@@ -1,0 +1,8 @@
+streamlit
+openai
+pandas
+sqlalchemy
+python-dotenv
+python-docx
+reportlab
+pytest
