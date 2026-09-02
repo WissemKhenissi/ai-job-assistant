@@ -4,6 +4,11 @@ from uuid import uuid4
 
 import streamlit as st
 
+from services.cv import (
+    build_targeted_cv,
+    export_docx,
+    export_pdf,
+)
 from services.job_service import save_job_offer
 from services.market_memory_service import get_market_skill_memory
 from services.matching import analyze_and_save_job_match
@@ -14,6 +19,106 @@ def _new_draft() -> None:
     st.session_state["job_matching_draft_id"] = f"job-{uuid4()}"
     st.session_state.pop("job_matching_result", None)
     st.rerun()
+
+
+def _render_cv_generation(
+    candidate_id: str,
+    job_offer_id: str,
+) -> None:
+    """
+    Génération du CV ciblé à partir de l'analyse affichée.
+
+    Le CV est reconstruit à chaque clic depuis les données du Master
+    CV : il n'existe aucun état intermédiaire modifiable entre
+    l'analyse et le document produit.
+    """
+
+    st.divider()
+
+    st.subheader("CV ciblé")
+
+    st.caption(
+        "Le CV ne reprend que les compétences prouvées, c'est-à-dire "
+        "déclarées dans le Master CV et soutenues par au moins une "
+        "preuve. Les compétences déduites ou déclarées sans preuve "
+        "en sont volontairement absentes."
+    )
+
+    if not st.button("Générer le CV ciblé"):
+        return
+
+    try:
+
+        cv = build_targeted_cv(
+            candidate_id=candidate_id,
+            job_offer_id=job_offer_id,
+        )
+
+    except Exception as error:
+
+        st.error(f"Génération impossible : {error}")
+
+        return
+
+    if not cv.skills:
+
+        st.warning(
+            "Aucune compétence prouvée ne correspond à cette "
+            "annonce. Le CV généré ne comportera pas de section "
+            "Compétences : documenter des preuves dans le Master CV "
+            "est le seul moyen honnête de l'étoffer."
+        )
+
+    else:
+
+        st.success(
+            f"{len(cv.skills)} compétence(s) prouvée(s) retenue(s) : "
+            + ", ".join(cv.skills)
+        )
+
+    if cv.declared_skills or cv.inferred_skills:
+
+        laissees = cv.declared_skills + cv.inferred_skills
+
+        st.info(
+            "Volontairement laissées de côté : "
+            + ", ".join(laissees)
+        )
+
+    st.caption(
+        f"{cv.total_lines} ligne(s) d'expérience retenue(s), "
+        f"{len(cv.achievements)} réalisation(s)."
+    )
+
+    # --------------------------------------------------------
+    # TÉLÉCHARGEMENT
+    # --------------------------------------------------------
+
+    docx_path = export_docx(cv)
+    pdf_path = export_pdf(cv)
+
+    docx_col, pdf_col = st.columns(2)
+
+    with docx_col:
+
+        st.download_button(
+            "Télécharger en DOCX",
+            data=docx_path.read_bytes(),
+            file_name=docx_path.name,
+            mime=(
+                "application/vnd.openxmlformats-officedocument"
+                ".wordprocessingml.document"
+            ),
+        )
+
+    with pdf_col:
+
+        st.download_button(
+            "Télécharger en PDF",
+            data=pdf_path.read_bytes(),
+            file_name=pdf_path.name,
+            mime="application/pdf",
+        )
 
 
 def render_job_matching_page(candidate_id: str) -> None:
@@ -313,6 +418,15 @@ def render_job_matching_page(candidate_id: str) -> None:
                 st.warning(
                     weakness
                 )
+
+        # ====================================================
+        # GÉNÉRATION DU CV CIBLÉ
+        # ====================================================
+
+        _render_cv_generation(
+            candidate_id=candidate_id,
+            job_offer_id=stored_result["job_offer_id"],
+        )
 
     # ========================================================
     # MÉMOIRE DE MARCHÉ
