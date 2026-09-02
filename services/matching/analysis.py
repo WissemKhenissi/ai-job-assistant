@@ -18,6 +18,7 @@ from database.models import (
 )
 from models.job import JobOfferDB
 from models.matching import JobMatchDB
+from models.skill_match import JobSkillMatchDB
 
 from services.matching.config import (
     DECLARED_SCORE,
@@ -985,6 +986,40 @@ def analyze_and_save_job_match(
         match.weaknesses = (
             result.weaknesses
         )
+
+        # ----------------------------------------------------
+        # DETAIL PAR COMPETENCE
+        # ----------------------------------------------------
+        #
+        # Le détail est remplacé intégralement à chaque analyse :
+        # il décrit l'analyse courante, pas son historique.
+
+        db.flush()
+
+        (
+            db.query(JobSkillMatchDB)
+            .filter(
+                JobSkillMatchDB.job_match_id == match.id
+            )
+            .delete(synchronize_session=False)
+        )
+
+        for skill_match in result.matches:
+
+            db.add(
+                JobSkillMatchDB(
+                    id=f"skill-match-{uuid4()}",
+                    job_match_id=match.id,
+                    skill=skill_match.skill,
+                    canonical_skill=_canonical_skill_name(
+                        skill_match.skill
+                    ),
+                    status=skill_match.status,
+                    score=skill_match.score,
+                    explanation=skill_match.explanation,
+                    evidence=list(skill_match.evidence),
+                )
+            )
 
         # ----------------------------------------------------
         # COMMIT
