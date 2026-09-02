@@ -84,6 +84,8 @@ SKILLS = [
         "aliases": [
             "User Research",
             "Recherche utilisateur",
+            "Analyse utilisateur",
+            "Comportement utilisateur",
             "Étude utilisateur",
             "Customer Research",
             "Recherche utilisateurs",
@@ -113,6 +115,8 @@ SKILLS = [
             "A/B Testing",
             "AB Testing",
             "Testing",
+            "Tests",
+            "Experiment",
             "Tests utilisateurs",
             "Experimentation",
         ],
@@ -140,6 +144,7 @@ SKILLS = [
             "Product Strategy",
             "Stratégie produit",
             "Strategie produit",
+            "Strategie Product",
             "Product Strategy Management",
         ],
         "parent": "catalog-product-management",
@@ -243,6 +248,7 @@ SKILLS = [
         ),
         "aliases": [
             "Backlog Management",
+            "Backlog",
             "Product backlog",
             "Gestion du backlog",
             "Backlog produit",
@@ -388,6 +394,7 @@ SKILLS = [
             "Analyse des données",
             "Data Analytics",
             "Analyse de performance",
+            "Performance Analysis",
         ],
         "parent": None,
         "related_skills": [
@@ -395,6 +402,32 @@ SKILLS = [
             "SQL",
             "Data / KPI",
             "Business Intelligence",
+        ],
+    },
+
+    {
+        "id": "catalog-data-kpi",
+        "canonical_name": "Data / KPI",
+        "category": "Data",
+        "subcategory": "Reporting",
+        "description": (
+            "Suivi et pilotage d'indicateurs clés de performance "
+            "(KPI), production de reportings et analyse orientée "
+            "décision business à partir de données chiffrées."
+        ),
+        "aliases": [
+            "Data / KPI",
+            "KPI",
+            "Reporting",
+            "Data Driven",
+            "Data Driven Decision Making",
+            "Data Marketing",
+        ],
+        "parent": "catalog-data-analysis",
+        "related_skills": [
+            "Data Analysis",
+            "Microsoft Excel",
+            "Product Management",
         ],
     },
 
@@ -528,6 +561,29 @@ SKILLS = [
             "Machine Learning",
             "Data Analysis",
             "Automatisation",
+        ],
+    },
+
+    {
+        "id": "catalog-automatisation",
+        "canonical_name": "Automatisation",
+        "category": "Technology",
+        "subcategory": "Process Automation",
+        "description": (
+            "Conception et mise en place de processus ou d'outils "
+            "permettant d'automatiser des tâches répétitives, "
+            "notamment via des scripts, macros ou intégrations "
+            "entre outils."
+        ),
+        "aliases": [
+            "Automatisation",
+            "Automation",
+            "Process Automation",
+        ],
+        "parent": None,
+        "related_skills": [
+            "Python",
+            "Microsoft Excel",
         ],
     },
 
@@ -754,6 +810,7 @@ SKILLS = [
             "E-commerce",
             "E commerce",
             "Ecommerce",
+            "Ecommerce experience",
             "Commerce électronique",
             "Commerce electronique",
             "Digital Commerce",
@@ -764,6 +821,29 @@ SKILLS = [
             "UX",
             "Data Analysis",
             "Product Discovery",
+        ],
+    },
+
+    {
+        "id": "catalog-adtech",
+        "canonical_name": "AdTech",
+        "category": "Business",
+        "subcategory": "Digital Advertising",
+        "description": (
+            "Connaissance des technologies et écosystèmes de la "
+            "publicité digitale : diffusion, ciblage, mesure de "
+            "performance et monétisation publicitaire en ligne."
+        ),
+        "aliases": [
+            "AdTech",
+            "Advertising Technology",
+            "Publicité digitale",
+        ],
+        "parent": None,
+        "related_skills": [
+            "E-commerce",
+            "Product Management",
+            "Data / KPI",
         ],
     },
 ]

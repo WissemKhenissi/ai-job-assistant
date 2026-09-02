@@ -16,6 +16,10 @@ from database.models import (
 from models.job import JobOfferDB
 from models.matching import JobMatchDB
 
+from services.skill_catalog_service import (
+    get_active_skills,
+    normalize_skill_text,
+)
 from services.skill_semantic_service import (
     find_semantic_skill_matches,
 )
@@ -25,126 +29,10 @@ from services.skill_semantic_service import (
 # NORMALISATION / ALIAS
 # ============================================================
 
-SKILL_ALIASES = {
-    "gestion de projet": {
-        "gestion de projet",
-        "project management",
-        "pilotage de projet",
-        "project delivery",
-    },
-    "product discovery": {
-        "product discovery",
-        "discovery produit",
-        "decouverte produit",
-        "discovery",
-        "discovery phase",
-    },
-    "stakeholder management": {
-        "stakeholder management",
-        "gestion des parties prenantes",
-        "gestion des stakeholders",
-        "stakeholders",
-        "stakeholder",
-    },
-    "e commerce": {
-        "e commerce",
-        "ecommerce",
-        "e-commerce",
-        "ecommerce experience",
-    },
-    "adtech": {
-        "adtech",
-        "advertising technology",
-        "publicite digitale",
-    },
-    "data kpi": {
-        "data kpi",
-        "data / kpi",
-        "kpi",
-        "analyse de performance",
-        "performance analysis",
-        "reporting",
-        "data marketing",
-        "data driven",
-        "data driven decision making",
-    },
-    "automatisation": {
-        "automatisation",
-        "automation",
-        "process automation",
-    },
-    "microsoft excel": {
-        "excel",
-        "microsoft excel",
-        "excel macros",
-        "macros excel",
-        "vba excel",
-    },
-    "agile scrum": {
-        "agile",
-        "scrum",
-        "agile scrum",
-        "methodologie agile",
-        "agile methodology",
-    },
-    "priorisation": {
-        "priorisation",
-        "priorisation produit",
-        "gestion des priorites",
-        "prioritize",
-        "prioritization",
-        "priorisation des fonctionnalites",
-    },
-    "backlog management": {
-        "backlog",
-        "backlog management",
-        "gestion du backlog",
-        "product backlog",
-    },
-    "sql": {
-        "sql",
-        "sql queries",
-        "requetes sql",
-    },
-    "jira": {
-        "jira",
-    },
-    "product strategy": {
-        "product strategy",
-        "strategie produit",
-        "strategie product",
-    },
-    "roadmap produit": {
-        "roadmap",
-        "roadmap produit",
-        "product roadmap",
-    },
-    "experimentation": {
-        "experimentation",
-        "experiment",
-        "tests",
-        "testing",
-        "a/b testing",
-        "ab testing",
-    },
-    "ux": {
-        "ux",
-        "user experience",
-        "experience utilisateur",
-    },
-    "ui": {
-        "ui",
-        "user interface",
-        "interface utilisateur",
-    },
-    "analyse utilisateur": {
-        "user research",
-        "recherche utilisateur",
-        "analyse utilisateur",
-        "comportement utilisateur",
-        "customer research",
-    },
-}
+# Les alias de compétences ne sont plus dupliqués ici : ils viennent
+# du référentiel skill_catalog (table skill_catalog, exposée par
+# services.skill_catalog_service), seule source de vérité. Voir
+# _canonical_skill_name() / _canonical_alias_index() plus bas.
 
 
 # ============================================================
@@ -277,22 +165,6 @@ SEMANTIC_INFERENCE_STRONG_THRESHOLD = 0.75
 
 SEMANTIC_SPECIFICITY_THRESHOLD = 0.80
 
-SEMANTIC_INFERENCE_SKILLS = {
-    "agile scrum",
-    "priorisation",
-    "backlog management",
-    "stakeholder management",
-    "product discovery",
-    "product strategy",
-    "roadmap produit",
-    "product delivery",
-    "experimentation",
-    "analyse utilisateur",
-    "user research",
-    "data analysis",
-    "gestion de projet",
-}
-
 
 # ============================================================
 # PONDERATION DES STATUTS
@@ -328,7 +200,8 @@ SEMANTIC_INFERENCE_SKILLS = {
     "roadmap produit",
     "product delivery",
     "experimentation",
-    "analyse utilisateur",
+    # "analyse utilisateur" fusionne désormais dans "user research"
+    # (alias du référentiel skill_catalog) via _canonical_skill_name().
     "user research",
     "data analysis",
     "gestion de projet",
@@ -470,23 +343,54 @@ def _contains_term(
     )
 
 
+_canonical_alias_index_cache: dict[str, str] | None = None
+
+
+def _canonical_alias_index() -> dict[str, str]:
+    """
+    Construit (une seule fois par process) l'index
+    "alias normalisé -> nom canonique normalisé" à partir du
+    référentiel skill_catalog.
+
+    Remplace l'ancien dictionnaire SKILL_ALIASES codé en dur :
+    skill_catalog est désormais l'unique source de vérité pour les
+    alias de compétences.
+    """
+
+    global _canonical_alias_index_cache
+
+    if _canonical_alias_index_cache is None:
+
+        index: dict[str, str] = {}
+
+        for skill in get_active_skills():
+
+            canonical_key = normalize_skill_text(
+                skill.canonical_name
+            )
+
+            for name in (
+                skill.canonical_name,
+                *skill.aliases,
+            ):
+
+                index[normalize_skill_text(name)] = canonical_key
+
+        _canonical_alias_index_cache = index
+
+    return _canonical_alias_index_cache
+
+
 def _canonical_skill_name(
     value: str,
 ) -> str:
 
     normalized_value = _normalize(value)
 
-    for canonical_name, aliases in SKILL_ALIASES.items():
-
-        normalized_aliases = {
-            _normalize(alias)
-            for alias in aliases
-        }
-
-        if normalized_value in normalized_aliases:
-            return canonical_name
-
-    return normalized_value
+    return _canonical_alias_index().get(
+        normalized_value,
+        normalized_value,
+    )
 
 
 # ============================================================
