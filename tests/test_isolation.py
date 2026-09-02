@@ -11,9 +11,69 @@ Ces tests échouent explicitement dans ce cas.
 
 from __future__ import annotations
 
+import ast
 import importlib
+from pathlib import Path
 
 from conftest import SERVICE_MODULES, add_candidate
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def _modules_important_session_local() -> set[str]:
+    """
+    Trouve, par analyse statique, tous les modules de services/ qui
+    importent SessionLocal.
+
+    Volontairement statique : importer les modules pour les inspecter
+    déclencherait leurs effets de bord.
+    """
+
+    trouves: set[str] = set()
+
+    for chemin in (PROJECT_ROOT / "services").rglob("*.py"):
+
+        arbre = ast.parse(
+            chemin.read_text(encoding="utf-8"),
+            filename=str(chemin),
+        )
+
+        for noeud in ast.walk(arbre):
+
+            if not isinstance(noeud, ast.ImportFrom):
+                continue
+
+            noms = {alias.name for alias in noeud.names}
+
+            if "SessionLocal" not in noms:
+                continue
+
+            relatif = chemin.relative_to(PROJECT_ROOT)
+
+            trouves.add(
+                ".".join(relatif.with_suffix("").parts)
+            )
+
+    return trouves
+
+
+def test_tout_module_ouvrant_une_session_est_isole():
+    """
+    Le piège que ce test ferme : ajouter un service qui ouvre des
+    sessions sans l'inscrire dans SERVICE_MODULES. Les tests
+    liraient alors la vraie base de développement.
+    """
+
+    non_isoles = (
+        _modules_important_session_local()
+        - set(SERVICE_MODULES)
+    )
+
+    assert not non_isoles, (
+        "ces modules ouvrent des sessions mais ne sont pas isolés "
+        f"par conftest : {sorted(non_isoles)}"
+    )
 
 
 def test_les_modules_a_patcher_existent_tous():
