@@ -1,7 +1,8 @@
 """
-Intégration IA (Gemini) du CV et de la lettre de motivation.
+Intégration IA (Gemini) du CV, de la lettre de motivation et de
+l'analyse d'offre.
 
-Deux usages, deux garde-fous équivalents mais adaptés :
+Trois usages, trois garde-fous adaptés au risque de chacun :
 
 - `reformulate_*` (services.ai.reformulation) : reformule un texte
   déjà entièrement déterminé par le Master CV — l'IA ne peut ajouter
@@ -10,12 +11,23 @@ Deux usages, deux garde-fous équivalents mais adaptés :
   l'IA l'argumentaire complet de la lettre à partir d'une fiche de
   faits structurée — même interdiction d'invention, contrôlée sur
   l'ensemble de la fiche plutôt que sur une phrase isolée.
+- `analyze_job_offer_with_ai` / `generate_fit_synthesis`
+  (services.ai.job_analysis) : catégorise l'offre (type de contrat,
+  télétravail, compétences attendues) et commente en langage naturel
+  le résultat déjà calculé par le moteur de matching honnête — l'IA
+  ne recalcule jamais le score ni les statuts prouvé/déclaré/déduit.
 
-Dans les deux cas, tout repose sur un repli automatique vers le
+Dans tous les cas, tout repose sur un repli automatique vers le
 contenu déterministe si l'IA n'est pas configurée, échoue, ou que le
 garde-fou se déclenche.
 """
 
+from services.ai.job_analysis import (
+    FitSynthesisResult,
+    JobOfferAnalysis,
+    analyze_job_offer_with_ai,
+    generate_fit_synthesis,
+)
 from services.ai.letter_authoring import build_ai_letter
 from services.ai.reformulation import (
     ReformulationResult,
@@ -25,8 +37,12 @@ from services.ai.reformulation import (
 )
 
 __all__ = [
+    "FitSynthesisResult",
+    "JobOfferAnalysis",
     "ReformulationResult",
+    "analyze_job_offer_with_ai",
     "build_ai_letter",
+    "generate_fit_synthesis",
     "reformulate_cover_letter",
     "reformulate_cv_summary",
     "reformulate_targeted_cv",

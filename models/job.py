@@ -40,6 +40,16 @@ class JobOfferDB(Base):
         default=""
     )
 
+    # Précision libre sur le télétravail (ex. "2 jours/semaine"),
+    # quand l'annonce le dit explicitement — remote_policy reste la
+    # catégorie grossière (Sur site / Hybride / Télétravail complet),
+    # ce champ porte le détail que ces trois catégories ne capturent
+    # pas.
+    remote_details: Mapped[str] = mapped_column(
+        String,
+        default=""
+    )
+
     salary: Mapped[str] = mapped_column(
         String,
         default=""

@@ -11,13 +11,31 @@ interaction, les deux onglets restent donc synchronisés.
 
 from __future__ import annotations
 
+import unicodedata
 from uuid import uuid4
 
 import streamlit as st
 
+from services.ai.gemini_client import is_configured as ai_is_configured
+from services.ai.job_analysis import (
+    analyze_job_offer_with_ai,
+    generate_fit_synthesis,
+)
 from services.job_service import save_job_offer
 from services.matching import analyze_and_save_job_match
 from services.job_requirements_service import extract_required_skills
+
+
+def _normalize_loose(text: str) -> str:
+    """Minuscules, sans accents — suffisant pour une déduplication d'affichage."""
+
+    normalized = unicodedata.normalize("NFKD", text)
+
+    return "".join(
+        character
+        for character in normalized
+        if not unicodedata.combining(character)
+    ).casefold()
 
 
 def _new_draft() -> None:
@@ -105,6 +123,50 @@ def render_analysis_tab(candidate_id: str) -> None:
 
         required_skills = extract_required_skills(description)
 
+        # --------------------------------------------------------
+        # CATEGORISATION + EXTRACTION IA (GEMINI), OPTIONNELLE
+        # --------------------------------------------------------
+        #
+        # Ne remplace jamais une sélection manuelle explicite : elle
+        # ne comble que les champs laissés vides. Les compétences
+        # détectées par le catalogue restent la base ; l'IA ne fait
+        # qu'y ajouter celles qu'elle a repérées en plus. La
+        # déduplication ici est insensible à la casse/aux accents —
+        # simple affichage — le moteur de matching applique sa propre
+        # normalisation, plus poussée, au moment du calcul du score.
+
+        avertissement_ia = ""
+
+        if ai_is_configured():
+
+            analyse_ia = analyze_job_offer_with_ai(
+                f"{title.strip()}\n{description.strip()}"
+            )
+
+            avertissement_ia = analyse_ia.warning
+
+            contract_type = contract_type or analyse_ia.contract_type
+            remote_policy = remote_policy or analyse_ia.remote_policy
+            remote_details = analyse_ia.remote_details
+
+            deja_presentes = {
+                _normalize_loose(skill) for skill in required_skills
+            }
+
+            for skill in analyse_ia.required_skills:
+
+                cle = _normalize_loose(skill)
+
+                if cle in deja_presentes:
+                    continue
+
+                deja_presentes.add(cle)
+                required_skills.append(skill)
+
+        else:
+
+            remote_details = ""
+
         if not required_skills:
 
             st.error(
@@ -124,6 +186,7 @@ def render_analysis_tab(candidate_id: str) -> None:
                 location=location.strip(),
                 contract_type=contract_type,
                 remote_policy=remote_policy,
+                remote_details=remote_details,
                 source="manual",
                 status="selected",
             )
@@ -137,15 +200,25 @@ def render_analysis_tab(candidate_id: str) -> None:
             st.session_state["job_matching_result"] = {
                 "job_offer_id": job_offer_id,
                 "title": title.strip(),
-                "extraction_source": "automatique",
+                "extraction_source": (
+                    "catalogue + IA (Gemini)"
+                    if ai_is_configured()
+                    else "catalogue"
+                ),
                 "required_skills": required_skills,
                 "result": result,
+                "contract_type": contract_type,
+                "remote_policy": remote_policy,
+                "remote_details": remote_details,
             }
 
             st.success(
                 "Annonce analysée et enregistrée. Passez à l'onglet "
                 "« CV & lettre » pour générer vos documents."
             )
+
+            if avertissement_ia:
+                st.caption(avertissement_ia)
 
         except Exception as error:
 
@@ -189,6 +262,23 @@ def render_analysis_tab(candidate_id: str) -> None:
         st.subheader(
             stored_result["title"]
         )
+
+        # ====================================================
+        # CATEGORISATION DE L'OFFRE
+        # ====================================================
+
+        categorisation = " · ".join(
+            partie
+            for partie in (
+                stored_result.get("contract_type", ""),
+                stored_result.get("remote_policy", ""),
+                stored_result.get("remote_details", ""),
+            )
+            if partie
+        )
+
+        if categorisation:
+            st.caption(f"📋 {categorisation}")
 
         # ====================================================
         # SCORE
@@ -320,6 +410,56 @@ def render_analysis_tab(candidate_id: str) -> None:
                 st.warning(
                     weakness
                 )
+
+        # ====================================================
+        # AVIS IA SUR L'ADEQUATION (OPTIONNEL)
+        # ====================================================
+        #
+        # Ne recalcule rien : met en mots le score et les statuts
+        # déjà déterminés ci-dessus par le moteur honnête. Volontaire
+        # -ment un avis à part, jamais confondu avec le score officiel.
+
+        st.divider()
+
+        job_offer_id = stored_result["job_offer_id"]
+        synthese_key = f"fit_synthesis_{job_offer_id}"
+
+        if not ai_is_configured():
+
+            st.caption(
+                "Avis IA sur l'adéquation indisponible — clé "
+                "GEMINI_API_KEY absente de .env."
+            )
+
+        else:
+
+            if st.button(
+                "🔎 Générer un avis IA sur l'adéquation",
+                key=f"generer_avis_{job_offer_id}",
+            ):
+
+                with st.spinner("Analyse en cours (Gemini)..."):
+                    st.session_state[synthese_key] = (
+                        generate_fit_synthesis(
+                            candidate_id=candidate_id,
+                            job_offer_id=job_offer_id,
+                        )
+                    )
+
+            synthese = st.session_state.get(synthese_key)
+
+            if synthese is not None:
+
+                if synthese.text:
+
+                    st.info(
+                        "**Avis IA (indicatif — ne remplace pas "
+                        "l'analyse ci-dessus)**\n\n" + synthese.text
+                    )
+
+                elif synthese.warning:
+
+                    st.caption(synthese.warning)
 
     # ========================================================
     # NOUVELLE ANNONCE

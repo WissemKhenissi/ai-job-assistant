@@ -35,6 +35,7 @@ def save_job_offer(
     location: str = "",
     contract_type: str = "",
     remote_policy: str = "",
+    remote_details: str = "",
     salary: str = "",
     url: str = "",
     source: str = "manual",
@@ -59,6 +60,7 @@ def save_job_offer(
         job_offer.location = location
         job_offer.contract_type = contract_type
         job_offer.remote_policy = remote_policy
+        job_offer.remote_details = remote_details
         job_offer.salary = salary
         job_offer.url = url
         job_offer.source = source
@@ -71,4 +73,34 @@ def save_job_offer(
         db.rollback()
         raise
     finally:
+        db.close()
+
+
+def get_job_offer_summary(job_offer_id: str) -> dict | None:
+    """
+    Champs d'affichage d'une offre (catégorisation incluse), en dict
+    de primitives — jamais l'objet ORM lui-même, pour ne pas exposer
+    une instance détachée de sa session en dehors de ce module.
+    """
+
+    db = SessionLocal()
+
+    try:
+
+        job_offer = db.get(JobOfferDB, job_offer_id)
+
+        if job_offer is None:
+            return None
+
+        return {
+            "title": job_offer.title or "",
+            "company": job_offer.company or "",
+            "location": job_offer.location or "",
+            "contract_type": job_offer.contract_type or "",
+            "remote_policy": job_offer.remote_policy or "",
+            "remote_details": job_offer.remote_details or "",
+        }
+
+    finally:
+
         db.close()
