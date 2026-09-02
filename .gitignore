@@ -1,0 +1,22 @@
+# Environnements virtuels
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Secrets / config locale
+.env
+
+# Base de données locale (données personnelles, régénérable via database/init_db.py)
+data/job_assistant.db
+
+# Éditeurs / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
