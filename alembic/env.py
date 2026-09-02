@@ -20,7 +20,11 @@ sys.path.insert(
 )
 
 # Importer les modèles SQLAlchemy
-from database.models import Base
+# On passe par model_registry (et non database.models directement) pour
+# être sûr que TOUS les modèles (y compris JobOfferDB, JobMatchDB définis
+# dans models/) sont importés et donc enregistrés dans Base.metadata avant
+# qu'Alembic ne compare le schéma — sinon l'autogenerate les ignore.
+from database.model_registry import Base
 
 
 # Configuration Alembic
