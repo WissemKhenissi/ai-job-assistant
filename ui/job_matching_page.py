@@ -187,7 +187,13 @@ def render_job_matching_page(candidate_id: str) -> None:
         # SCORE
         # ====================================================
 
-        score_col, proven_col, inferred_col, missing_col = st.columns(4)
+        (
+            score_col,
+            proven_col,
+            declared_col,
+            inferred_col,
+            missing_col,
+        ) = st.columns(5)
 
         score_col.metric(
             "Score global",
@@ -195,17 +201,34 @@ def render_job_matching_page(candidate_id: str) -> None:
         )
 
         proven_col.metric(
-            "Compétences prouvées",
-            len(result.matched_skills),
+            "Prouvées",
+            len(result.proven_skills),
+            help=(
+                "Déclarées dans le Master CV et soutenues par "
+                "au moins une preuve."
+            ),
+        )
+
+        declared_col.metric(
+            "Déclarées",
+            len(result.declared_skills),
+            help=(
+                "Déclarées dans le Master CV, mais sans preuve "
+                "rattachée : à documenter."
+            ),
         )
 
         inferred_col.metric(
-            "Compétences déduites",
+            "Déduites",
             len(result.inferred_skills),
+            help=(
+                "Non déclarées, déduites du parcours : une "
+                "hypothèse, pas un fait affirmé."
+            ),
         )
 
         missing_col.metric(
-            "Compétences manquantes",
+            "Manquantes",
             len(result.missing_skills),
         )
 
@@ -215,6 +238,7 @@ def render_job_matching_page(candidate_id: str) -> None:
 
         status_labels = {
             "proven": "🟢 Prouvée",
+            "declared": "🔵 Déclarée",
             "inferred": "🟡 Déduite",
             "missing": "🔴 Manquante",
         }

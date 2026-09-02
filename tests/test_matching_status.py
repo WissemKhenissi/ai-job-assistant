@@ -87,11 +87,8 @@ def test_competence_declaree_sans_preuve_est_moins_bien_notee(
     session_factory,
 ):
     """
-    Caractérisation du comportement actuel.
-
-    Une compétence déclarée sans preuve reste au statut "proven",
-    avec un score dégradé (DECLARED_SCORE). Voir la note de
-    vigilance dans le test suivant.
+    Une compétence déclarée sans preuve reçoit le statut "declared"
+    et un score dégradé (DECLARED_SCORE).
     """
 
     from services.matching import analyze_candidate_against_skills
@@ -124,27 +121,25 @@ def test_competence_declaree_sans_preuve_est_moins_bien_notee(
 
     match = _match_for(result, "Gestion de projet")
 
+    assert match.status == "declared"
     assert match.score == DECLARED_SCORE
     assert match.score < PROVEN_SCORE
 
 
-def test_le_statut_proven_ne_distingue_pas_encore_les_preuves(
+def test_une_competence_sans_preuve_n_est_pas_listee_comme_prouvee(
     session_factory,
 ):
     """
-    ATTENTION — comportement à trancher avant la génération de CV.
+    Garde-fou central du projet.
 
     Le principe de cadrage dit : "seules les compétences prouvées
     (avec une preuve EvidenceDB liée) peuvent apparaître comme ligne
     de compétence explicite" sur un CV généré.
 
-    Or aujourd'hui le statut "proven" est attribué aussi bien à une
-    compétence documentée qu'à une compétence simplement déclarée
-    sans aucune preuve. Un générateur de CV qui filtrerait sur
-    status == "proven" afficherait donc des compétences non prouvées.
-
-    Ce test verrouille le comportement actuel pour qu'un changement
-    soit conscient et non silencieux.
+    proven_skills est la liste sur laquelle la génération de CV doit
+    s'appuyer : une compétence déclarée sans preuve doit en être
+    absente, tout en restant visible dans matched_skills (vision
+    "est-ce que je couvre cette compétence ?").
     """
 
     from services.matching import analyze_candidate_against_skills
@@ -171,10 +166,48 @@ def test_le_statut_proven_ne_distingue_pas_encore_les_preuves(
         required_skills=["Gestion de projet"],
     )
 
-    match = _match_for(result, "Gestion de projet")
+    assert result.proven_skills == []
+    assert result.declared_skills == ["Gestion de projet"]
+    assert result.matched_skills == ["Gestion de projet"]
 
-    assert match.status == "proven"
-    assert "Gestion de projet" in result.matched_skills
+
+def test_une_competence_avec_preuve_est_listee_comme_prouvee(
+    session_factory,
+):
+    from services.matching import analyze_candidate_against_skills
+
+    session = session_factory()
+
+    add_candidate(session)
+    add_catalog_skill(
+        session,
+        canonical_name="Gestion de projet",
+        aliases=["Gestion de projet"],
+    )
+
+    skill = add_candidate_skill(
+        session,
+        candidate_id=CANDIDATE_ID,
+        name="Gestion de projet",
+    )
+
+    add_evidence(
+        session,
+        candidate_id=CANDIDATE_ID,
+        skill_id=skill.id,
+        description="Refonte du tunnel d'achat, -18 % d'abandons.",
+    )
+
+    session.close()
+
+    result = analyze_candidate_against_skills(
+        candidate_id=CANDIDATE_ID,
+        required_skills=["Gestion de projet"],
+    )
+
+    assert result.proven_skills == ["Gestion de projet"]
+    assert result.declared_skills == []
+    assert result.matched_skills == ["Gestion de projet"]
 
 
 # ============================================================

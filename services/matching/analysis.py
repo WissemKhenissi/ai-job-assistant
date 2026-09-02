@@ -45,6 +45,7 @@ from services.matching.profile_text import (
     _text_from_profile,
 )
 from services.matching.results import (
+    PRESENT_STATUSES,
     MatchingResult,
     SkillMatch,
 )
@@ -296,7 +297,7 @@ def analyze_candidate_against_skills(
                 matches.append(
                     SkillMatch(
                         skill=required_skill,
-                        status="proven",
+                        status="declared",
                         score=DECLARED_SCORE,
                         evidence=declared_evidence,
                         explanation=(
@@ -505,7 +506,7 @@ def analyze_candidate_against_skills(
                 canonical_component
                 in PRODUCT_MANAGEMENT_COMPONENTS
                 and match.status
-                in {"proven", "inferred"}
+                in PRESENT_STATUSES | {"inferred"}
             ):
 
                 component_matches.append(
@@ -538,10 +539,14 @@ def analyze_candidate_against_skills(
         # Nombre de compétences réellement démontrées
         # ----------------------------------------------------
 
+        # NOTE : une compétence déclarée sans preuve compte encore ici,
+        # comme avant l'introduction du statut "declared". Restreindre
+        # cette inférence composite aux seules compétences prouvées
+        # changerait les résultats de matching : à trancher à part.
         proven_components = [
             match
             for match in component_matches
-            if match.status == "proven"
+            if match.status in PRESENT_STATUSES
         ]
 
         component_count = len(
@@ -672,10 +677,16 @@ def analyze_candidate_against_skills(
         #
         # Une compétence prouvée compte davantage qu'une
         # compétence simplement inférée.
+        #
+        # NOTE : une compétence déclarée sans preuve pèse ici autant
+        # qu'une compétence prouvée, comme avant l'introduction du
+        # statut "declared". Lui donner un poids intermédiaire ferait
+        # baisser les scores existants : arbitrage à part entière,
+        # volontairement non fait dans ce commit.
         # ----------------------------------------------------
 
-        proven_count = sum(
-            match.status == "proven"
+        present_count = sum(
+            match.status in PRESENT_STATUSES
             for match in matches
         )
 
@@ -686,7 +697,7 @@ def analyze_candidate_against_skills(
 
         score_experience = round(
             (
-                proven_count * EXPERIENCE_PROVEN_WEIGHT
+                present_count * EXPERIENCE_PROVEN_WEIGHT
                 + inferred_count * EXPERIENCE_INFERRED_WEIGHT
             )
             / len(matches),
@@ -787,6 +798,13 @@ def analyze_candidate_against_skills(
             strengths.append(
                 f"{match.skill} : "
                 "compétence prouvée"
+            )
+
+        elif match.status == "declared":
+
+            strengths.append(
+                f"{match.skill} : "
+                "compétence déclarée, à documenter"
             )
 
         elif (
