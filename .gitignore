@@ -16,6 +16,10 @@ __pycache__/
 data/job_assistant.db
 data/job_assistant.db.backup_*
 
+# CV et lettres générés (données personnelles, régénérables à la demande)
+exports/*
+!exports/.gitkeep
+
 # Éditeurs / OS
 .vscode/
 .idea/

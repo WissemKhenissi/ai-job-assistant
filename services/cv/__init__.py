@@ -6,6 +6,11 @@ généré porte l'identifiant de la donnée du Master CV dont elle est
 issue.
 """
 
+from services.cv.export import (
+    default_export_path,
+    export_docx,
+    export_pdf,
+)
 from services.cv.results import (
     CVAchievement,
     CVEvidenceLine,
@@ -24,4 +29,7 @@ __all__ = [
     "MissingAnalysisError",
     "TargetedCV",
     "build_targeted_cv",
+    "default_export_path",
+    "export_docx",
+    "export_pdf",
 ]
