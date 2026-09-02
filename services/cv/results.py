@@ -73,6 +73,7 @@ class TargetedCV:
 
     job_offer_id: str
     job_offer_title: str
+    job_offer_company: str = ""
 
     skills: list[str] = field(default_factory=list)
 

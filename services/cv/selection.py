@@ -327,6 +327,7 @@ def build_targeted_cv(
             summary=candidate.summary or "",
             job_offer_id=job_offer.id,
             job_offer_title=job_offer.title or "",
+            job_offer_company=(job_offer.company or "").strip(),
             skills=[row.skill for row in proven],
             experiences=experiences,
             achievements=achievements,
