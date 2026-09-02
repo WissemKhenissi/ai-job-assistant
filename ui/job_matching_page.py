@@ -34,6 +34,83 @@ from services.matching import analyze_and_save_job_match
 from services.job_requirements_service import extract_required_skills
 
 
+def _render_comparaison_reformulation(etat: dict) -> None:
+    """
+    Affiche côte à côte le texte déterministe et le texte reformulé,
+    ligne par ligne / paragraphe par paragraphe — uniquement là où ils
+    diffèrent. C'est le seul filet fiable contre une dérive que le
+    contrôle automatique (limité aux chiffres) ne peut pas détecter :
+    un ton plus affirmatif, une activité plausible mais absente du
+    texte source.
+    """
+
+    cv_det = etat["cv_deterministe"]
+    cv_ref = etat["cv_affiche"]
+
+    lignes_differentes = [
+        (ligne_det.text, ligne_ref.text)
+        for exp_det, exp_ref in zip(cv_det.experiences, cv_ref.experiences)
+        for ligne_det, ligne_ref in zip(exp_det.lines, exp_ref.lines)
+        if ligne_det.text != ligne_ref.text
+    ]
+
+    letter_det = etat["letter_deterministe"]
+    letter_ref = etat["letter_affiche"]
+
+    paragraphes_differents = [
+        (p_det.text, p_ref.text)
+        for p_det, p_ref in zip(letter_det.paragraphs, letter_ref.paragraphs)
+        if p_det.text != p_ref.text
+    ]
+
+    if not lignes_differentes and not paragraphes_differents:
+        st.caption("Aucune ligne n'a été modifiée par la reformulation.")
+        return
+
+    with st.expander(
+        f"Comparer avant/après ({len(lignes_differentes)} ligne(s) "
+        f"de CV, {len(paragraphes_differents)} paragraphe(s) de "
+        "lettre modifiés)",
+        expanded=True,
+    ):
+
+        if lignes_differentes:
+
+            st.markdown("**CV**")
+
+            for avant, apres in lignes_differentes:
+
+                col_avant, col_apres = st.columns(2)
+
+                with col_avant:
+                    st.caption("Déterministe")
+                    st.write(avant)
+
+                with col_apres:
+                    st.caption("Reformulé")
+                    st.write(apres)
+
+                st.divider()
+
+        if paragraphes_differents:
+
+            st.markdown("**Lettre**")
+
+            for avant, apres in paragraphes_differents:
+
+                col_avant, col_apres = st.columns(2)
+
+                with col_avant:
+                    st.caption("Déterministe")
+                    st.write(avant)
+
+                with col_apres:
+                    st.caption("Reformulé")
+                    st.write(apres)
+
+                st.divider()
+
+
 def _new_draft() -> None:
     st.session_state["job_matching_draft_id"] = f"job-{uuid4()}"
     st.session_state.pop("job_matching_result", None)
@@ -221,6 +298,22 @@ def _render_cv_generation(
         elif etat["reformule"]:
 
             st.caption("Version actuellement affichée : reformulée par l'IA.")
+
+        if etat["reformule"]:
+
+            st.warning(
+                "⚠️ L'IA peut reformuler correctement les faits tout "
+                "en glissant vers un ton plus affirmatif, voire "
+                "ajouter une activité plausible mais absente du "
+                "texte source (déjà observé : \"identification "
+                "d'opportunités\" transformé en \"analyse de marché "
+                "et identification d'opportunités\"). Le contrôle "
+                "automatique ne détecte que les chiffres inventés — "
+                "compare toi-même chaque ligne ci-dessous avant "
+                "d'envoyer quoi que ce soit."
+            )
+
+            _render_comparaison_reformulation(etat)
 
     # --------------------------------------------------------
     # LETTRE — RELECTURE OBLIGATOIRE

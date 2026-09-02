@@ -14,13 +14,34 @@ Ce module ne contient aucune logique métier : il sait seulement parler
 from __future__ import annotations
 
 import os
+import time
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
-GEMINI_MODEL = "gemini-2.5-flash"
+
+# "-latest" plutôt qu'un nom de version épinglé : Google a fait
+# migrer les utilisateurs de gemini-2.5-flash vers gemini-3.6-flash
+# en cours de session (l'ancien renvoyait un 404 explicite), et
+# gemini-3.6-flash s'est révélé plafonné à seulement 20 requêtes
+# gratuites/jour — bien plus restrictif que prévu. Le palier "flash
+# lite" (optimisé pour le débit) accepte davantage de requêtes
+# gratuites ; l'alias "-latest" suit le modèle recommandé du moment
+# sans dépendre d'un nom de version qui finira par être déprécié à
+# son tour.
+GEMINI_MODEL = "gemini-flash-lite-latest"
+
+# Délai maximal d'une requête HTTP individuelle, en millisecondes.
+#
+# Le SDK n'impose aucune limite par défaut : sous forte demande,
+# une requête peut rester bloquée indéfiniment sans jamais renvoyer
+# ni réponse ni erreur — observé en conditions réelles (un appel
+# resté suspendu plus de 3 minutes). Sans ce délai, la logique de
+# nouvelle tentative sur 503 ne sert à rien : elle ne se déclenche
+# jamais si l'appel ne se termine jamais.
+GEMINI_TIMEOUT_MS = 30_000
 
 
 class GeminiNotConfiguredError(RuntimeError):
@@ -40,6 +61,7 @@ def is_configured() -> bool:
 def _get_client():
 
     from google import genai
+    from google.genai import types
 
     api_key = os.environ.get("GEMINI_API_KEY", "").strip()
 
@@ -50,7 +72,32 @@ def _get_client():
             "pour activer la reformulation IA."
         )
 
-    return genai.Client(api_key=api_key)
+    return genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(timeout=GEMINI_TIMEOUT_MS),
+    )
+
+
+def _is_transient_overload(error: Exception) -> bool:
+    """
+    503 "high demand" : le palier gratuit en renvoie régulièrement
+    sous charge, et ça se résout en général en réessayant. Une clé
+    invalide ou un modèle inconnu, à l'inverse, ne se résoudront
+    jamais en insistant.
+    """
+
+    texte_erreur_minuscules = str(error).lower()
+    nom_type_erreur = type(error).__name__
+
+    return (
+        "503" in texte_erreur_minuscules
+        or "504" in texte_erreur_minuscules
+        or "unavailable" in texte_erreur_minuscules
+        or "deadline" in texte_erreur_minuscules
+        or "timeout" in texte_erreur_minuscules
+        or "timed out" in texte_erreur_minuscules
+        or "Timeout" in nom_type_erreur
+    )
 
 
 def generate_text(prompt: str, temperature: float = 0.4) -> str:
@@ -60,36 +107,61 @@ def generate_text(prompt: str, temperature: float = 0.4) -> str:
     Lève GeminiNotConfiguredError si aucune clé n'est disponible, et
     GeminiRequestError pour toute autre défaillance (réseau, quota
     dépassé, réponse vide) — l'appelant décide alors du repli.
+
+    Jusqu'à deux tentatives supplémentaires en cas de surcharge
+    temporaire (503) avant d'abandonner.
     """
 
     from google.genai import types
 
     client = _get_client()
 
-    try:
+    config = types.GenerateContentConfig(temperature=temperature)
 
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                temperature=temperature,
-            ),
-        )
+    max_tentatives = 3
+    derniere_erreur: Exception = GeminiRequestError(
+        "Aucune tentative n'a été effectuée."
+    )
 
-    except GeminiNotConfiguredError:
-        raise
+    for tentative in range(max_tentatives):
 
-    except Exception as error:
+        if tentative > 0:
+            time.sleep(2 * tentative)
 
-        raise GeminiRequestError(
-            f"Échec de l'appel à l'API Gemini : {error}"
-        ) from error
+        try:
 
-    texte = (response.text or "").strip()
+            response = client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=config,
+            )
 
-    if not texte:
-        raise GeminiRequestError(
-            "L'API Gemini a renvoyé une réponse vide."
-        )
+            texte = (response.text or "").strip()
 
-    return texte
+            if not texte:
+                raise GeminiRequestError(
+                    "L'API Gemini a renvoyé une réponse vide."
+                )
+
+            return texte
+
+        except GeminiNotConfiguredError:
+            raise
+
+        except Exception as error:
+
+            derniere_erreur = error
+
+            derniere_tentative = tentative == max_tentatives - 1
+
+            if derniere_tentative or not _is_transient_overload(
+                error
+            ):
+                raise GeminiRequestError(
+                    f"Échec de l'appel à l'API Gemini : {error}"
+                ) from error
+
+    # Inatteignable : la boucle lève ou retourne systématiquement.
+    raise GeminiRequestError(
+        f"Échec de l'appel à l'API Gemini : {derniere_erreur}"
+    ) from derniere_erreur
