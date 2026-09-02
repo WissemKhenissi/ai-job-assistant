@@ -314,3 +314,96 @@ class SkillCatalogDB(Base):
         default=True,
         nullable=False
     )
+
+
+# ============================================================
+# FORMATION
+# ============================================================
+
+class EducationDB(Base):
+
+    __tablename__ = "education"
+
+    id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True
+    )
+
+    candidate_id: Mapped[str] = mapped_column(
+        String,
+        nullable=False
+    )
+
+    institution: Mapped[str] = mapped_column(
+        String,
+        nullable=False
+    )
+
+    degree: Mapped[str] = mapped_column(
+        String,
+        nullable=False
+    )
+
+    field_of_study: Mapped[str] = mapped_column(
+        String,
+        default=""
+    )
+
+    start_year: Mapped[int | None] = mapped_column(
+        nullable=True
+    )
+
+    end_year: Mapped[int | None] = mapped_column(
+        nullable=True
+    )
+
+    description: Mapped[str] = mapped_column(
+        Text,
+        default=""
+    )
+
+
+# ============================================================
+# CERTIFICATIONS
+# ============================================================
+
+class CertificationDB(Base):
+
+    __tablename__ = "certifications"
+
+    id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True
+    )
+
+    candidate_id: Mapped[str] = mapped_column(
+        String,
+        nullable=False
+    )
+
+    name: Mapped[str] = mapped_column(
+        String,
+        nullable=False
+    )
+
+    organization: Mapped[str] = mapped_column(
+        String,
+        default=""
+    )
+
+    # Année seule, comme pour EducationDB : le mois d'obtention n'est
+    # presque jamais connu, et une date complète imposerait de
+    # fabriquer un jour arbitraire.
+    obtained_year: Mapped[int | None] = mapped_column(
+        nullable=True
+    )
+
+    credential_url: Mapped[str] = mapped_column(
+        String,
+        default=""
+    )
+
+    description: Mapped[str] = mapped_column(
+        Text,
+        default=""
+    )
