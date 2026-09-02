@@ -84,6 +84,15 @@ class CandidateDB(Base):
         default=""
     )
 
+    # Projet professionnel, reconversion, intérêt pour un secteur ou
+    # une entreprise : uniquement ce que le candidat a explicitement
+    # fourni, jamais déduit. Alimente la lettre de motivation rédigée
+    # par l'IA (services/ai/letter_authoring.py).
+    motivations: Mapped[str] = mapped_column(
+        Text,
+        default=""
+    )
+
 
 # ============================================================
 # EXPERIENCE

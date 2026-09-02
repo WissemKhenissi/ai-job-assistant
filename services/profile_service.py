@@ -135,6 +135,7 @@ _CANDIDATE_FIELDS = {
     "availability",
     "languages",
     "interests",
+    "motivations",
 }
 
 

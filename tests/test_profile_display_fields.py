@@ -34,6 +34,7 @@ def test_les_nouveaux_champs_candidat_sont_vides_par_defaut(
     assert candidate.availability == ""
     assert candidate.languages == ""
     assert candidate.interests == ""
+    assert candidate.motivations == ""
 
 
 def test_update_candidate_ecrit_les_nouveaux_champs(
@@ -51,6 +52,7 @@ def test_update_candidate_ecrit_les_nouveaux_champs(
         availability="Disponible immédiatement",
         languages="Français : natif | Anglais : B2",
         interests="Entrepreneuriat • IA • Product Management",
+        motivations="En reconversion vers le produit digital.",
     )
 
     candidate = get_candidate()
@@ -59,6 +61,9 @@ def test_update_candidate_ecrit_les_nouveaux_champs(
         "Product / Chef de projet digital — E-commerce & Tech"
     )
     assert candidate.availability == "Disponible immédiatement"
+    assert candidate.motivations == (
+        "En reconversion vers le produit digital."
+    )
 
 
 def test_add_experience_accepte_une_localisation(session_factory):
