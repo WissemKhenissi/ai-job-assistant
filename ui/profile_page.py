@@ -1,12 +1,12 @@
 """
-Page "Mon profil" : consultation et édition des champs de
-présentation du candidat (accroche, disponibilité, langues, centres
-d'intérêt, motivations).
+Section "Profil" de la page Master CV : consultation et édition des
+champs de présentation du candidat (accroche, disponibilité, langues,
+centres d'intérêt, motivations).
 
 Avant ce module, ces champs existaient en base (voir
 database/models.py::CandidateDB) mais n'avaient aucune interface pour
 les renseigner — ils restaient vides. C'est le premier point d'entrée
-qui les rend réellement éditables, et qui introduit le nouveau champ
+qui les rend réellement éditables, et qui introduit le champ
 "motivations" (projet professionnel, reconversion, intérêt pour un
 secteur ou une entreprise) : la seule source pour ce que la lettre de
 motivation rédigée par l'IA peut dire des motivations du candidat.
@@ -21,7 +21,7 @@ from services.profile_service import update_candidate
 
 def render_profile_page(candidate, experiences_count: int, skills_count: int) -> None:
 
-    st.header("Mon profil professionnel", divider="blue")
+    st.subheader("Profil")
 
     # --------------------------------------------------------
     # RÉSUMÉ CHIFFRÉ

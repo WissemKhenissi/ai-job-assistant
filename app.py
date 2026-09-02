@@ -3,13 +3,10 @@ import streamlit as st
 from services.profile_service import (
     get_candidate,
     get_experiences,
-    get_achievements,
-    get_skills,
 )
 
-from utils.profile_editor import edit_experience
 from ui.job_matching import render_job_matching_page
-from ui.profile_page import render_profile_page
+from ui.master_cv import render_master_cv_page
 
 
 st.set_page_config(
@@ -48,128 +45,19 @@ st.sidebar.title("Navigation")
 page = st.sidebar.radio(
     "Aller vers",
     [
-        "Mon profil",
-        "Mes expériences",
-        "Mes compétences",
+        "Mon Master CV",
         "Mes candidatures",
     ]
 )
 
 
 # ============================================================
-# PAGE : MON PROFIL
+# PAGE : MON MASTER CV
 # ============================================================
 
-if page == "Mon profil":
+if page == "Mon Master CV":
 
-    render_profile_page(
-        candidate,
-        experiences_count=len(experiences),
-        skills_count=len(get_skills(candidate.id)),
-    )
-
-
-# ============================================================
-# PAGE : MES EXPÉRIENCES
-# ============================================================
-
-elif page == "Mes expériences":
-
-    st.header("Mes expériences professionnelles", divider="blue")
-
-    for experience in experiences:
-
-        with st.container(border=True):
-            st.subheader(
-                f"{experience.job_title} — {experience.company}"
-            )
-
-            fin = (
-                experience.end_date.strftime('%B %Y')
-                if experience.end_date
-                else "aujourd'hui"
-            )
-
-            lieu = (
-                f" · {experience.location}"
-                if experience.location
-                else ""
-            )
-
-            st.caption(
-                f"{experience.start_date.strftime('%B %Y')} → "
-                f"{fin}{lieu}"
-            )
-
-            if experience.business_context:
-                st.markdown("**Contexte**")
-                st.write(experience.business_context)
-
-        st.subheader("Réalisations")
-
-        achievements = get_achievements(experience.id)
-
-        for achievement in achievements:
-            with st.container(border=True):
-                st.markdown(f"### {achievement.title}")
-                st.write(achievement.description)
-
-                if achievement.situation:
-                    st.markdown("**Situation**")
-                    st.write(achievement.situation)
-
-                if achievement.action:
-                    st.markdown("**Actions menées**")
-                    st.write(achievement.action)
-
-                if achievement.result:
-                    st.markdown("**Résultat**")
-                    st.write(achievement.result)
-
-                if achievement.metrics:
-                    st.markdown("**Indicateurs**")
-                    for metric in achievement.metrics.split("\n"):
-                        if metric.strip():
-                            st.markdown(f"- {metric}")
-
-        mode = st.segmented_control(
-            "Mode",
-            ["Consulter", "Modifier"],
-            default="Consulter",
-            key=f"mode_{experience.id}"
-        )
-
-        if mode == "Modifier":
-
-            edit_experience(
-                experience
-            )
-
-
-# ============================================================
-# PAGE : MES COMPÉTENCES
-# ============================================================
-
-elif page == "Mes compétences":
-
-    st.header("🧠 Mes compétences")
-
-    skills = get_skills(candidate.id)
-
-    st.subheader("Compétences")
-
-    for skill in skills:
-
-        col1, col2 = st.columns([3, 1])
-
-        with col1:
-            st.markdown(
-                f"**{skill.name}**"
-            )
-
-        with col2:
-            if skill.level:
-                st.write(skill.level)
+    render_master_cv_page(candidate, experiences)
 
 
 # ============================================================
