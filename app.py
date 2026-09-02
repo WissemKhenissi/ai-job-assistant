@@ -7,7 +7,6 @@ from services.profile_service import (
     get_skills,
 )
 
-from data.master_profile import france_billet
 from utils.profile_editor import edit_experience
 from ui.job_matching_page import render_job_matching_page
 
@@ -123,19 +122,26 @@ elif page == "Mes expériences":
                 f"{experience.job_title} — {experience.company}"
             )
 
-            st.caption(
-                f"{experience.start_date.strftime('%B %Y')} → "
-                f"{experience.end_date.strftime('%B %Y')}"
+            fin = (
+                experience.end_date.strftime('%B %Y')
+                if experience.end_date
+                else "aujourd'hui"
             )
 
-            st.markdown("**Contexte**")
-            st.write(experience.business_context)
+            lieu = (
+                f" · {experience.location}"
+                if experience.location
+                else ""
+            )
 
-            with st.expander("Responsabilités", expanded=False):
-                # Pour l'instant les responsabilités viennent encore
-                # du Master Profile historique.
-                for responsibility in france_billet.responsibilities:
-                    st.markdown(f"- {responsibility}")
+            st.caption(
+                f"{experience.start_date.strftime('%B %Y')} → "
+                f"{fin}{lieu}"
+            )
+
+            if experience.business_context:
+                st.markdown("**Contexte**")
+                st.write(experience.business_context)
 
         st.subheader("Réalisations")
 
@@ -174,7 +180,7 @@ elif page == "Mes expériences":
         if mode == "Modifier":
 
             edit_experience(
-                france_billet
+                experience
             )
 
 
