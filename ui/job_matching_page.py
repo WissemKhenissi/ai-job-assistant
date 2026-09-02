@@ -13,6 +13,11 @@ from services.application_service import (
     record_application,
     update_application_status,
 )
+from services.ai.gemini_client import is_configured as ai_is_configured
+from services.ai.reformulation import (
+    reformulate_cover_letter,
+    reformulate_targeted_cv,
+)
 from services.cv import (
     build_targeted_cv,
     export_docx,
@@ -23,7 +28,7 @@ from services.letter import (
     export_letter_docx,
     export_letter_pdf,
 )
-from services.job_service import save_job_offer
+from services.job_service import get_job_offer_text, save_job_offer
 from services.market_memory_service import get_market_skill_memory
 from services.matching import analyze_and_save_job_match
 from services.job_requirements_service import extract_required_skills
@@ -40,11 +45,17 @@ def _render_cv_generation(
     job_offer_id: str,
 ) -> None:
     """
-    Génération du CV ciblé et de la lettre à partir de l'analyse.
+    Génération du CV ciblé et de la lettre à partir de l'analyse, et
+    reformulation IA optionnelle.
 
     Les deux documents sont reconstruits à chaque clic depuis les
     données du Master CV : il n'existe aucun état intermédiaire
     modifiable entre l'analyse et les documents produits.
+
+    Le texte affiché (déterministe ou reformulé) est conservé en
+    session_state, sous la clé de l'offre : Streamlit réexécute tout
+    le script à chaque interaction, il faut donc explicitement se
+    souvenir de si on regarde la version brute ou reformulée.
     """
 
     st.divider()
@@ -58,26 +69,46 @@ def _render_cv_generation(
         "sans preuve en sont volontairement absentes."
     )
 
-    if not st.button("Générer le CV et la lettre"):
+    etat_key = f"cv_letter_{job_offer_id}"
+
+    if st.button("Générer le CV et la lettre"):
+
+        try:
+
+            cv = build_targeted_cv(
+                candidate_id=candidate_id,
+                job_offer_id=job_offer_id,
+            )
+
+            letter = build_cover_letter(
+                candidate_id=candidate_id,
+                job_offer_id=job_offer_id,
+            )
+
+        except Exception as error:
+
+            st.error(f"Génération impossible : {error}")
+
+            return
+
+        # La reformulation part toujours de cette version : ne
+        # jamais reformuler un texte déjà reformulé, pour ne pas
+        # accumuler de dérive au fil des essais.
+        st.session_state[etat_key] = {
+            "cv_deterministe": cv,
+            "letter_deterministe": letter,
+            "cv_affiche": cv,
+            "letter_affiche": letter,
+            "reformule": False,
+        }
+
+    etat = st.session_state.get(etat_key)
+
+    if etat is None:
         return
 
-    try:
-
-        cv = build_targeted_cv(
-            candidate_id=candidate_id,
-            job_offer_id=job_offer_id,
-        )
-
-        letter = build_cover_letter(
-            candidate_id=candidate_id,
-            job_offer_id=job_offer_id,
-        )
-
-    except Exception as error:
-
-        st.error(f"Génération impossible : {error}")
-
-        return
+    cv = etat["cv_affiche"]
+    letter = etat["letter_affiche"]
 
     if not cv.skills:
 
@@ -108,6 +139,88 @@ def _render_cv_generation(
         f"{cv.total_lines} ligne(s) d'expérience retenue(s), "
         f"{len(cv.achievements)} réalisation(s)."
     )
+
+    # --------------------------------------------------------
+    # REFORMULATION IA (GEMINI) — OPTIONNELLE
+    # --------------------------------------------------------
+    #
+    # Reformule toujours à partir de la version déterministe stockée
+    # (jamais à partir d'une reformulation précédente) : l'IA ne peut
+    # qu'ajuster le ton et le vocabulaire, jamais s'écarter davantage
+    # du texte source à chaque nouvel essai.
+
+    st.divider()
+
+    if not ai_is_configured():
+
+        st.caption(
+            "Reformulation IA (Gemini) non configurée — clé "
+            "GEMINI_API_KEY absente de .env. Les documents restent "
+            "utilisables tels quels."
+        )
+
+    else:
+
+        reformuler_col, revenir_col = st.columns(2)
+
+        with reformuler_col:
+
+            reformuler_clic = st.button(
+                "✨ Reformuler avec l'IA (Gemini)",
+                key=f"reformuler_{job_offer_id}",
+            )
+
+        with revenir_col:
+
+            if etat["reformule"]:
+
+                if st.button(
+                    "↩️ Revenir au texte déterministe",
+                    key=f"revenir_{job_offer_id}",
+                ):
+
+                    etat["cv_affiche"] = etat["cv_deterministe"]
+                    etat["letter_affiche"] = etat["letter_deterministe"]
+                    etat["reformule"] = False
+
+                    st.rerun()
+
+        if reformuler_clic:
+
+            job_text = get_job_offer_text(job_offer_id)
+
+            with st.spinner("Reformulation en cours..."):
+
+                cv_reformule, avertissements_cv = reformulate_targeted_cv(
+                    etat["cv_deterministe"],
+                    job_text,
+                )
+
+                letter_reformulee, avertissements_lettre = (
+                    reformulate_cover_letter(
+                        etat["letter_deterministe"],
+                        job_text,
+                    )
+                )
+
+            etat["cv_affiche"] = cv_reformule
+            etat["letter_affiche"] = letter_reformulee
+            etat["reformule"] = True
+
+            cv = cv_reformule
+            letter = letter_reformulee
+
+            for avertissement in (
+                avertissements_cv + avertissements_lettre
+            ):
+                st.warning(avertissement)
+
+            if not (avertissements_cv + avertissements_lettre):
+                st.success("Texte reformulé avec Gemini.")
+
+        elif etat["reformule"]:
+
+            st.caption("Version actuellement affichée : reformulée par l'IA.")
 
     # --------------------------------------------------------
     # LETTRE — RELECTURE OBLIGATOIRE

@@ -2,6 +2,31 @@ from database.db import SessionLocal
 from models.job import JobOfferDB
 
 
+def get_job_offer_text(job_offer_id: str) -> str:
+    """
+    Texte complet (titre + description) d'une offre, tel qu'analysé
+    par le moteur de matching — utilisé par la reformulation IA pour
+    aligner le vocabulaire sur celui de l'annonce.
+    """
+
+    db = SessionLocal()
+
+    try:
+
+        job_offer = db.get(JobOfferDB, job_offer_id)
+
+        if job_offer is None:
+            return ""
+
+        return "\n".join(
+            [job_offer.title or "", job_offer.description or ""]
+        )
+
+    finally:
+
+        db.close()
+
+
 def save_job_offer(
     job_offer_id: str,
     title: str,
