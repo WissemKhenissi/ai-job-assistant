@@ -186,6 +186,23 @@ INFERRED_PRUDENT_SCORE = 0.60
 
 MISSING_SCORE = 0.00
 
+
+# ============================================================
+# PONDERATION DU SCORE D'EXPERIENCE
+# ============================================================
+#
+# Le score d'expérience est exprimé sur 100 : il mesure la part
+# des compétences demandées que le candidat sait démontrer.
+#
+# Une compétence prouvée (preuve EvidenceDB liée) vaut le maximum,
+# une compétence seulement déduite vaut nettement moins — une
+# inférence reste une hypothèse, pas un fait affirmé.
+
+EXPERIENCE_PROVEN_WEIGHT = 100
+
+EXPERIENCE_INFERRED_WEIGHT = 60
+
+
 # ============================================================
 # COMPETENCES AUTORISEES A L'INFERENCE
 # ============================================================
@@ -1513,42 +1530,10 @@ def analyze_candidate_against_skills(
             for match in matches
         )
 
-        missing_count = sum(
-            match.status == "missing"
-            for match in matches
-        )
-
         score_experience = round(
             (
-                proven_count * 100
-                + inferred_count * 65
-            )
-            / len(matches),
-            1,
-        )
-
-        # ========================================================
-        # COMPTEURS
-        # ========================================================
-
-        proven_count = sum(
-            match.status == "proven"
-            for match in matches
-        )
-
-        inferred_count = sum(
-            match.status == "inferred"
-            for match in matches
-        )
-
-        # ========================================================
-        # SCORE EXPERIENCE
-        # ========================================================
-
-        score_experience = round(
-            (
-                proven_count * 100
-                + inferred_count * 60
+                proven_count * EXPERIENCE_PROVEN_WEIGHT
+                + inferred_count * EXPERIENCE_INFERRED_WEIGHT
             )
             / len(matches),
             1,
