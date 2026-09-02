@@ -116,10 +116,13 @@ Ces éléments ne sont pas abandonnés : ils constituent le backlog de la V2, à
 
 ### Phase 4 — Qualité de sortie (ajoutée le 2 septembre 2026)
 
-- CV limité à une page, avec un budget de contenu qui remplit la page au mieux sans jamais la dépasser.
-- Reformulation IA (Gemini) du CV et de la lettre, contrainte à reformuler le contenu déjà sélectionné sans y ajouter de compétence, chiffre ou fait absent du texte source.
-- Validation explicite d'une compétence déclarée sans preuve par l'utilisateur lui-même (son attestation, pas une invention du système) pour qu'elle devienne utilisable par le générateur.
-- Suggestions de compétences déduites du parcours, soumises à validation utilisateur avant d'entrer au Master CV.
+- ~~Reformulation IA (Gemini) du CV et de la lettre, contrainte à reformuler le contenu déjà sélectionné sans y ajouter de compétence, chiffre ou fait absent du texte source.~~ **Fait, puis dépassé le 2 septembre 2026** : après test réel, la reformulation paragraphe par paragraphe s'est révélée insuffisante (elle ne fait que polir des formules déjà pauvres). Remplacée pour la lettre par une **rédaction IA complète** (`services/ai/letter_authoring.py`) : Gemini compose l'argumentaire à partir d'une fiche de faits structurée (Master CV + motivations + analyse de matching + offre), avec un garde-fou numérique sur l'ensemble de la fiche et un panneau des faits affiché à l'écran pour la relecture humaine. Le CV garde la reformulation légère (résumé + lignes de preuve), le contenu factuel restant sélectionné déterministiquement.
+- **Ajouté le 2 septembre 2026** : champ `motivations` sur le profil candidat (reconversion, intérêt pour un secteur ou une entreprise) — collecté via une vraie UI de profil (`ui/profile_page.py`, qui n'existait pas avant), et seule source utilisée par la lettre pour parler de motivation personnelle.
+- **Ajouté le 2 septembre 2026** : sections du CV activables/désactivables à l'export (Profil, Compétences, Expériences, Formation & certifications, Langues, Centres d'intérêt) — le candidat choisit, par candidature, ce qui reste pertinent à montrer.
+- **Ajouté le 2 septembre 2026** : page "Mes candidatures" réorganisée en onglets (`ui/job_matching/`, éclaté depuis un fichier unique de 880 lignes) — Nouvelle annonce / CV & lettre / Suivi / Mémoire de marché.
+- CV limité à une page, avec un budget de contenu qui remplit la page au mieux sans jamais la dépasser. **Toujours ouvert.**
+- Validation explicite d'une compétence déclarée sans preuve par l'utilisateur lui-même (son attestation, pas une invention du système) pour qu'elle devienne utilisable par le générateur. **Toujours ouvert.**
+- Suggestions de compétences déduites du parcours, soumises à validation utilisateur avant d'entrer au Master CV. **Toujours ouvert.**
 
 ---
 
@@ -127,7 +130,7 @@ Ces éléments ne sont pas abandonnés : ils constituent le backlog de la V2, à
 
 - La table `applications` se relie à `job_offers` existante plutôt que de dupliquer les informations de l'offre.
 - Pas d'automatisation par lecture d'emails pour le suivi de candidature en V1 — ça nécessiterait un connecteur externe, explicitement hors périmètre.
-- La lettre de motivation combine un squelette déterministe (zéro invention) et une reformulation IA légère, toujours soumise à validation avant d'être considérée comme finale.
+- La lettre de motivation peut être générée de deux façons, toujours soumises à validation avant d'être considérées comme finales : un squelette déterministe (zéro invention, toujours disponible sans IA) ou une rédaction complète par Gemini à partir d'une fiche de faits (repli automatique sur le déterministe en cas d'échec ou de garde-fou déclenché).
 
 ---
 

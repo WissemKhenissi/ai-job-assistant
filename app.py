@@ -8,7 +8,8 @@ from services.profile_service import (
 )
 
 from utils.profile_editor import edit_experience
-from ui.job_matching_page import render_job_matching_page
+from ui.job_matching import render_job_matching_page
+from ui.profile_page import render_profile_page
 
 
 st.set_page_config(
@@ -61,49 +62,10 @@ page = st.sidebar.radio(
 
 if page == "Mon profil":
 
-    st.header("Mon profil professionnel", divider="blue")
-
-    st.subheader("Positionnement")
-
-    st.write(
-        "Product Owner • Product Owner Digital • "
-        "Chef de projet IT • PMO"
-    )
-
-    st.divider()
-
-    st.subheader("Résumé de l'expérience")
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.metric(
-            "Expérience principale",
-            "7+ ans"
-        )
-
-    with col2:
-        st.metric(
-            "Expériences",
-            len(experiences)
-        )
-
-    with col3:
-        st.metric(
-            "Compétences",
-            len(get_skills(candidate.id))
-        )
-
-    st.divider()
-
-    st.subheader("🎯 Positionnement")
-
-    st.write(
-        """
-        Profil hybride Business / Digital / Produit,
-        avec plus de 7 ans d'expérience dans des environnements
-        e-commerce et adtech.
-        """ 
+    render_profile_page(
+        candidate,
+        experiences_count=len(experiences),
+        skills_count=len(get_skills(candidate.id)),
     )
 
 
