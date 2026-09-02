@@ -14,6 +14,7 @@ __pycache__/
 
 # Base de données locale (données personnelles, régénérable via database/init_db.py)
 data/job_assistant.db
+data/job_assistant.db.backup_*
 
 # Éditeurs / OS
 .vscode/
