@@ -26,6 +26,26 @@ EXPORT_DIR = (
 )
 
 
+# Sections activables/désactivables à l'export. `included_sections`
+# vaut None par défaut (tout est inclus) : c'est le candidat qui
+# choisit, pour une offre donnée, ce qui reste pertinent à montrer —
+# jamais le contenu lui-même, seulement sa présence.
+ALL_CV_SECTIONS = frozenset(
+    {
+        "resume",
+        "competences",
+        "experiences",
+        "formation_certifications",
+        "langues",
+        "interets",
+    }
+)
+
+
+def _inclut(section: str, included_sections: set[str] | None) -> bool:
+    return included_sections is None or section in included_sections
+
+
 MOIS_ABREGES = (
     "Janv.", "Févr.", "Mars", "Avr.", "Mai", "Juin",
     "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc.",
@@ -139,8 +159,15 @@ def _formation_certifications_lines(
 def export_docx(
     cv: TargetedCV,
     path: Path | str | None = None,
+    included_sections: set[str] | None = None,
 ) -> Path:
-    """Écrit le CV ciblé dans un fichier .docx et retourne son chemin."""
+    """
+    Écrit le CV ciblé dans un fichier .docx et retourne son chemin.
+
+    `included_sections` restreint les rubriques affichées (voir
+    ALL_CV_SECTIONS) ; None (par défaut) inclut tout ce que le
+    contenu du CV rend pertinent, comme avant l'ajout de ce paramètre.
+    """
 
     from docx import Document
     from docx.shared import Cm, Pt, RGBColor
@@ -211,7 +238,7 @@ def export_docx(
     # PROFIL
     # --------------------------------------------------------
 
-    if cv.summary:
+    if cv.summary and _inclut("resume", included_sections):
         _rubrique("Profil")
         document.add_paragraph(cv.summary)
 
@@ -222,7 +249,7 @@ def export_docx(
     # Uniquement les compétences prouvées, regroupées par catégorie
     # du référentiel : c'est la garantie d'honnêteté du CV généré.
 
-    if cv.skill_groups:
+    if cv.skill_groups and _inclut("competences", included_sections):
 
         _rubrique("Compétences clés")
 
@@ -239,7 +266,7 @@ def export_docx(
     # EXPERIENCES — DEUX COLONNES (DATES/LIEU | CONTENU)
     # --------------------------------------------------------
 
-    if cv.experiences:
+    if cv.experiences and _inclut("experiences", included_sections):
 
         _rubrique("Expériences professionnelles")
 
@@ -292,7 +319,9 @@ def export_docx(
 
     lignes_formation = _formation_certifications_lines(cv)
 
-    if lignes_formation:
+    if lignes_formation and _inclut(
+        "formation_certifications", included_sections
+    ):
 
         _rubrique("Formation & certifications")
 
@@ -316,14 +345,21 @@ def export_docx(
     # LANGUES & CENTRES D'INTERET
     # --------------------------------------------------------
 
-    if cv.languages or cv.interests:
+    afficher_langues = bool(cv.languages) and _inclut(
+        "langues", included_sections
+    )
+    afficher_interets = bool(cv.interests) and _inclut(
+        "interets", included_sections
+    )
+
+    if afficher_langues or afficher_interets:
 
         _rubrique("Langues & centres d'intérêt")
 
-        if cv.languages:
+        if afficher_langues:
             document.add_paragraph(f"Langues : {cv.languages}")
 
-        if cv.interests:
+        if afficher_interets:
             document.add_paragraph(
                 f"Centres d'intérêt : {cv.interests}"
             )
@@ -340,8 +376,15 @@ def export_docx(
 def export_pdf(
     cv: TargetedCV,
     path: Path | str | None = None,
+    included_sections: set[str] | None = None,
 ) -> Path:
-    """Écrit le CV ciblé dans un fichier .pdf et retourne son chemin."""
+    """
+    Écrit le CV ciblé dans un fichier .pdf et retourne son chemin.
+
+    `included_sections` restreint les rubriques affichées (voir
+    ALL_CV_SECTIONS) ; None (par défaut) inclut tout ce que le
+    contenu du CV rend pertinent, comme avant l'ajout de ce paramètre.
+    """
 
     from reportlab.lib.colors import HexColor
     from reportlab.lib.pagesizes import A4
@@ -454,7 +497,7 @@ def export_pdf(
     # PROFIL
     # --------------------------------------------------------
 
-    if cv.summary:
+    if cv.summary and _inclut("resume", included_sections):
         elements.append(Paragraph("PROFIL", style_rubrique))
         elements.append(Paragraph(cv.summary, style_normal))
 
@@ -462,7 +505,7 @@ def export_pdf(
     # COMPETENCES CLES
     # --------------------------------------------------------
 
-    if cv.skill_groups:
+    if cv.skill_groups and _inclut("competences", included_sections):
 
         elements.append(
             Paragraph("COMPÉTENCES CLÉS", style_rubrique)
@@ -489,7 +532,7 @@ def export_pdf(
     # EXPERIENCES — TABLEAU 2 COLONNES PAR EXPERIENCE
     # --------------------------------------------------------
 
-    if cv.experiences:
+    if cv.experiences and _inclut("experiences", included_sections):
 
         elements.append(
             Paragraph(
@@ -560,7 +603,9 @@ def export_pdf(
 
     lignes_formation = _formation_certifications_lines(cv)
 
-    if lignes_formation:
+    if lignes_formation and _inclut(
+        "formation_certifications", included_sections
+    ):
 
         elements.append(
             Paragraph("FORMATION & CERTIFICATIONS", style_rubrique)
@@ -595,7 +640,14 @@ def export_pdf(
     # LANGUES & CENTRES D'INTERET
     # --------------------------------------------------------
 
-    if cv.languages or cv.interests:
+    afficher_langues = bool(cv.languages) and _inclut(
+        "langues", included_sections
+    )
+    afficher_interets = bool(cv.interests) and _inclut(
+        "interets", included_sections
+    )
+
+    if afficher_langues or afficher_interets:
 
         elements.append(
             Paragraph(
@@ -603,12 +655,12 @@ def export_pdf(
             )
         )
 
-        if cv.languages:
+        if afficher_langues:
             elements.append(
                 Paragraph(f"Langues : {cv.languages}", style_normal)
             )
 
-        if cv.interests:
+        if afficher_interets:
             elements.append(
                 Paragraph(
                     f"Centres d'intérêt : {cv.interests}",

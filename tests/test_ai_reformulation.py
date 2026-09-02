@@ -299,7 +299,8 @@ def _cv_de_test() -> TargetedCV:
         phone="",
         location="",
         linkedin_url="",
-        summary="",
+        summary="Profil produit avec 7 ans d'expérience e-commerce.",
+        headline="Product Owner Digital",
         job_offer_id="job-test",
         job_offer_title="Product Owner",
         skills=["Product Discovery"],
@@ -369,3 +370,71 @@ def test_reformulate_targeted_cv_rejette_un_chiffre_invente(
 
     assert ligne.text == "Conception de produits digitaux."
     assert avertissements
+
+
+def test_reformulate_targeted_cv_reformule_aussi_le_resume(
+    monkeypatch,
+):
+    monkeypatch.setattr(reformulation, "is_configured", lambda: True)
+
+    monkeypatch.setattr(
+        reformulation,
+        "generate_text",
+        lambda *a, **k: "Résumé reformulé sans nouveau chiffre.",
+    )
+
+    cv = _cv_de_test()
+
+    cv_reformule, _avertissements = (
+        reformulation.reformulate_targeted_cv(cv, JOB_TEXT)
+    )
+
+    assert cv_reformule.summary == "Résumé reformulé sans nouveau chiffre."
+
+
+# ============================================================
+# RESUME DU CV
+# ============================================================
+
+def test_reformulate_cv_summary_sans_nouveau_chiffre_est_accepte(
+    monkeypatch,
+):
+    monkeypatch.setattr(reformulation, "is_configured", lambda: True)
+
+    monkeypatch.setattr(
+        reformulation,
+        "generate_text",
+        lambda *a, **k: (
+            "Profil produit orienté e-commerce, 7 ans d'expérience."
+        ),
+    )
+
+    resultat = reformulation.reformulate_cv_summary(
+        "Profil produit avec 7 ans d'expérience e-commerce.",
+        "Product Owner Digital",
+        JOB_TEXT,
+    )
+
+    assert resultat.was_reformulated is True
+    assert "7 ans" in resultat.text
+
+
+def test_reformulate_cv_summary_rejette_un_chiffre_invente(
+    monkeypatch,
+):
+    monkeypatch.setattr(reformulation, "is_configured", lambda: True)
+
+    monkeypatch.setattr(
+        reformulation,
+        "generate_text",
+        lambda *a, **k: "Profil produit avec 12 ans d'expérience.",
+    )
+
+    resultat = reformulation.reformulate_cv_summary(
+        "Profil produit avec 7 ans d'expérience e-commerce.",
+        "",
+        JOB_TEXT,
+    )
+
+    assert resultat.was_reformulated is False
+    assert resultat.text == "Profil produit avec 7 ans d'expérience e-commerce."

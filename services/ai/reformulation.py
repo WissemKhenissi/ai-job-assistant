@@ -231,12 +231,38 @@ def reformulate_cv_line(
     return _safe_reformulate(text, instructions)
 
 
+def reformulate_cv_summary(
+    summary: str,
+    headline: str,
+    job_text: str,
+) -> ReformulationResult:
+    """
+    Reformule le résumé de profil (section "Profil" du CV) pour le
+    rapprocher du vocabulaire et des enjeux de l'offre — un résumé
+    plus "adapté au storytelling de l'offre" reste un résumé du même
+    parcours, jamais un résumé différent.
+    """
+
+    instructions = (
+        "Ce texte est le résumé de profil affiché en tête d'un CV "
+        "ciblé pour l'offre ci-dessous"
+        + (f' (accroche : "{headline}")' if headline.strip() else "")
+        + ". Reformule-le pour qu'il mette en avant, avec le "
+        "vocabulaire de l'offre, ce qui est déjà écrit — sans "
+        "changer le fond ni la longueur de façon significative.\n\n"
+        f"Extrait de l'offre :\n{job_text[:MAX_JOB_EXCERPT]}"
+    )
+
+    return _safe_reformulate(summary, instructions)
+
+
 def reformulate_targeted_cv(
     cv: TargetedCV,
     job_text: str,
 ) -> tuple[TargetedCV, list[str]]:
     """
-    Reformule les lignes de preuve de chaque expérience retenue.
+    Reformule le résumé de profil et les lignes de preuve de chaque
+    expérience retenue.
 
     Le reste du CV (compétences, formation, certifications, en-tête)
     n'est volontairement pas passé à l'IA : ce sont des données
@@ -244,6 +270,16 @@ def reformulate_targeted_cv(
     """
 
     avertissements: list[str] = []
+
+    resultat_resume = reformulate_cv_summary(
+        cv.summary,
+        cv.headline,
+        job_text,
+    )
+
+    if resultat_resume.warning:
+        avertissements.append(resultat_resume.warning)
+
     nouvelles_experiences = []
 
     for experience in cv.experiences:
@@ -269,6 +305,10 @@ def reformulate_targeted_cv(
             replace(experience, lines=nouvelles_lignes)
         )
 
-    cv_reformule = replace(cv, experiences=nouvelles_experiences)
+    cv_reformule = replace(
+        cv,
+        summary=resultat_resume.text,
+        experiences=nouvelles_experiences,
+    )
 
     return cv_reformule, avertissements

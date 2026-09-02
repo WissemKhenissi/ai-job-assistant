@@ -296,6 +296,109 @@ def test_un_cv_sans_formation_n_affiche_pas_la_rubrique(tmp_path):
 
 
 # ============================================================
+# DOCX — SECTIONS ACTIVABLES
+# ============================================================
+
+def test_included_sections_none_affiche_tout_comme_avant(tmp_path):
+    from services.cv import export_docx
+
+    destination = tmp_path / "cv.docx"
+
+    export_docx(_cv_de_test(), destination, included_sections=None)
+
+    texte = _texte_du_docx(destination).upper()
+
+    assert "PROFIL" in texte
+    assert "COMPÉTENCES CLÉS" in texte
+    assert "EXPÉRIENCES PROFESSIONNELLES" in texte
+    assert "FORMATION" in texte
+    assert "LANGUES" in texte
+
+
+def test_une_section_decochee_disparait_du_docx(tmp_path):
+    from services.cv import export_docx
+
+    destination = tmp_path / "cv.docx"
+
+    export_docx(
+        _cv_de_test(),
+        destination,
+        included_sections={
+            "competences",
+            "experiences",
+            "formation_certifications",
+            "langues",
+            "interets",
+        },
+    )
+
+    texte = _texte_du_docx(destination).upper()
+
+    assert "PROFIL" not in texte
+    assert "COMPÉTENCES CLÉS" in texte
+
+
+def test_seule_la_section_choisie_reste(tmp_path):
+    """
+    Une sélection réduite à une seule section ne doit faire
+    apparaître que celle-ci — le contenu retenu reste inchangé, seule
+    sa présence varie.
+    """
+
+    from services.cv import export_docx
+
+    destination = tmp_path / "cv.docx"
+
+    export_docx(
+        _cv_de_test(),
+        destination,
+        included_sections={"experiences"},
+    )
+
+    texte = _texte_du_docx(destination).upper()
+
+    assert "PROFIL" not in texte
+    assert "COMPÉTENCES CLÉS" not in texte
+    assert "FORMATION" not in texte
+    assert "LANGUES" not in texte
+    assert "EXPÉRIENCES PROFESSIONNELLES" in texte
+    assert "CONCEPTION DE PRODUITS DIGITAUX." in texte
+
+
+def test_langues_et_interets_sont_activables_independamment(
+    tmp_path,
+):
+    from services.cv import export_docx
+
+    destination = tmp_path / "cv.docx"
+
+    export_docx(
+        _cv_de_test(),
+        destination,
+        included_sections={"langues"},
+    )
+
+    texte = _texte_du_docx(destination)
+
+    assert "Français" in texte
+    assert "Product Management" not in texte
+
+
+def test_le_pdf_accepte_aussi_included_sections(tmp_path):
+    from services.cv import export_pdf
+
+    destination = tmp_path / "cv.pdf"
+
+    export_pdf(
+        _cv_de_test(),
+        destination,
+        included_sections={"experiences"},
+    )
+
+    assert destination.read_bytes().startswith(b"%PDF-")
+
+
+# ============================================================
 # PDF
 # ============================================================
 

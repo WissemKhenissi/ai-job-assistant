@@ -7,6 +7,7 @@ issue.
 """
 
 from services.cv.export import (
+    ALL_CV_SECTIONS,
     default_export_path,
     export_docx,
     export_pdf,
@@ -23,6 +24,7 @@ from services.cv.selection import (
 )
 
 __all__ = [
+    "ALL_CV_SECTIONS",
     "CVAchievement",
     "CVEvidenceLine",
     "CVExperience",
