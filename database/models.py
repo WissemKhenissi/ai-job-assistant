@@ -61,6 +61,29 @@ class CandidateDB(Base):
         default=""
     )
 
+    # Accroche affichée sous le nom sur le CV
+    # (ex. "Product / Chef de projet digital — E-commerce & Tech").
+    headline: Mapped[str] = mapped_column(
+        String,
+        default=""
+    )
+
+    # Ex. "Disponible immédiatement", "Disponible sous 1 mois".
+    availability: Mapped[str] = mapped_column(
+        String,
+        default=""
+    )
+
+    languages: Mapped[str] = mapped_column(
+        Text,
+        default=""
+    )
+
+    interests: Mapped[str] = mapped_column(
+        Text,
+        default=""
+    )
+
 
 # ============================================================
 # EXPERIENCE
@@ -88,6 +111,11 @@ class ExperienceDB(Base):
     job_title: Mapped[str] = mapped_column(
         String,
         nullable=False
+    )
+
+    location: Mapped[str] = mapped_column(
+        String,
+        default=""
     )
 
     start_date: Mapped[date] = mapped_column(

@@ -131,6 +131,10 @@ _CANDIDATE_FIELDS = {
     "linkedin_url",
     "portfolio_url",
     "summary",
+    "headline",
+    "availability",
+    "languages",
+    "interests",
 }
 
 
@@ -170,6 +174,7 @@ def update_candidate(candidate_id: str, **fields) -> None:
 _EXPERIENCE_FIELDS = {
     "company",
     "job_title",
+    "location",
     "start_date",
     "end_date",
     "description",
@@ -184,6 +189,7 @@ def add_experience(
     job_title: str,
     start_date: date,
     end_date: date | None = None,
+    location: str = "",
     description: str = "",
     business_context: str = "",
     team_context: str = "",
@@ -198,6 +204,7 @@ def add_experience(
             candidate_id=candidate_id,
             company=company,
             job_title=job_title,
+            location=location,
             start_date=start_date,
             end_date=end_date,
             description=description,
