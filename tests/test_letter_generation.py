@@ -118,6 +118,44 @@ def test_la_lettre_affirme_les_competences_prouvees(
     assert "Product Discovery" in lettre.full_text
 
 
+def test_le_resume_complet_n_est_pas_duplique_dans_l_ouverture(
+    session_factory,
+):
+    """
+    cv.summary vit déjà dans la section PROFIL du CV joint. Le
+    dupliquer intégralement dans la phrase d'ouverture de la lettre
+    noierait l'accroche sous un paragraphe dense — seule l'accroche
+    courte (headline) y a sa place.
+    """
+
+    from services.profile_service import update_candidate
+    from services.letter import build_cover_letter
+
+    session = session_factory()
+    _prepare(session)
+    session.close()
+
+    resume_long = (
+        "Professionnel du digital avec plus de 7 ans d'expérience "
+        "en environnements e-commerce et adtech, une solide culture "
+        "produit et une forte capacité à faire le lien entre enjeux "
+        "business, besoins métiers et contraintes techniques."
+    )
+
+    update_candidate(
+        CANDIDATE_ID,
+        summary=resume_long,
+        headline="Product / Chef de projet digital",
+    )
+
+    _analyser(["Product Discovery"])
+
+    lettre = build_cover_letter(CANDIDATE_ID, JOB_OFFER_ID)
+
+    assert "Product / Chef de projet digital" in lettre.full_text
+    assert resume_long not in lettre.full_text
+
+
 def test_la_lettre_n_affirme_jamais_une_competence_sans_preuve(
     session_factory,
 ):

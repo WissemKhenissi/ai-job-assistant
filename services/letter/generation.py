@@ -50,6 +50,15 @@ def _paragraphe_accroche(
     cv: TargetedCV,
     company: str,
 ) -> LetterParagraph:
+    """
+    Phrase d'ouverture, courte par construction.
+
+    Le résumé complet du profil (cv.summary) n'est volontairement pas
+    repris ici : il vit déjà dans la section PROFIL du CV joint, et
+    le dupliquer intégralement noierait l'ouverture de la lettre sous
+    un paragraphe dense. Seule l'accroche courte (cv.headline) est
+    éventuellement reprise, comme un sous-titre de positionnement.
+    """
 
     poste = cv.job_offer_title or "le poste proposé"
 
@@ -58,8 +67,8 @@ def _paragraphe_accroche(
         f"attention, et je souhaite y postuler."
     )
 
-    if cv.summary.strip():
-        phrase += f" {cv.summary.strip()}"
+    if cv.headline.strip():
+        phrase += f" Mon positionnement : {cv.headline.strip()}."
 
     return LetterParagraph(text=phrase)
 
