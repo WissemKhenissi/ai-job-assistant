@@ -10,7 +10,11 @@ explicite de l'utilisateur, retenue après discussion) :
    expériences passées — jamais une seule ligne de questions en
    profondeur sur une expérience isolée.
 2. Le candidat répond à ce qu'il veut, dans l'interface (aucune
-   question n'est obligatoire).
+   question n'est obligatoire) — à l'écrit, ou à l'oral (chaque
+   réponse orale est transcrite par `transcribe_audio` avant d'être
+   traitée comme n'importe quelle réponse texte, pour que le garde-fou
+   de traçabilité ci-dessous s'applique de la même façon quelle que
+   soit la modalité de saisie).
 3. `propose_evidence_from_answers` ne relit QUE les réponses
    effectivement données dans cette session — jamais le reste du
    profil — et propose des formulations courtes prêtes pour le
@@ -435,6 +439,64 @@ def generate_interview_questions(
 
 
 # ============================================================
+# TRANSCRIPTION AUDIO
+# ============================================================
+
+# Types MIME audio produits par st.audio_input (enregistrement
+# navigateur) — la valeur exacte varie selon le navigateur, on garde
+# une liste large plutôt que d'imposer un seul format.
+AUDIO_MIME_TYPES = {"audio/wav", "audio/webm", "audio/ogg", "audio/mp4"}
+
+
+def transcribe_audio(audio_bytes: bytes, mime_type: str = "audio/wav") -> tuple[str, str]:
+    """
+    Transcrit un enregistrement audio en texte via Gemini.
+
+    Chaque réponse orale passe par ici avant d'être traitée comme
+    n'importe quelle réponse texte : le garde-fou de traçabilité de
+    propose_evidence_from_answers (l'extrait cité doit apparaître mot
+    pour mot dans la réponse) ne fonctionne que sur du texte — la
+    transcription est donc une étape obligatoire, jamais un simple
+    confort, pas un raccourci qui contournerait le garde-fou.
+
+    Ne lève jamais d'exception : retourne une chaîne vide avec un
+    avertissement en cas d'échec.
+    """
+
+    if not audio_bytes:
+        return "", ""
+
+    if not is_configured():
+        return "", (
+            "Clé GEMINI_API_KEY non configurée : transcription audio "
+            "indisponible."
+        )
+
+    from google.genai import types
+
+    parts = [
+        types.Part.from_text(
+            text=(
+                "Transcris fidèlement cet enregistrement audio en "
+                "français. Réponds UNIQUEMENT avec la transcription "
+                "du texte parlé, mot pour mot — pas de reformulation, "
+                "pas de résumé, pas de commentaire, pas de correction "
+                "de ce qui a été dit."
+            )
+        ),
+        types.Part.from_bytes(data=audio_bytes, mime_type=mime_type),
+    ]
+
+    try:
+        texte = generate_multimodal(parts, temperature=0.0)
+
+    except (GeminiNotConfiguredError, GeminiRequestError) as error:
+        return "", f"Transcription audio impossible ({error})."
+
+    return texte.strip(), ""
+
+
+# ============================================================
 # PROPOSITION DE PREUVES A PARTIR DES REPONSES
 # ============================================================
 
@@ -452,11 +514,19 @@ RÈGLES ABSOLUES :
 
 def propose_evidence_from_answers(
     answers: list[InterviewAnswer],
+    inspiration_questions: list[InterviewQuestion] | None = None,
 ) -> tuple[list[EvidenceProposal], str]:
     """
     Ne lit que les réponses transmises ici — jamais le reste du
     Master CV — et propose des preuves à valider explicitement par
     l'utilisateur avant toute écriture en base.
+
+    `inspiration_questions`, optionnel, sert uniquement de contexte
+    (mode "réponse libre" : le candidat répond en un seul bloc à
+    l'ensemble des questions plutôt qu'une par une) — l'IA voit quelles
+    pistes avaient été proposées, mais le garde-fou de traçabilité
+    porte toujours exclusivement sur le texte des réponses, jamais sur
+    ces questions elles-mêmes.
     """
 
     reponses_utiles = [
@@ -485,7 +555,19 @@ def propose_evidence_from_answers(
 
         blocs.append(bloc)
 
-    prompt = EVIDENCE_RULES + "\n\n" + "\n\n".join(blocs)
+    prompt = EVIDENCE_RULES
+
+    if inspiration_questions:
+        prompt += (
+            "\n\nPour information, voici les pistes de réflexion "
+            "proposées au candidat avant sa réponse libre — ce ne "
+            "sont PAS des réponses, seulement le contexte de ce qui "
+            "était recherché, à ne jamais utiliser comme source de "
+            "preuve :\n"
+            + "\n".join(f"- {q.question}" for q in inspiration_questions)
+        )
+
+    prompt += "\n\n" + "\n\n".join(blocs)
 
     try:
         reponse = generate_multimodal([prompt], temperature=0.3)

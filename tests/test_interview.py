@@ -317,3 +317,93 @@ def test_une_reponse_illisible_retourne_un_avertissement_evidence(
 
     assert propositions == []
     assert avertissement
+
+
+def test_les_questions_d_inspiration_atteignent_le_prompt(monkeypatch):
+    """
+    Mode "réponse libre" : les questions générées sont transmises
+    comme contexte, mais ne doivent jamais servir de source de preuve
+    — seul le texte des réponses compte pour le garde-fou.
+    """
+
+    monkeypatch.setattr(interview, "is_configured", lambda: True)
+
+    prompts_recus = []
+
+    def _generate_multimodal(parts, *a, **k):
+        prompts_recus.append(parts[0])
+        return "[]"
+
+    monkeypatch.setattr(interview, "generate_multimodal", _generate_multimodal)
+
+    interview.propose_evidence_from_answers(
+        [_reponse(answer="Réponse libre à tout.")],
+        inspiration_questions=[
+            interview.InterviewQuestion(question="Avez-vous géré un budget ?")
+        ],
+    )
+
+    assert prompts_recus
+    assert "Avez-vous géré un budget ?" in prompts_recus[0]
+
+
+# ============================================================
+# TRANSCRIPTION AUDIO
+# ============================================================
+
+def test_un_audio_vide_ne_declenche_aucun_appel(monkeypatch):
+    appele = False
+
+    def _generate_multimodal(*a, **k):
+        nonlocal appele
+        appele = True
+        return "peu importe"
+
+    monkeypatch.setattr(interview, "generate_multimodal", _generate_multimodal)
+
+    texte, avertissement = interview.transcribe_audio(b"")
+
+    assert texte == ""
+    assert avertissement == ""
+    assert not appele
+
+
+def test_transcription_sans_cle_configuree(monkeypatch):
+    monkeypatch.setattr(interview, "is_configured", lambda: False)
+
+    texte, avertissement = interview.transcribe_audio(b"donnees-audio")
+
+    assert texte == ""
+    assert "GEMINI_API_KEY" in avertissement
+
+
+def test_transcription_reussie(monkeypatch):
+    monkeypatch.setattr(interview, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        interview,
+        "generate_multimodal",
+        lambda *a, **k: "J'ai géré un budget marketing de 50k€.",
+    )
+
+    texte, avertissement = interview.transcribe_audio(
+        b"donnees-audio", mime_type="audio/wav"
+    )
+
+    assert texte == "J'ai géré un budget marketing de 50k€."
+    assert avertissement == ""
+
+
+def test_transcription_erreur_api(monkeypatch):
+    from services.ai.gemini_client import GeminiRequestError
+
+    monkeypatch.setattr(interview, "is_configured", lambda: True)
+
+    def _generate_multimodal(*a, **k):
+        raise GeminiRequestError("quota dépassé")
+
+    monkeypatch.setattr(interview, "generate_multimodal", _generate_multimodal)
+
+    texte, avertissement = interview.transcribe_audio(b"donnees-audio")
+
+    assert texte == ""
+    assert "quota dépassé" in avertissement

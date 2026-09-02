@@ -33,6 +33,7 @@ from services.ai.interview import (
     InterviewQuestion,
     generate_interview_questions,
     propose_evidence_from_answers,
+    transcribe_audio,
 )
 from services.ai.job_analysis import (
     FitSynthesisResult,
@@ -63,4 +64,5 @@ __all__ = [
     "reformulate_cover_letter",
     "reformulate_cv_summary",
     "reformulate_targeted_cv",
+    "transcribe_audio",
 ]

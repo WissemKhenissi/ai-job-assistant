@@ -4,9 +4,22 @@ Section "Entretien IA" de la page Master CV.
 Un seul round volontairement large (voir services/ai/interview.py) :
 poste recherché optionnel + fichiers optionnels (CV externe, captures
 d'écran LinkedIn) → éventail de questions couvrant plusieurs
-expériences → réponses libres, aucune obligatoire → propositions de
-preuves, chacune éditable et à valider explicitement, une par une,
-avant d'entrer au Master CV. Rejeter n'écrit jamais rien.
+expériences → réponses libres, aucune obligatoire, à l'écrit ou à
+l'oral → propositions de preuves, chacune éditable et à valider
+explicitement, une par une, avant d'entrer au Master CV. Rejeter
+n'écrit jamais rien.
+
+Deux façons de répondre, au choix du candidat :
+
+- question par question (texte et/ou audio pour chacune) ;
+- en un seul champ libre (texte et/ou audio), l'IA se chargeant de
+  trier ce qui est exploitable — l'idée étant de donner de la matière
+  à réflexion plutôt que d'imposer une structure rigide.
+
+Chaque réponse orale est transcrite (services.ai.interview.
+transcribe_audio) avant d'être traitée exactement comme une réponse
+écrite : le garde-fou de traçabilité de propose_evidence_from_answers
+s'applique donc de la même façon, quelle que soit la modalité.
 """
 
 from __future__ import annotations
@@ -18,6 +31,7 @@ from services.ai.interview import (
     InterviewAnswer,
     generate_interview_questions,
     propose_evidence_from_answers,
+    transcribe_audio,
 )
 from services.profile_service import add_evidence, add_skill
 
@@ -33,6 +47,29 @@ def _etat_initial() -> dict:
     }
 
 
+def _transcrire_si_fourni(fichier_audio) -> tuple[str, str]:
+    """Transcrit un enregistrement st.audio_input, ou ("", "") si absent."""
+
+    if fichier_audio is None:
+        return "", ""
+
+    return transcribe_audio(
+        fichier_audio.getvalue(),
+        mime_type=fichier_audio.type or "audio/wav",
+    )
+
+
+def _combiner(texte: str, transcription: str) -> str:
+
+    texte = texte.strip()
+    transcription = transcription.strip()
+
+    if texte and transcription:
+        return f"{texte}\n{transcription}"
+
+    return texte or transcription
+
+
 def render_interview_section(candidate_id: str) -> None:
 
     st.subheader("🎙️ Entretien IA")
@@ -42,8 +79,9 @@ def render_interview_section(candidate_id: str) -> None:
         "parcours actuel (et, si vous en fournissez, d'un CV externe "
         "ou de captures d'écran) pour faire émerger des compétences "
         "ou des détails d'expérience que vous n'auriez pas pensé à "
-        "écrire. Rien n'est ajouté au Master CV sans votre validation "
-        "explicite, phrase par phrase."
+        "écrire. Répondez à l'écrit ou à l'oral. Rien n'est ajouté au "
+        "Master CV sans votre validation explicite, phrase par "
+        "phrase."
     )
 
     if not ai_is_configured():
@@ -106,25 +144,117 @@ def render_interview_section(candidate_id: str) -> None:
 
         st.write(
             f"{len(etat['questions'])} question(s) — répondez à ce "
-            "qui vous parle, aucune n'est obligatoire."
+            "qui vous parle, aucune n'est obligatoire. Aucun champ "
+            "n'est dans un formulaire : vous pouvez enregistrer un "
+            "audio ou taper, dans l'ordre qui vous convient, puis "
+            "cliquer sur \"Envoyer\" en bas."
         )
 
-        with st.form(f"{_STATE_KEY}_reponses"):
+        mode_libre = st.toggle(
+            "Répondre librement en un seul champ, plutôt que "
+            "question par question",
+            key=f"{_STATE_KEY}_mode_libre",
+            help=(
+                "Les questions ci-dessous servent alors de simple "
+                "matière à réflexion : répondez-y dans l'ordre que "
+                "vous voulez, en une seule fois, à l'écrit ou à "
+                "l'oral — l'IA se charge de trier ce qui est "
+                "exploitable."
+            ),
+        )
 
-            for indice, question in enumerate(etat["questions"]):
+        st.divider()
+
+        if mode_libre:
+
+            st.markdown("**Pistes de réflexion :**")
+
+            for question in etat["questions"]:
+                st.caption(f"· {question.question}")
+
+            st.divider()
+
+            texte_libre = st.text_area(
+                "Votre réponse, à l'écrit",
+                key=f"{_STATE_KEY}_libre_texte",
+                height=200,
+            )
+
+            audio_libre = st.audio_input(
+                "Ou votre réponse, à l'oral",
+                key=f"{_STATE_KEY}_libre_audio",
+            )
+
+            envoyer = st.button(
+                "Envoyer ma réponse", type="primary", key=f"{_STATE_KEY}_envoyer_libre"
+            )
+
+            if st.button("Recommencer l'entretien"):
+                st.session_state[_STATE_KEY] = _etat_initial()
+                st.rerun()
+
+            if envoyer:
+
+                avertissements = []
+
+                with st.spinner("Traitement de votre réponse (Gemini)..."):
+
+                    transcription, avert = _transcrire_si_fourni(audio_libre)
+
+                    if avert:
+                        avertissements.append(avert)
+
+                    texte_final = _combiner(texte_libre, transcription)
+
+                    reponses = [
+                        InterviewAnswer(
+                            question="Réponse libre à l'ensemble des questions",
+                            answer=texte_final,
+                        )
+                    ]
+
+                    propositions, avertissement = propose_evidence_from_answers(
+                        reponses,
+                        inspiration_questions=etat["questions"],
+                    )
+
+                if avertissement:
+                    avertissements.append(avertissement)
+
+                etat["proposals"] = propositions
+                etat["warning"] = " ".join(avertissements)
+                st.rerun()
+
+            return
+
+        # --------------------------------------------------------
+        # MODE : QUESTION PAR QUESTION
+        # --------------------------------------------------------
+
+        for indice, question in enumerate(etat["questions"]):
+
+            with st.container(border=True):
 
                 if question.experience_label:
                     st.caption(f"À propos de : {question.experience_label}")
 
+                st.markdown(f"**{question.question}**")
+
                 st.text_area(
-                    question.question,
+                    "Réponse écrite",
                     key=f"{_STATE_KEY}_reponse_{indice}",
                     height=80,
+                    label_visibility="collapsed",
                 )
 
-            envoyer = st.form_submit_button(
-                "Envoyer mes réponses", type="primary"
-            )
+                st.audio_input(
+                    "🎤 Ou répondez à l'oral",
+                    key=f"{_STATE_KEY}_audio_{indice}",
+                )
+
+        envoyer = st.button(
+            "Envoyer mes réponses", type="primary", key=f"{_STATE_KEY}_envoyer"
+        )
 
         if st.button("Recommencer l'entretien"):
             st.session_state[_STATE_KEY] = _etat_initial()
@@ -132,25 +262,44 @@ def render_interview_section(candidate_id: str) -> None:
 
         if envoyer:
 
-            reponses = [
-                InterviewAnswer(
-                    question=question.question,
-                    answer=st.session_state.get(
-                        f"{_STATE_KEY}_reponse_{indice}", ""
-                    ),
-                    experience_id=question.experience_id,
-                    experience_label=question.experience_label,
-                )
-                for indice, question in enumerate(etat["questions"])
-            ]
+            reponses = []
+            avertissements = []
 
-            with st.spinner("Analyse de vos réponses (Gemini)..."):
+            with st.spinner("Traitement de vos réponses (Gemini)..."):
+
+                for indice, question in enumerate(etat["questions"]):
+
+                    texte_tape = st.session_state.get(
+                        f"{_STATE_KEY}_reponse_{indice}", ""
+                    )
+
+                    audio_fichier = st.session_state.get(
+                        f"{_STATE_KEY}_audio_{indice}"
+                    )
+
+                    transcription, avert = _transcrire_si_fourni(audio_fichier)
+
+                    if avert:
+                        avertissements.append(avert)
+
+                    reponses.append(
+                        InterviewAnswer(
+                            question=question.question,
+                            answer=_combiner(texte_tape, transcription),
+                            experience_id=question.experience_id,
+                            experience_label=question.experience_label,
+                        )
+                    )
+
                 propositions, avertissement = propose_evidence_from_answers(
                     reponses
                 )
 
+            if avertissement:
+                avertissements.append(avertissement)
+
             etat["proposals"] = propositions
-            etat["warning"] = avertissement
+            etat["warning"] = " ".join(avertissements)
             st.rerun()
 
         return
