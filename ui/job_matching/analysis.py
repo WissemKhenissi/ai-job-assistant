@@ -21,9 +21,17 @@ from services.ai.job_analysis import (
     analyze_job_offer_with_ai,
     generate_fit_synthesis,
 )
+from services.job_offer_fetcher import fetch_job_offer_from_url
 from services.job_service import save_job_offer
 from services.matching import analyze_and_save_job_match
 from services.job_requirements_service import extract_required_skills
+
+
+# Clés session_state utilisées pour préremplir le formulaire après une
+# récupération réussie depuis un lien — le formulaire ci-dessous les
+# lit comme valeurs initiales.
+_PREFILL_TITLE_KEY = "job_matching_prefill_title"
+_PREFILL_TEXT_KEY = "job_matching_prefill_text"
 
 
 def _normalize_loose(text: str) -> str:
@@ -41,6 +49,8 @@ def _normalize_loose(text: str) -> str:
 def _new_draft() -> None:
     st.session_state["job_matching_draft_id"] = f"job-{uuid4()}"
     st.session_state.pop("job_matching_result", None)
+    st.session_state.pop(_PREFILL_TITLE_KEY, None)
+    st.session_state.pop(_PREFILL_TEXT_KEY, None)
     st.rerun()
 
 
@@ -59,6 +69,60 @@ def render_analysis_tab(candidate_id: str) -> None:
         st.session_state["job_matching_draft_id"] = f"job-{uuid4()}"
 
     # ========================================================
+    # RECUPERATION DEPUIS UN LIEN (OPTIONNEL)
+    # ========================================================
+    #
+    # Purement mécanique (pas d'IA) : un téléchargement de la page et
+    # une extraction du texte principal. Ne fonctionne pas partout —
+    # LinkedIn notamment bloque ce type de requête. Le copier-coller
+    # ci-dessous reste toujours disponible, avant comme après un échec.
+
+    with st.expander("🔗 Récupérer depuis un lien"):
+
+        col_lien, col_bouton = st.columns([4, 1])
+
+        with col_lien:
+
+            lien_annonce = st.text_input(
+                "Lien de l'annonce",
+                placeholder="https://...",
+                label_visibility="collapsed",
+                key="job_offer_url_input",
+            )
+
+        with col_bouton:
+
+            recuperer_clic = st.button(
+                "Récupérer",
+                use_container_width=True,
+            )
+
+        if recuperer_clic:
+
+            with st.spinner("Récupération en cours..."):
+                resultat_fetch = fetch_job_offer_from_url(lien_annonce)
+
+            if resultat_fetch.success:
+
+                st.session_state[_PREFILL_TITLE_KEY] = resultat_fetch.title
+                st.session_state[_PREFILL_TEXT_KEY] = resultat_fetch.text
+
+                st.success(
+                    "Contenu récupéré ci-dessous — vérifiez-le avant "
+                    "d'analyser : l'extraction automatique peut être "
+                    "imparfaite selon le site."
+                )
+
+                st.rerun()
+
+            else:
+
+                st.error(
+                    f"{resultat_fetch.error} Vous pouvez toujours "
+                    "coller le texte manuellement ci-dessous."
+                )
+
+    # ========================================================
     # FORMULAIRE
     # ========================================================
 
@@ -66,6 +130,7 @@ def render_analysis_tab(candidate_id: str) -> None:
 
         title = st.text_input(
             "Intitulé du poste *",
+            value=st.session_state.get(_PREFILL_TITLE_KEY, ""),
             placeholder="Product Owner E-commerce",
         )
 
@@ -97,6 +162,7 @@ def render_analysis_tab(candidate_id: str) -> None:
 
         description = st.text_area(
             "Texte de l'annonce *",
+            value=st.session_state.get(_PREFILL_TEXT_KEY, ""),
             height=220,
             placeholder="Collez ici l'annonce complète.",
         )

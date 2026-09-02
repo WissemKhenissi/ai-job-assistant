@@ -6,4 +6,5 @@ sqlalchemy
 python-dotenv
 python-docx
 reportlab
+trafilatura
 pytest
