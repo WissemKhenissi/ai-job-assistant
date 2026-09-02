@@ -1,0 +1,33 @@
+{
+  "titre": "IA Product Manager H/F - CDI",
+  "revise_par_humain": false,
+  "commentaire": "PRÉ-REMPLI PAR LE MOTEUR — à relire et corriger. Retire les compétences qui ne sont pas réellement demandées par l'annonce, ajoute celles qui manquent, puis corrige les statuts selon ce que tu peux honnêtement démontrer. Passe ensuite revise_par_humain à true.",
+  "competences_attendues": [
+    "Artificial Intelligence",
+    "Product Management",
+    "Experimentation",
+    "Machine Learning",
+    "Data Science",
+    "Data / KPI",
+    "Product Discovery",
+    "Python",
+    "R",
+    "AWS",
+    "Google Cloud",
+    "Azure"
+  ],
+  "statuts_attendus": {
+    "Artificial Intelligence": "missing",
+    "Product Management": "missing",
+    "Experimentation": "inferred",
+    "Machine Learning": "missing",
+    "Data Science": "missing",
+    "Data / KPI": "proven",
+    "Product Discovery": "proven",
+    "Python": "missing",
+    "R": "missing",
+    "AWS": "missing",
+    "Google Cloud": "missing",
+    "Azure": "missing"
+  }
+}

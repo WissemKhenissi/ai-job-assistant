@@ -1,0 +1,25 @@
+{
+  "titre": "Product Manager H/F",
+  "revise_par_humain": false,
+  "commentaire": "PRÉ-REMPLI PAR LE MOTEUR — à relire et corriger. Retire les compétences qui ne sont pas réellement demandées par l'annonce, ajoute celles qui manquent, puis corrige les statuts selon ce que tu peux honnêtement démontrer. Passe ensuite revise_par_humain à true.",
+  "competences_attendues": [
+    "Product Management",
+    "Product Strategy",
+    "Roadmap produit",
+    "Product Discovery",
+    "Experimentation",
+    "Product Delivery",
+    "Agile / Scrum",
+    "Priorisation"
+  ],
+  "statuts_attendus": {
+    "Product Management": "inferred",
+    "Product Strategy": "inferred",
+    "Roadmap produit": "inferred",
+    "Product Discovery": "proven",
+    "Experimentation": "inferred",
+    "Product Delivery": "inferred",
+    "Agile / Scrum": "inferred",
+    "Priorisation": "inferred"
+  }
+}
