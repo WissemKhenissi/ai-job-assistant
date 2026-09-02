@@ -61,7 +61,7 @@ def test_normalise_une_valeur_vide():
 def test_un_alias_du_catalogue_resout_vers_le_nom_canonique(
     session_factory,
 ):
-    from services.matching_service import _canonical_skill_name
+    from services.matching.normalization import _canonical_skill_name
 
     session = session_factory()
 
@@ -91,7 +91,7 @@ def test_un_alias_du_catalogue_resout_vers_le_nom_canonique(
 def test_la_resolution_ignore_les_accents_et_la_casse(
     session_factory,
 ):
-    from services.matching_service import _canonical_skill_name
+    from services.matching.normalization import _canonical_skill_name
 
     session = session_factory()
 
@@ -130,7 +130,7 @@ def test_le_slash_devient_un_espace_dans_les_alias(
     dans le référentiel (c'est ce que fait seed_skill_catalog).
     """
 
-    from services.matching_service import _canonical_skill_name
+    from services.matching.normalization import _canonical_skill_name
 
     session = session_factory()
 
@@ -155,7 +155,7 @@ def test_une_competence_inconnue_retombe_sur_sa_forme_normalisee(
     compétence existante.
     """
 
-    from services.matching_service import _canonical_skill_name
+    from services.matching.normalization import _canonical_skill_name
 
     session = session_factory()
 
@@ -182,7 +182,7 @@ def test_le_catalogue_est_bien_la_source_de_verite(
     (c'était l'objet de la suppression du dictionnaire SKILL_ALIASES).
     """
 
-    from services.matching_service import _canonical_skill_name
+    from services.matching.normalization import _canonical_skill_name
 
     session = session_factory()
 

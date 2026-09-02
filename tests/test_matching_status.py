@@ -44,10 +44,8 @@ def _match_for(result, skill_name: str):
 def test_competence_declaree_avec_preuve_est_prouvee(
     session_factory,
 ):
-    from services.matching_service import (
-        PROVEN_SCORE,
-        analyze_candidate_against_skills,
-    )
+    from services.matching import analyze_candidate_against_skills
+    from services.matching.config import PROVEN_SCORE
 
     session = session_factory()
 
@@ -96,10 +94,10 @@ def test_competence_declaree_sans_preuve_est_moins_bien_notee(
     vigilance dans le test suivant.
     """
 
-    from services.matching_service import (
+    from services.matching import analyze_candidate_against_skills
+    from services.matching.config import (
         DECLARED_SCORE,
         PROVEN_SCORE,
-        analyze_candidate_against_skills,
     )
 
     session = session_factory()
@@ -149,9 +147,7 @@ def test_le_statut_proven_ne_distingue_pas_encore_les_preuves(
     soit conscient et non silencieux.
     """
 
-    from services.matching_service import (
-        analyze_candidate_against_skills,
-    )
+    from services.matching import analyze_candidate_against_skills
 
     session = session_factory()
 
@@ -207,7 +203,9 @@ def test_une_competence_technique_non_declaree_est_manquante(
     parce que son parcours "ressemble" à de la data.
     """
 
-    import services.matching_service as matching_service
+    import services.matching.inference as inference
+
+    from services.matching import analyze_candidate_against_skills
 
     session = session_factory()
 
@@ -241,12 +239,12 @@ def test_une_competence_technique_non_declaree_est_manquante(
         )
 
     monkeypatch.setattr(
-        matching_service,
+        inference,
         "find_semantic_skill_matches",
         _always_strong_match,
     )
 
-    result = matching_service.analyze_candidate_against_skills(
+    result = analyze_candidate_against_skills(
         candidate_id=CANDIDATE_ID,
         required_skills=[technical_skill],
     )
@@ -265,7 +263,7 @@ def test_la_liste_des_exclusions_couvre_les_competences_techniques():
     silencieuse consisterait à en retirer une entrée.
     """
 
-    from services.matching_service import SEMANTIC_INFERENCE_EXCLUDED
+    from services.matching.config import SEMANTIC_INFERENCE_EXCLUDED
 
     attendues = {
         "python",

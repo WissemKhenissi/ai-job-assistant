@@ -6,7 +6,7 @@ import streamlit as st
 
 from services.job_service import save_job_offer
 from services.market_memory_service import get_market_skill_memory
-from services.matching_service import analyze_and_save_job_match
+from services.matching import analyze_and_save_job_match
 from services.job_requirements_service import extract_required_skills
 
 

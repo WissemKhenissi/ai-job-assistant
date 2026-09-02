@@ -1,0 +1,228 @@
+"""
+Paramètres du moteur de matching.
+
+Regroupe les listes, seuils et pondérations qui pilotent le
+comportement du moteur, séparés de la logique qui les applique.
+"""
+
+from __future__ import annotations
+
+
+# ============================================================
+# NORMALISATION / ALIAS
+# ============================================================
+
+# Les alias de compétences ne sont plus dupliqués ici : ils viennent
+# du référentiel skill_catalog (table skill_catalog, exposée par
+# services.skill_catalog_service), seule source de vérité. Voir
+# _canonical_skill_name() / _canonical_alias_index() plus bas.
+
+
+# ============================================================
+# INFERENCE LEXICALE
+# ============================================================
+
+INFERENCE_KEYWORDS = {
+    "agile scrum": (
+        "iteration",
+        "iterative",
+        "mvp",
+        "test",
+        "amelioration continue",
+        "sprint",
+        "cycle iteratif",
+        "cycles iteratifs",
+        "developpement iteratif",
+        "developpements iteratifs",
+    ),
+    "priorisation": (
+        "priorite",
+        "priorites",
+        "arbitrage",
+        "mvp",
+        "quick win",
+        "optimisation",
+        "valeur",
+        "cout",
+        "faisabilite",
+    ),
+    "backlog management": (
+        "priorite",
+        "arbitrage",
+        "mvp",
+        "iteration",
+        "fonctionnalite",
+        "backlog",
+        "user story",
+        "stories",
+    ),
+    "stakeholder management": (
+        "coordination",
+        "partenaire",
+        "equipe",
+        "juridique",
+        "comptabilite",
+        "ux",
+        "ui",
+        "it",
+        "client",
+        "parties prenantes",
+        "stakeholders",
+    ),
+    "data kpi": (
+        "kpi",
+        "performance",
+        "marge",
+        "chiffre d affaires",
+        "ca",
+        "reporting",
+        "metrique",
+        "conversion",
+        "roi",
+    ),
+    "gestion de projet": (
+        "pilotage",
+        "coordination",
+        "mise en production",
+        "projet",
+        "planning",
+        "blocage",
+        "deadline",
+    ),
+    "e commerce": (
+        "e commerce",
+        "fnac",
+        "france billet",
+        "post achat",
+        "confirmation de commande",
+        "achat",
+    ),
+    "product strategy": (
+        "business model",
+        "proposition de valeur",
+        "opportunite",
+        "valeur business",
+        "monetisation",
+        "offre",
+        "strategie",
+    ),
+    "roadmap produit": (
+        "planning",
+        "priorite",
+        "evolution",
+        "iteration",
+        "projet",
+        "mise en production",
+        "roadmap",
+    ),
+    "experimentation": (
+        "test",
+        "iteration",
+        "optimisation",
+        "mvp",
+        "mesure",
+        "kpi",
+    ),
+    "ux": (
+        "ux",
+        "parcours",
+        "experience utilisateur",
+        "interface",
+        "landing page",
+    ),
+    "ui": (
+        "ui",
+        "interface",
+        "design",
+        "landing page",
+    ),
+}
+
+# ============================================================
+# INFERENCE SEMANTIQUE
+# ============================================================
+
+SEMANTIC_INFERENCE_THRESHOLD = 0.62
+
+SEMANTIC_INFERENCE_STRONG_THRESHOLD = 0.75
+
+SEMANTIC_SPECIFICITY_THRESHOLD = 0.80
+
+
+# ============================================================
+# PONDERATION DES STATUTS
+# ============================================================
+
+# Une compétence explicitement prouvée est la référence.
+PROVEN_SCORE = 1.00
+
+# Compétence déclarée dans le CV mais sans preuve détaillée.
+DECLARED_SCORE = 0.90
+
+# Inférence sémantique :
+# la valeur dépend de la qualité de la correspondance.
+INFERRED_VERY_STRONG_SCORE = 0.85
+INFERRED_STRONG_SCORE = 0.80
+INFERRED_GOOD_SCORE = 0.75
+INFERRED_MODERATE_SCORE = 0.70
+INFERRED_PRUDENT_SCORE = 0.60
+
+MISSING_SCORE = 0.00
+
+
+# ============================================================
+# PONDERATION DU SCORE D'EXPERIENCE
+# ============================================================
+#
+# Le score d'expérience est exprimé sur 100 : il mesure la part
+# des compétences demandées que le candidat sait démontrer.
+#
+# Une compétence prouvée (preuve EvidenceDB liée) vaut le maximum,
+# une compétence seulement déduite vaut nettement moins — une
+# inférence reste une hypothèse, pas un fait affirmé.
+
+EXPERIENCE_PROVEN_WEIGHT = 100
+
+EXPERIENCE_INFERRED_WEIGHT = 60
+
+
+# ============================================================
+# COMPETENCES AUTORISEES A L'INFERENCE
+# ============================================================
+
+SEMANTIC_INFERENCE_SKILLS = {
+    "agile scrum",
+    "priorisation",
+    "backlog management",
+    "stakeholder management",
+    "product discovery",
+    "product strategy",
+    "roadmap produit",
+    "product delivery",
+    "experimentation",
+    # "analyse utilisateur" fusionne désormais dans "user research"
+    # (alias du référentiel skill_catalog) via _canonical_skill_name().
+    "user research",
+    "data analysis",
+    "gestion de projet",
+}
+
+
+# ============================================================
+# COMPETENCES QUI NE DOIVENT JAMAIS ETRE INDUITES
+# ============================================================
+
+SEMANTIC_INFERENCE_EXCLUDED = {
+    "product management",
+    "python",
+    "sql",
+    "r",
+    "aws",
+    "azure",
+    "google cloud",
+    "machine learning",
+    "data science",
+    "artificial intelligence",
+    "jira",
+}
+

@@ -27,7 +27,7 @@ SERVICE_MODULES = (
     "services.job_requirements_service",
     "services.job_service",
     "services.market_memory_service",
-    "services.matching_service",
+    "services.matching.analysis",
     "services.profile_service",
     "services.skill_catalog_service",
 )
@@ -71,12 +71,12 @@ def session_factory(tmp_path, monkeypatch):
 
     # Le référentiel d'alias est mis en cache au niveau module :
     # sans reset, un test hériterait du catalogue d'un test précédent.
-    matching_service = importlib.import_module(
-        "services.matching_service"
+    normalization = importlib.import_module(
+        "services.matching.normalization"
     )
 
     monkeypatch.setattr(
-        matching_service,
+        normalization,
         "_canonical_alias_index_cache",
         None,
     )

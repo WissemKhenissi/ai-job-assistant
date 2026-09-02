@@ -3,7 +3,7 @@ from __future__ import annotations
 from database.db import SessionLocal
 from models.job import JobOfferDB
 from services.job_requirements_service import extract_required_skills
-from services.matching_service import analyze_and_save_job_match
+from services.matching import analyze_and_save_job_match
 
 
 def recalculate_all_job_matches() -> None:
