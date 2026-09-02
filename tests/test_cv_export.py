@@ -1,11 +1,15 @@
 """
 Export DOCX / PDF du CV ciblé.
 
-L'export est une mise en forme : il ne doit rien ajouter au contenu
-sélectionné. Ces tests vérifient surtout qu'aucune compétence non
-prouvée ne peut apparaître dans le fichier produit — c'est le dernier
-endroit où une compétence non fondée pourrait se glisser avant d'être
-envoyée à un recruteur.
+Gabarit calqué sur le CV existant de l'utilisateur : en-tête compact
+avec accroche/disponibilité, compétences regroupées par catégorie,
+expériences en deux colonnes, formation et certifications, langues et
+centres d'intérêt.
+
+Ces tests vérifient surtout qu'aucune compétence non prouvée ne peut
+apparaître dans le fichier produit — c'est le dernier endroit où une
+compétence non fondée pourrait se glisser avant d'être envoyée à un
+recruteur.
 """
 
 from __future__ import annotations
@@ -15,8 +19,11 @@ from datetime import date
 import pytest
 
 from services.cv.results import (
+    CVCertification,
+    CVEducation,
     CVEvidenceLine,
     CVExperience,
+    CVSkillGroup,
     TargetedCV,
 )
 
@@ -35,14 +42,25 @@ def _cv_de_test() -> TargetedCV:
         location="Paris",
         linkedin_url="",
         summary="Profil produit.",
+        headline="Product / Chef de projet digital",
+        availability="Disponible immédiatement",
+        languages="Français : natif | Anglais : B2",
+        interests="Product Management",
         job_offer_id="job-test",
         job_offer_title="Product Owner",
         skills=["Product Discovery"],
+        skill_groups=[
+            CVSkillGroup(
+                category="Product",
+                skills=("Product Discovery",),
+            )
+        ],
         experiences=[
             CVExperience(
                 experience_id="experience-test",
                 job_title="Chef de projet",
                 company="Groupe Meridiem",
+                location="Ivry-sur-Seine",
                 start_date=date(2018, 1, 1),
                 end_date=date(2024, 12, 31),
                 business_context="Contexte e-commerce.",
@@ -53,6 +71,22 @@ def _cv_de_test() -> TargetedCV:
                         evidence_id="evidence-1",
                     )
                 ],
+            )
+        ],
+        educations=[
+            CVEducation(
+                institution="Lyon 2",
+                degree="Master AEI E-Commerce",
+                field_of_study="Cybersécurité",
+                start_year=2015,
+                end_year=2017,
+            )
+        ],
+        certifications=[
+            CVCertification(
+                name="PSPO I",
+                organization="Scrum.org",
+                obtained_year=2026,
             )
         ],
         declared_skills=["CompetenceDeclareeSansPreuve"],
@@ -66,13 +100,20 @@ def _texte_du_docx(path) -> str:
 
     document = Document(str(path))
 
-    return "\n".join(
+    morceaux = [
         paragraphe.text for paragraphe in document.paragraphs
-    )
+    ]
+
+    for table in document.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                morceaux.append(cell.text)
+
+    return "\n".join(morceaux)
 
 
 # ============================================================
-# DOCX
+# DOCX — CONTENU DE BASE
 # ============================================================
 
 def test_le_docx_est_cree_et_relisible(tmp_path):
@@ -88,7 +129,7 @@ def test_le_docx_est_cree_et_relisible(tmp_path):
 
     texte = _texte_du_docx(destination)
 
-    assert "Wissem Khenissi" in texte
+    assert "WISSEM KHENISSI" in texte
     assert "Chef de projet" in texte
     assert "Conception de produits digitaux." in texte
 
@@ -128,8 +169,8 @@ def test_le_docx_affiche_la_periode_en_clair(tmp_path):
 
     texte = _texte_du_docx(destination)
 
-    assert "janvier 2018" in texte
-    assert "décembre 2024" in texte
+    assert "Janv. 2018" in texte
+    assert "Déc. 2024" in texte
 
 
 def test_un_poste_en_cours_est_affiche_comme_tel(tmp_path):
@@ -142,7 +183,116 @@ def test_un_poste_en_cours_est_affiche_comme_tel(tmp_path):
 
     export_docx(cv, destination)
 
-    assert "aujourd'hui" in _texte_du_docx(destination)
+    assert "Aujourd'hui" in _texte_du_docx(destination)
+
+
+def test_un_cv_sans_competence_prouvee_s_exporte_quand_meme(
+    tmp_path,
+):
+    """
+    Cas réaliste : aucune compétence prouvée pour cette offre. Le CV
+    doit rester exportable, sans section Compétences fabriquée.
+    """
+
+    from services.cv import export_docx
+
+    cv = _cv_de_test()
+    cv.skills = []
+    cv.skill_groups = []
+
+    destination = tmp_path / "cv.docx"
+
+    export_docx(cv, destination)
+
+    texte = _texte_du_docx(destination)
+
+    assert "COMPÉTENCES CLÉS" not in texte.upper()
+    assert "WISSEM KHENISSI" in texte
+
+
+# ============================================================
+# DOCX — NOUVELLES SECTIONS DU GABARIT
+# ============================================================
+
+def test_le_docx_affiche_l_accroche_et_la_disponibilite(tmp_path):
+    from services.cv import export_docx
+
+    destination = tmp_path / "cv.docx"
+
+    export_docx(_cv_de_test(), destination)
+
+    texte = _texte_du_docx(destination)
+
+    assert "Product / Chef de projet digital" in texte
+    assert "Disponible immédiatement" in texte
+
+
+def test_le_docx_regroupe_les_competences_par_categorie(tmp_path):
+    from services.cv import export_docx
+
+    destination = tmp_path / "cv.docx"
+
+    export_docx(_cv_de_test(), destination)
+
+    texte = _texte_du_docx(destination)
+
+    assert "Product" in texte
+
+
+def test_le_docx_affiche_la_localisation_de_l_experience(tmp_path):
+    from services.cv import export_docx
+
+    destination = tmp_path / "cv.docx"
+
+    export_docx(_cv_de_test(), destination)
+
+    assert "Ivry-sur-Seine" in _texte_du_docx(destination)
+
+
+def test_le_docx_affiche_la_formation_et_les_certifications(
+    tmp_path,
+):
+    from services.cv import export_docx
+
+    destination = tmp_path / "cv.docx"
+
+    export_docx(_cv_de_test(), destination)
+
+    texte = _texte_du_docx(destination)
+
+    assert "Master AEI E-Commerce" in texte
+    assert "Lyon 2" in texte
+    assert "PSPO I" in texte
+    assert "Scrum.org" in texte
+
+
+def test_le_docx_affiche_langues_et_interets(tmp_path):
+    from services.cv import export_docx
+
+    destination = tmp_path / "cv.docx"
+
+    export_docx(_cv_de_test(), destination)
+
+    texte = _texte_du_docx(destination)
+
+    assert "Français : natif" in texte
+    assert "Product Management" in texte
+
+
+def test_un_cv_sans_formation_n_affiche_pas_la_rubrique(tmp_path):
+    from services.cv import export_docx
+
+    cv = _cv_de_test()
+    cv.educations = []
+    cv.certifications = []
+
+    destination = tmp_path / "cv.docx"
+
+    export_docx(cv, destination)
+
+    texte = _texte_du_docx(destination).upper()
+
+    assert "FORMATION" not in texte
 
 
 # ============================================================
@@ -163,27 +313,24 @@ def test_le_pdf_est_cree_et_valide(tmp_path):
     assert destination.read_bytes().startswith(b"%PDF-")
 
 
-def test_un_cv_sans_competence_prouvee_s_exporte_quand_meme(
-    tmp_path,
-):
-    """
-    Cas réaliste : aucune compétence prouvée pour cette offre. Le CV
-    doit rester exportable, sans section Compétences fabriquée.
-    """
+def test_le_pdf_s_exporte_sans_competence_ni_formation(tmp_path):
+    """Un CV très incomplet doit rester exportable sans planter."""
 
-    from services.cv import export_docx
+    from services.cv import export_pdf
 
     cv = _cv_de_test()
     cv.skills = []
+    cv.skill_groups = []
+    cv.educations = []
+    cv.certifications = []
+    cv.languages = ""
+    cv.interests = ""
 
-    destination = tmp_path / "cv.docx"
+    destination = tmp_path / "cv.pdf"
 
-    export_docx(cv, destination)
+    export_pdf(cv, destination)
 
-    texte = _texte_du_docx(destination)
-
-    assert "Compétences" not in texte
-    assert "Wissem Khenissi" in texte
+    assert destination.read_bytes().startswith(b"%PDF-")
 
 
 # ============================================================

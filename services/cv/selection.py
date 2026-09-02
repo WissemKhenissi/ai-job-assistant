@@ -17,6 +17,8 @@ from database.db import SessionLocal
 from database.models import (
     AchievementDB,
     CandidateDB,
+    CertificationDB,
+    EducationDB,
     EvidenceDB,
     ExperienceDB,
     SkillDB,
@@ -27,11 +29,15 @@ from models.skill_match import JobSkillMatchDB
 
 from services.cv.results import (
     CVAchievement,
+    CVCertification,
+    CVEducation,
     CVEvidenceLine,
     CVExperience,
+    CVSkillGroup,
     TargetedCV,
 )
 from services.matching.normalization import _canonical_skill_name
+from services.skill_catalog_service import find_skill_by_name
 
 
 # Un CV ne peut pas porter les 58 preuves du Master CV : on retient
@@ -268,6 +274,7 @@ def build_targeted_cv(
                         experience_id=experience.id,
                         job_title=experience.job_title,
                         company=experience.company,
+                        location=experience.location or "",
                         start_date=experience.start_date,
                         end_date=experience.end_date,
                         business_context=(
@@ -311,6 +318,79 @@ def build_targeted_cv(
                 )
 
         # ====================================================
+        # COMPETENCES REGROUPEES PAR CATEGORIE
+        # ====================================================
+        #
+        # Reprend la catégorie du référentiel skill_catalog (Product,
+        # Data, Business...) pour présenter les compétences prouvées
+        # groupées, comme sur un CV classique.
+
+        skill_groups: list[CVSkillGroup] = []
+
+        if proven:
+
+            par_categorie: dict[str, list[str]] = {}
+
+            for row in proven:
+
+                catalog_skill = find_skill_by_name(row.skill)
+
+                categorie = (
+                    catalog_skill.category
+                    if catalog_skill is not None
+                    and catalog_skill.category
+                    else "Autres compétences"
+                )
+
+                par_categorie.setdefault(categorie, []).append(
+                    row.skill
+                )
+
+            skill_groups = [
+                CVSkillGroup(
+                    category=categorie,
+                    skills=tuple(skills),
+                )
+                for categorie, skills in par_categorie.items()
+            ]
+
+        # ====================================================
+        # FORMATION ET CERTIFICATIONS
+        # ====================================================
+        #
+        # Non filtrées par offre : vraies quelle que soit l'annonce.
+
+        educations = [
+            CVEducation(
+                institution=row.institution,
+                degree=row.degree,
+                field_of_study=row.field_of_study or "",
+                start_year=row.start_year,
+                end_year=row.end_year,
+            )
+            for row in (
+                db.query(EducationDB)
+                .filter(EducationDB.candidate_id == candidate_id)
+                .order_by(EducationDB.end_year.desc())
+                .all()
+            )
+        ]
+
+        certifications = [
+            CVCertification(
+                name=row.name,
+                organization=row.organization or "",
+                obtained_year=row.obtained_year,
+            )
+            for row in (
+                db.query(CertificationDB)
+                .filter(CertificationDB.candidate_id == candidate_id)
+                .order_by(CertificationDB.obtained_year.desc())
+                .all()
+            )
+        ]
+
+        # ====================================================
         # RESULTAT
         # ====================================================
 
@@ -325,12 +405,19 @@ def build_targeted_cv(
             location=candidate.location or "",
             linkedin_url=candidate.linkedin_url or "",
             summary=candidate.summary or "",
+            headline=candidate.headline or "",
+            availability=candidate.availability or "",
+            languages=candidate.languages or "",
+            interests=candidate.interests or "",
             job_offer_id=job_offer.id,
             job_offer_title=job_offer.title or "",
             job_offer_company=(job_offer.company or "").strip(),
             skills=[row.skill for row in proven],
+            skill_groups=skill_groups,
             experiences=experiences,
             achievements=achievements,
+            educations=educations,
+            certifications=certifications,
             declared_skills=declared,
             inferred_skills=inferred,
             missing_skills=missing,

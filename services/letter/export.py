@@ -9,13 +9,23 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from services.cv.export import EXPORT_DIR, MOIS, _slugify
+from services.cv.export import EXPORT_DIR, _slugify
 from services.letter.results import CoverLetter
+
+
+# Noms de mois complets pour une date en prose ("2 septembre 2026") :
+# distinct des abréviations utilisées sur le CV ("Sept. 2026"), le
+# registre d'une lettre est plus formel.
+MOIS_COMPLETS = (
+    "janvier", "février", "mars", "avril", "mai", "juin",
+    "juillet", "août", "septembre", "octobre", "novembre",
+    "décembre",
+)
 
 
 def _date_en_toutes_lettres(valeur) -> str:
     return (
-        f"{valeur.day} {MOIS[valeur.month - 1]} {valeur.year}"
+        f"{valeur.day} {MOIS_COMPLETS[valeur.month - 1]} {valeur.year}"
     )
 
 

@@ -32,6 +32,7 @@ class CVExperience:
     experience_id: str
     job_title: str
     company: str
+    location: str
     start_date: date
     end_date: date | None
     business_context: str
@@ -47,6 +48,33 @@ class CVAchievement:
     action: str
     result: str
     metrics: str
+
+
+@dataclass(frozen=True)
+class CVSkillGroup:
+    """
+    Un regroupement de compétences prouvées par catégorie du
+    référentiel skill_catalog (ex. "Product", "Data", "Business").
+    """
+
+    category: str
+    skills: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class CVEducation:
+    institution: str
+    degree: str
+    field_of_study: str
+    start_year: int | None
+    end_year: int | None
+
+
+@dataclass(frozen=True)
+class CVCertification:
+    name: str
+    organization: str
+    obtained_year: int | None
 
 
 @dataclass
@@ -71,14 +99,25 @@ class TargetedCV:
     linkedin_url: str
     summary: str
 
-    job_offer_id: str
-    job_offer_title: str
+    headline: str = ""
+    availability: str = ""
+    languages: str = ""
+    interests: str = ""
+
+    job_offer_id: str = ""
+    job_offer_title: str = ""
     job_offer_company: str = ""
 
     skills: list[str] = field(default_factory=list)
+    skill_groups: list[CVSkillGroup] = field(default_factory=list)
 
     experiences: list[CVExperience] = field(default_factory=list)
     achievements: list[CVAchievement] = field(default_factory=list)
+
+    # La formation et les certifications ne sont pas filtrées par
+    # offre : elles sont vraies quelle que soit l'annonce visée.
+    educations: list[CVEducation] = field(default_factory=list)
+    certifications: list[CVCertification] = field(default_factory=list)
 
     # Transparence : ce que le CV n'affiche volontairement pas.
     declared_skills: list[str] = field(default_factory=list)

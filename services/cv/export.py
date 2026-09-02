@@ -1,7 +1,12 @@
 """
 Export d'un CV ciblé en DOCX et en PDF.
 
-L'export est une mise en forme : il n'ajoute, ne reformule et ne
+Gabarit calqué sur le CV existant de l'utilisateur (fourni comme
+référence) : en-tête compact, compétences regroupées par catégorie,
+expériences en deux colonnes (dates/lieu à gauche, contenu à droite),
+formation et certifications, langues et centres d'intérêt.
+
+L'export reste une mise en forme : il n'ajoute, ne reformule et ne
 complète aucun contenu. Tout ce qui apparaît dans le fichier produit
 vient de l'objet TargetedCV, donc du Master CV.
 """
@@ -13,7 +18,7 @@ import unicodedata
 from datetime import date
 from pathlib import Path
 
-from services.cv.results import TargetedCV
+from services.cv.results import TargetedCV, CVEducation, CVCertification
 
 
 EXPORT_DIR = (
@@ -21,10 +26,9 @@ EXPORT_DIR = (
 )
 
 
-MOIS = (
-    "janvier", "février", "mars", "avril", "mai", "juin",
-    "juillet", "août", "septembre", "octobre", "novembre",
-    "décembre",
+MOIS_ABREGES = (
+    "Janv.", "Févr.", "Mars", "Avr.", "Mai", "Juin",
+    "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc.",
 )
 
 
@@ -34,12 +38,12 @@ def _format_periode(
 ) -> str:
 
     def _mois_annee(valeur: date) -> str:
-        return f"{MOIS[valeur.month - 1]} {valeur.year}"
+        return f"{MOIS_ABREGES[valeur.month - 1]} {valeur.year}"
 
     if fin is None:
-        return f"{_mois_annee(debut)} → aujourd'hui"
+        return f"{_mois_annee(debut)} – Aujourd'hui"
 
-    return f"{_mois_annee(debut)} → {_mois_annee(fin)}"
+    return f"{_mois_annee(debut)} – {_mois_annee(fin)}"
 
 
 def _slugify(value: str) -> str:
@@ -73,6 +77,62 @@ def default_export_path(
 
 
 # ============================================================
+# FORMATION + CERTIFICATIONS — LIGNE COMMUNE TRIEE
+# ============================================================
+
+def _education_line(item: CVEducation) -> tuple[str, str]:
+
+    intitule = item.degree
+
+    if item.field_of_study:
+        intitule += f", {item.field_of_study}"
+
+    if item.start_year and item.end_year:
+        annees = f"{item.start_year} – {item.end_year}"
+    elif item.end_year:
+        annees = str(item.end_year)
+    elif item.start_year:
+        annees = str(item.start_year)
+    else:
+        annees = ""
+
+    return annees, f"{intitule} — {item.institution}"
+
+
+def _certification_line(item: CVCertification) -> tuple[str, str]:
+
+    annees = str(item.obtained_year) if item.obtained_year else ""
+
+    intitule = item.name
+
+    if item.organization:
+        intitule += f" — {item.organization}"
+
+    return annees, intitule
+
+
+def _formation_certifications_lines(
+    cv: TargetedCV,
+) -> list[tuple[str, str]]:
+    """
+    Fusionne formation et certifications en une seule liste, triée de
+    la plus récente à la plus ancienne.
+    """
+
+    lignes = [
+        (item.end_year or item.start_year or 0, _education_line(item))
+        for item in cv.educations
+    ] + [
+        (item.obtained_year or 0, _certification_line(item))
+        for item in cv.certifications
+    ]
+
+    lignes.sort(key=lambda paire: paire[0], reverse=True)
+
+    return [ligne for _annee, ligne in lignes]
+
+
+# ============================================================
 # DOCX
 # ============================================================
 
@@ -83,8 +143,7 @@ def export_docx(
     """Écrit le CV ciblé dans un fichier .docx et retourne son chemin."""
 
     from docx import Document
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
-    from docx.shared import Pt
+    from docx.shared import Cm, Pt, RGBColor
 
     destination = Path(
         path
@@ -96,16 +155,43 @@ def export_docx(
 
     document = Document()
 
+    for section in document.sections:
+        section.left_margin = Cm(1.8)
+        section.right_margin = Cm(1.8)
+        section.top_margin = Cm(1.5)
+        section.bottom_margin = Cm(1.5)
+
+    GRIS = RGBColor(0x55, 0x55, 0x55)
+
+    def _rubrique(titre: str) -> None:
+        paragraphe = document.add_paragraph()
+        run = paragraphe.add_run(titre.upper())
+        run.bold = True
+        run.font.size = Pt(12)
+        paragraphe.paragraph_format.space_before = Pt(12)
+        paragraphe.paragraph_format.space_after = Pt(4)
+
     # --------------------------------------------------------
-    # IDENTITE
+    # EN-TETE
     # --------------------------------------------------------
 
-    titre = document.add_heading(cv.full_name, level=0)
-    titre.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    nom = document.add_paragraph()
+    run_nom = nom.add_run(cv.full_name.upper())
+    run_nom.bold = True
+    run_nom.font.size = Pt(20)
+    nom.paragraph_format.space_after = Pt(2)
 
-    coordonnees = " • ".join(
+    if cv.headline:
+        accroche = document.add_paragraph()
+        run_accroche = accroche.add_run(cv.headline)
+        run_accroche.bold = True
+        run_accroche.font.size = Pt(11)
+        accroche.paragraph_format.space_after = Pt(4)
+
+    coordonnees = " | ".join(
         partie
         for partie in (
+            cv.availability,
             cv.location,
             cv.phone,
             cv.email,
@@ -115,101 +201,132 @@ def export_docx(
     )
 
     if coordonnees:
-        paragraphe = document.add_paragraph(coordonnees)
-        paragraphe.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        ligne_contact = document.add_paragraph()
+        run_contact = ligne_contact.add_run(coordonnees)
+        run_contact.font.size = Pt(9)
+        run_contact.font.color.rgb = GRIS
+        ligne_contact.paragraph_format.space_after = Pt(4)
+
+    # --------------------------------------------------------
+    # PROFIL
+    # --------------------------------------------------------
 
     if cv.summary:
+        _rubrique("Profil")
         document.add_paragraph(cv.summary)
 
     # --------------------------------------------------------
-    # COMPETENCES
+    # COMPETENCES CLES
     # --------------------------------------------------------
     #
-    # Uniquement les compétences prouvées : c'est la garantie
-    # d'honnêteté du CV généré.
+    # Uniquement les compétences prouvées, regroupées par catégorie
+    # du référentiel : c'est la garantie d'honnêteté du CV généré.
 
-    if cv.skills:
+    if cv.skill_groups:
 
-        document.add_heading("Compétences", level=1)
+        _rubrique("Compétences clés")
 
-        document.add_paragraph(" • ".join(cv.skills))
+        for groupe in cv.skill_groups:
+
+            ligne = document.add_paragraph(style="List Bullet")
+
+            run_categorie = ligne.add_run(f"{groupe.category} : ")
+            run_categorie.bold = True
+
+            ligne.add_run(", ".join(groupe.skills))
 
     # --------------------------------------------------------
-    # EXPERIENCES
+    # EXPERIENCES — DEUX COLONNES (DATES/LIEU | CONTENU)
     # --------------------------------------------------------
 
     if cv.experiences:
 
-        document.add_heading("Expérience professionnelle", level=1)
+        _rubrique("Expériences professionnelles")
 
         for experience in cv.experiences:
 
-            entete = document.add_paragraph()
+            table = document.add_table(rows=1, cols=2)
+            table.autofit = False
 
-            titre_poste = entete.add_run(
-                f"{experience.job_title} — {experience.company}"
-            )
-            titre_poste.bold = True
+            colonne_date, colonne_contenu = table.rows[0].cells
 
-            periode = document.add_paragraph(
+            colonne_date.width = Cm(3.6)
+            colonne_contenu.width = Cm(12.8)
+
+            p_periode = colonne_date.paragraphs[0]
+            run_periode = p_periode.add_run(
                 _format_periode(
                     experience.start_date,
                     experience.end_date,
                 )
             )
+            run_periode.font.size = Pt(9)
+            run_periode.font.color.rgb = GRIS
 
-            for run in periode.runs:
-                run.italic = True
-                run.font.size = Pt(9)
+            if experience.location:
+                p_lieu = colonne_date.add_paragraph()
+                run_lieu = p_lieu.add_run(experience.location)
+                run_lieu.font.size = Pt(9)
+                run_lieu.font.color.rgb = GRIS
 
-            if experience.business_context:
-                document.add_paragraph(
-                    experience.business_context
-                )
+            p_titre = colonne_contenu.paragraphs[0]
+            run_titre = p_titre.add_run(
+                f"{experience.job_title} — {experience.company}"
+            )
+            run_titre.bold = True
 
             for ligne in experience.lines:
-                document.add_paragraph(
+                colonne_contenu.add_paragraph(
                     ligne.text,
                     style="List Bullet",
                 )
 
-    # --------------------------------------------------------
-    # REALISATIONS
-    # --------------------------------------------------------
-
-    if cv.achievements:
-
-        document.add_heading("Réalisations", level=1)
-
-        for achievement in cv.achievements:
-
-            paragraphe = document.add_paragraph()
-
-            titre_realisation = paragraphe.add_run(
-                achievement.title
+            # Espace visuel entre deux expériences.
+            document.add_paragraph().paragraph_format.space_after = (
+                Pt(2)
             )
-            titre_realisation.bold = True
 
-            for libelle, valeur in (
-                ("Situation", achievement.situation),
-                ("Actions", achievement.action),
-                ("Résultat", achievement.result),
-            ):
+    # --------------------------------------------------------
+    # FORMATION & CERTIFICATIONS
+    # --------------------------------------------------------
 
-                if valeur:
-                    document.add_paragraph(
-                        f"{libelle} : {valeur}"
-                    )
+    lignes_formation = _formation_certifications_lines(cv)
 
-            if achievement.metrics:
+    if lignes_formation:
 
-                for metrique in achievement.metrics.split("\n"):
+        _rubrique("Formation & certifications")
 
-                    if metrique.strip():
-                        document.add_paragraph(
-                            metrique.strip(),
-                            style="List Bullet",
-                        )
+        for annee, intitule in lignes_formation:
+
+            table = document.add_table(rows=1, cols=2)
+            table.autofit = False
+
+            colonne_annee, colonne_intitule = table.rows[0].cells
+
+            colonne_annee.width = Cm(3.6)
+            colonne_intitule.width = Cm(12.8)
+
+            run_annee = colonne_annee.paragraphs[0].add_run(annee)
+            run_annee.font.size = Pt(9)
+            run_annee.font.color.rgb = GRIS
+
+            colonne_intitule.paragraphs[0].add_run(intitule)
+
+    # --------------------------------------------------------
+    # LANGUES & CENTRES D'INTERET
+    # --------------------------------------------------------
+
+    if cv.languages or cv.interests:
+
+        _rubrique("Langues & centres d'intérêt")
+
+        if cv.languages:
+            document.add_paragraph(f"Langues : {cv.languages}")
+
+        if cv.interests:
+            document.add_paragraph(
+                f"Centres d'intérêt : {cv.interests}"
+            )
 
     document.save(str(destination))
 
@@ -226,7 +343,7 @@ def export_pdf(
 ) -> Path:
     """Écrit le CV ciblé dans un fichier .pdf et retourne son chemin."""
 
-    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.colors import HexColor
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import (
         ParagraphStyle,
@@ -239,6 +356,8 @@ def export_pdf(
         Paragraph,
         SimpleDocTemplate,
         Spacer,
+        Table,
+        TableStyle,
     )
 
     destination = Path(
@@ -251,44 +370,75 @@ def export_pdf(
 
     styles = getSampleStyleSheet()
 
+    GRIS = HexColor("#555555")
+
     style_nom = ParagraphStyle(
         "NomCandidat",
         parent=styles["Title"],
-        alignment=TA_CENTER,
+        alignment=0,
+        fontSize=20,
+        leading=24,
+        spaceAfter=2,
+    )
+
+    style_accroche = ParagraphStyle(
+        "Accroche",
+        parent=styles["Normal"],
+        fontSize=11,
+        leading=14,
         spaceAfter=4,
     )
 
     style_contact = ParagraphStyle(
         "Contact",
         parent=styles["Normal"],
-        alignment=TA_CENTER,
         fontSize=9,
-        spaceAfter=12,
+        textColor=GRIS,
+        spaceAfter=6,
     )
 
-    style_periode = ParagraphStyle(
-        "Periode",
+    style_rubrique = ParagraphStyle(
+        "Rubrique",
+        parent=styles["Heading2"],
+        fontSize=12,
+        spaceBefore=12,
+        spaceAfter=4,
+    )
+
+    style_normal = styles["Normal"]
+
+    style_petit = ParagraphStyle(
+        "Petit",
         parent=styles["Normal"],
         fontSize=9,
-        textColor="#555555",
-        spaceAfter=4,
+        textColor=GRIS,
+    )
+
+    style_titre_poste = ParagraphStyle(
+        "TitrePoste",
+        parent=styles["Normal"],
+        fontName="Helvetica-Bold",
     )
 
     document = SimpleDocTemplate(
         str(destination),
         pagesize=A4,
-        leftMargin=2 * cm,
-        rightMargin=2 * cm,
-        topMargin=1.8 * cm,
-        bottomMargin=1.8 * cm,
+        leftMargin=1.8 * cm,
+        rightMargin=1.8 * cm,
+        topMargin=1.5 * cm,
+        bottomMargin=1.5 * cm,
         title=f"CV {cv.full_name}",
     )
 
-    elements = [Paragraph(cv.full_name, style_nom)]
+    elements = [Paragraph(cv.full_name.upper(), style_nom)]
 
-    coordonnees = " • ".join(
+    if cv.headline:
+        elements.append(Paragraph(cv.headline, style_accroche))
+
+    coordonnees = " | ".join(
         partie
         for partie in (
+            cv.availability,
             cv.location,
             cv.phone,
             cv.email,
@@ -298,154 +448,173 @@ def export_pdf(
     )
 
     if coordonnees:
-        elements.append(
-            Paragraph(coordonnees, style_contact)
-        )
+        elements.append(Paragraph(coordonnees, style_contact))
+
+    # --------------------------------------------------------
+    # PROFIL
+    # --------------------------------------------------------
 
     if cv.summary:
-        elements.append(
-            Paragraph(cv.summary, styles["Normal"])
-        )
-        elements.append(Spacer(1, 10))
+        elements.append(Paragraph("PROFIL", style_rubrique))
+        elements.append(Paragraph(cv.summary, style_normal))
 
     # --------------------------------------------------------
-    # COMPETENCES
+    # COMPETENCES CLES
     # --------------------------------------------------------
 
-    if cv.skills:
+    if cv.skill_groups:
 
         elements.append(
-            Paragraph("Compétences", styles["Heading2"])
+            Paragraph("COMPÉTENCES CLÉS", style_rubrique)
         )
 
         elements.append(
-            Paragraph(
-                " • ".join(cv.skills),
-                styles["Normal"],
+            ListFlowable(
+                [
+                    ListItem(
+                        Paragraph(
+                            f"<b>{groupe.category} :</b> "
+                            + ", ".join(groupe.skills),
+                            style_normal,
+                        )
+                    )
+                    for groupe in cv.skill_groups
+                ],
+                bulletType="bullet",
+                leftIndent=12,
             )
         )
 
-        elements.append(Spacer(1, 8))
-
     # --------------------------------------------------------
-    # EXPERIENCES
+    # EXPERIENCES — TABLEAU 2 COLONNES PAR EXPERIENCE
     # --------------------------------------------------------
 
     if cv.experiences:
 
         elements.append(
             Paragraph(
-                "Expérience professionnelle",
-                styles["Heading2"],
+                "EXPÉRIENCES PROFESSIONNELLES", style_rubrique
             )
         )
 
         for experience in cv.experiences:
 
-            elements.append(
-                Paragraph(
-                    f"<b>{experience.job_title} — "
-                    f"{experience.company}</b>",
-                    styles["Normal"],
-                )
-            )
-
-            elements.append(
+            colonne_date = [
                 Paragraph(
                     _format_periode(
                         experience.start_date,
                         experience.end_date,
                     ),
-                    style_periode,
+                    style_petit,
                 )
-            )
+            ]
 
-            if experience.business_context:
-                elements.append(
-                    Paragraph(
-                        experience.business_context,
-                        styles["Normal"],
-                    )
+            if experience.location:
+                colonne_date.append(
+                    Paragraph(experience.location, style_petit)
                 )
+
+            colonne_contenu = [
+                Paragraph(
+                    f"{experience.job_title} — {experience.company}",
+                    style_titre_poste,
+                )
+            ]
 
             if experience.lines:
-                elements.append(
+                colonne_contenu.append(
                     ListFlowable(
                         [
                             ListItem(
-                                Paragraph(
-                                    ligne.text,
-                                    styles["Normal"],
-                                )
+                                Paragraph(ligne.text, style_normal)
                             )
                             for ligne in experience.lines
                         ],
                         bulletType="bullet",
-                        leftIndent=12,
+                        leftIndent=10,
                     )
                 )
 
-            elements.append(Spacer(1, 8))
+            table = Table(
+                [[colonne_date, colonne_contenu]],
+                colWidths=[3.6 * cm, 12.8 * cm],
+            )
 
-    # --------------------------------------------------------
-    # REALISATIONS
-    # --------------------------------------------------------
-
-    if cv.achievements:
-
-        elements.append(
-            Paragraph("Réalisations", styles["Heading2"])
-        )
-
-        for achievement in cv.achievements:
-
-            elements.append(
-                Paragraph(
-                    f"<b>{achievement.title}</b>",
-                    styles["Normal"],
+            table.setStyle(
+                TableStyle(
+                    [
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                        ("TOPPADDING", (0, 0), (-1, -1), 0),
+                        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+                    ]
                 )
             )
 
-            for libelle, valeur in (
-                ("Situation", achievement.situation),
-                ("Actions", achievement.action),
-                ("Résultat", achievement.result),
-            ):
+            elements.append(table)
 
-                if valeur:
-                    elements.append(
-                        Paragraph(
-                            f"{libelle} : {valeur}",
-                            styles["Normal"],
-                        )
-                    )
+    # --------------------------------------------------------
+    # FORMATION & CERTIFICATIONS
+    # --------------------------------------------------------
 
-            metriques = [
-                metrique.strip()
-                for metrique in (
-                    achievement.metrics or ""
-                ).split("\n")
-                if metrique.strip()
-            ]
+    lignes_formation = _formation_certifications_lines(cv)
 
-            if metriques:
-                elements.append(
-                    ListFlowable(
-                        [
-                            ListItem(
-                                Paragraph(
-                                    metrique,
-                                    styles["Normal"],
-                                )
-                            )
-                            for metrique in metriques
-                        ],
-                        bulletType="bullet",
-                        leftIndent=12,
-                    )
+    if lignes_formation:
+
+        elements.append(
+            Paragraph("FORMATION & CERTIFICATIONS", style_rubrique)
+        )
+
+        table = Table(
+            [
+                [
+                    Paragraph(annee, style_petit),
+                    Paragraph(intitule, style_normal),
+                ]
+                for annee, intitule in lignes_formation
+            ],
+            colWidths=[3.6 * cm, 12.8 * cm],
+        )
+
+        table.setStyle(
+            TableStyle(
+                [
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                    ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                    ("TOPPADDING", (0, 0), (-1, -1), 2),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ]
+            )
+        )
+
+        elements.append(table)
+
+    # --------------------------------------------------------
+    # LANGUES & CENTRES D'INTERET
+    # --------------------------------------------------------
+
+    if cv.languages or cv.interests:
+
+        elements.append(
+            Paragraph(
+                "LANGUES & CENTRES D'INTÉRÊT", style_rubrique
+            )
+        )
+
+        if cv.languages:
+            elements.append(
+                Paragraph(f"Langues : {cv.languages}", style_normal)
+            )
+
+        if cv.interests:
+            elements.append(
+                Paragraph(
+                    f"Centres d'intérêt : {cv.interests}",
+                    style_normal,
                 )
-
-            elements.append(Spacer(1, 8))
+            )
 
     document.build(elements)
 
