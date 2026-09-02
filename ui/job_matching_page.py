@@ -4,10 +4,24 @@ from uuid import uuid4
 
 import streamlit as st
 
+from models.application import (
+    APPLICATION_STATUS_LABELS,
+    APPLICATION_STATUSES,
+)
+from services.application_service import (
+    list_applications,
+    record_application,
+    update_application_status,
+)
 from services.cv import (
     build_targeted_cv,
     export_docx,
     export_pdf,
+)
+from services.letter import (
+    build_cover_letter,
+    export_letter_docx,
+    export_letter_pdf,
 )
 from services.job_service import save_job_offer
 from services.market_memory_service import get_market_skill_memory
@@ -26,30 +40,35 @@ def _render_cv_generation(
     job_offer_id: str,
 ) -> None:
     """
-    Génération du CV ciblé à partir de l'analyse affichée.
+    Génération du CV ciblé et de la lettre à partir de l'analyse.
 
-    Le CV est reconstruit à chaque clic depuis les données du Master
-    CV : il n'existe aucun état intermédiaire modifiable entre
-    l'analyse et le document produit.
+    Les deux documents sont reconstruits à chaque clic depuis les
+    données du Master CV : il n'existe aucun état intermédiaire
+    modifiable entre l'analyse et les documents produits.
     """
 
     st.divider()
 
-    st.subheader("CV ciblé")
+    st.subheader("CV ciblé et lettre de motivation")
 
     st.caption(
-        "Le CV ne reprend que les compétences prouvées, c'est-à-dire "
-        "déclarées dans le Master CV et soutenues par au moins une "
-        "preuve. Les compétences déduites ou déclarées sans preuve "
-        "en sont volontairement absentes."
+        "Les documents ne reprennent que les compétences prouvées, "
+        "c'est-à-dire déclarées dans le Master CV et soutenues par "
+        "au moins une preuve. Les compétences déduites ou déclarées "
+        "sans preuve en sont volontairement absentes."
     )
 
-    if not st.button("Générer le CV ciblé"):
+    if not st.button("Générer le CV et la lettre"):
         return
 
     try:
 
         cv = build_targeted_cv(
+            candidate_id=candidate_id,
+            job_offer_id=job_offer_id,
+        )
+
+        letter = build_cover_letter(
             candidate_id=candidate_id,
             job_offer_id=job_offer_id,
         )
@@ -91,34 +110,195 @@ def _render_cv_generation(
     )
 
     # --------------------------------------------------------
-    # TÉLÉCHARGEMENT
+    # LETTRE — RELECTURE OBLIGATOIRE
     # --------------------------------------------------------
 
-    docx_path = export_docx(cv)
-    pdf_path = export_pdf(cv)
+    st.markdown("**Lettre de motivation**")
 
-    docx_col, pdf_col = st.columns(2)
+    st.warning(
+        "Cette lettre est un brouillon assemblé à partir de votre "
+        "Master CV. Relisez-la et adaptez-la avant tout envoi : "
+        "aucune lettre générée n'est finale."
+    )
 
-    with docx_col:
+    st.text_area(
+        "Texte de la lettre",
+        value=letter.full_text,
+        height=320,
+        label_visibility="collapsed",
+    )
+
+    # --------------------------------------------------------
+    # TÉLÉCHARGEMENTS
+    # --------------------------------------------------------
+
+    cv_docx = export_docx(cv)
+    cv_pdf = export_pdf(cv)
+
+    letter_docx = export_letter_docx(letter)
+    letter_pdf = export_letter_pdf(letter)
+
+    DOCX_MIME = (
+        "application/vnd.openxmlformats-officedocument"
+        ".wordprocessingml.document"
+    )
+
+    cv_col, letter_col = st.columns(2)
+
+    with cv_col:
+
+        st.caption("CV ciblé")
 
         st.download_button(
-            "Télécharger en DOCX",
-            data=docx_path.read_bytes(),
-            file_name=docx_path.name,
-            mime=(
-                "application/vnd.openxmlformats-officedocument"
-                ".wordprocessingml.document"
-            ),
+            "CV — DOCX",
+            data=cv_docx.read_bytes(),
+            file_name=cv_docx.name,
+            mime=DOCX_MIME,
         )
 
-    with pdf_col:
-
         st.download_button(
-            "Télécharger en PDF",
-            data=pdf_path.read_bytes(),
-            file_name=pdf_path.name,
+            "CV — PDF",
+            data=cv_pdf.read_bytes(),
+            file_name=cv_pdf.name,
             mime="application/pdf",
         )
+
+    with letter_col:
+
+        st.caption("Lettre de motivation")
+
+        st.download_button(
+            "Lettre — DOCX",
+            data=letter_docx.read_bytes(),
+            file_name=letter_docx.name,
+            mime=DOCX_MIME,
+        )
+
+        st.download_button(
+            "Lettre — PDF",
+            data=letter_pdf.read_bytes(),
+            file_name=letter_pdf.name,
+            mime="application/pdf",
+        )
+
+    # --------------------------------------------------------
+    # SUIVI DE CANDIDATURE
+    # --------------------------------------------------------
+    #
+    # Le CV et la lettre existent : la candidature est tracée
+    # automatiquement, conformément au principe « chaque candidature
+    # laisse une trace ».
+
+    record_application(
+        candidate_id=candidate_id,
+        job_offer_id=job_offer_id,
+        cv_docx_path=cv_docx,
+        cv_pdf_path=cv_pdf,
+        letter_docx_path=letter_docx,
+        letter_pdf_path=letter_pdf,
+    )
+
+    st.caption(
+        "Cette candidature a été ajoutée à votre suivi, dans la "
+        "section « Suivi des candidatures » ci-dessous."
+    )
+
+
+def _render_application_tracking(candidate_id: str) -> None:
+    """
+    Suivi des candidatures.
+
+    Les statuts sont saisis à la main : la V1 ne lit aucune boîte
+    mail, ce qui demanderait un connecteur externe hors périmètre.
+    """
+
+    st.divider()
+
+    st.subheader("Suivi des candidatures")
+
+    candidatures = list_applications(candidate_id)
+
+    if not candidatures:
+
+        st.info(
+            "Aucune candidature enregistrée. Générer un CV et une "
+            "lettre pour une annonce crée automatiquement son suivi."
+        )
+
+        return
+
+    for candidature in candidatures:
+
+        intitule = candidature.job_offer_title or "Annonce"
+
+        if candidature.company:
+            intitule += f" — {candidature.company}"
+
+        with st.expander(
+            f"{intitule}  ·  {candidature.status_label}"
+        ):
+
+            st.caption(
+                "Documents générés le "
+                + candidature.created_at.strftime("%d/%m/%Y à %H:%M")
+            )
+
+            fichiers = [
+                chemin
+                for chemin in (
+                    candidature.cv_docx_path,
+                    candidature.cv_pdf_path,
+                    candidature.letter_docx_path,
+                    candidature.letter_pdf_path,
+                )
+                if chemin
+            ]
+
+            if fichiers:
+                st.caption("Fichiers : " + " · ".join(fichiers))
+
+            with st.form(f"suivi_{candidature.id}"):
+
+                statut = st.selectbox(
+                    "Statut",
+                    options=APPLICATION_STATUSES,
+                    index=APPLICATION_STATUSES.index(
+                        candidature.status
+                    )
+                    if candidature.status in APPLICATION_STATUSES
+                    else 0,
+                    format_func=lambda valeur: (
+                        APPLICATION_STATUS_LABELS.get(valeur, valeur)
+                    ),
+                )
+
+                notes = st.text_area(
+                    "Notes",
+                    value=candidature.notes,
+                    placeholder=(
+                        "Contact, canal d'envoi, retour reçu..."
+                    ),
+                )
+
+                if st.form_submit_button("Enregistrer le suivi"):
+
+                    try:
+
+                        update_application_status(
+                            application_id=candidature.id,
+                            status=statut,
+                            notes=notes,
+                        )
+
+                        st.success("Suivi mis à jour.")
+
+                        st.rerun()
+
+                    except Exception as error:
+
+                        st.error(
+                            f"Mise à jour impossible : {error}"
+                        )
 
 
 def render_job_matching_page(candidate_id: str) -> None:
@@ -478,6 +658,12 @@ def render_job_matching_page(candidate_id: str) -> None:
             "La mémoire se construira après l'analyse "
             "d'une annonce sélectionnée."
         )
+
+    # ========================================================
+    # SUIVI DES CANDIDATURES
+    # ========================================================
+
+    _render_application_tracking(candidate_id)
 
     # ========================================================
     # NOUVELLE ANNONCE

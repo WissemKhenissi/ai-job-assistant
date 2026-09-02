@@ -24,6 +24,7 @@ from database.model_registry import Base
 
 # Modules dont le SessionLocal doit pointer vers la base de test.
 SERVICE_MODULES = (
+    "services.application_service",
     "services.cv.selection",
     "services.job_requirements_service",
     "services.job_service",
