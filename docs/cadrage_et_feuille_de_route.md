@@ -67,6 +67,8 @@ Le document de vision élargie ("Career Intelligence Platform") reste une **cart
   - Les paliers gratuits (Gemini, Groq) sont dimensionnés pour un seul compte/projet, pas pour un produit — le quota serait épuisé en quelques heures avec plusieurs dizaines d'utilisateurs actifs.
   - À cette échelle, le critère change : coût par génération × nombre d'utilisateurs, politique de non-entraînement sur les données contractuelle, conformité RGPD/localisation des données (Mistral, hébergement France/UE, est un candidat pertinent pour cet argument même si ce n'est pas l'option la moins chère).
   - Implique une architecture différente : clé API strictement côté serveur, comptage d'usage par utilisateur, et un modèle économique (freemium avec quota, abonnement...) qui absorbe le coût — à trancher avec le reste de la bascule V2, pas isolément.
+- **Récupération fiable du contenu d'une annonce depuis un lien, tous sites confondus** (ajouté le 2 septembre 2026, après test réel). La version V1 (téléchargement HTTP simple + extraction de texte, sans IA) fonctionne sur les pages au contenu statique, mais échoue sur la plupart des grands jobboards (LinkedIn en tête, qui bloque activement ce type de requête et charge son contenu en JavaScript). Une version fiable demanderait un rendu JavaScript complet (navigateur headless) voire une intégration officielle par site — hors périmètre V1, le copier-coller manuel reste la solution.
+- **Entretien vocal pour enrichir le Master CV** (ajouté le 2 septembre 2026). Recueillir les informations du candidat par chat vocal retranscrit, pour l'aider à prendre le temps de développer ses expériences à l'oral plutôt qu'à l'écrit — explicitement noté par l'utilisateur comme pouvant attendre une V2, une fois le mécanisme d'entretien textuel (voir Phase 5) éprouvé.
 
 Ces éléments ne sont pas abandonnés : ils constituent le backlog de la V2, à réévaluer une fois la V1 stable et testée.
 
@@ -122,7 +124,24 @@ Ces éléments ne sont pas abandonnés : ils constituent le backlog de la V2, à
 - **Ajouté le 2 septembre 2026** : page "Mes candidatures" réorganisée en onglets (`ui/job_matching/`, éclaté depuis un fichier unique de 880 lignes) — Nouvelle annonce / CV & lettre / Suivi / Mémoire de marché.
 - CV limité à une page, avec un budget de contenu qui remplit la page au mieux sans jamais la dépasser. **Toujours ouvert.**
 - Validation explicite d'une compétence déclarée sans preuve par l'utilisateur lui-même (son attestation, pas une invention du système) pour qu'elle devienne utilisable par le générateur. **Toujours ouvert.**
-- Suggestions de compétences déduites du parcours, soumises à validation utilisateur avant d'entrer au Master CV. **Toujours ouvert.**
+- Suggestions de compétences déduites du parcours, soumises à validation utilisateur avant d'entrer au Master CV. **Toujours ouvert** — voir Phase 5, qui l'englobe dans un mécanisme plus large.
+
+### Phase 5 — Entretien IA d'enrichissement du Master CV (brainstorm ouvert le 2 septembre 2026)
+
+Constat déclencheur : construire un Master CV riche et honnête à la seule initiative du candidat plafonne vite — on oublie des expériences, on sous-décrit ce qu'on a fait, on ne pense pas à formuler une compétence qu'on possède réellement. L'utilisateur demande :
+
+- Une seule page regroupant profil, expériences et compétences (aujourd'hui trois pages séparées dans `app.py`), pour construire/enrichir le Master CV en un seul endroit.
+- Une IA (Gemini) qui analyse le profil/CV envoyé et pose les questions de relance les plus pertinentes, expérience par expérience, jusqu'à ce que continuer n'apporte plus de valeur.
+- Que l'IA "creuse" chaque expérience pour suggérer des compétences et des éléments d'expérience plausibles mais non explicitement mentionnés — **jamais ajoutés directement** : ce sont des suggestions soumises à validation explicite, exactement comme pour les compétences déduites (voir ci-dessus) et par cohérence avec le principe "rien n'est inventé" (une suggestion validée par le candidat devient un fait qu'il atteste, pas une invention du système).
+- Explicitement repoussé en V2 par l'utilisateur lui-même : la collecte par **chat vocal retranscrit**, pour que le candidat soit à l'aise et prenne le temps de développer à l'oral. Le mécanisme d'entretien (textuel, V1) doit être conçu pour ne pas dépendre de la modalité de saisie, afin qu'ajouter la voix en V2 n'implique pas de le refondre.
+
+**Fait le 2 septembre 2026**, après brainstorm avec l'utilisateur (préférence confirmée : largeur plutôt que profondeur — un éventail de questions couvrant plusieurs expériences et le poste recherché, pas un dialogue adaptatif expérience par expérience) :
+
+- Page unique "Mon Master CV" (`ui/master_cv/`), qui remplace les trois anciennes pages.
+- Entretien IA en un seul round (`services/ai/interview.py`) : poste recherché optionnel, upload optionnel de CV externe (`.pdf`/`.docx`, texte extrait par `services/document_extraction.py`) et de captures d'écran (`.png`/`.jpg`, transmises à Gemini en pièces multimodales via `services/ai/gemini_client.generate_multimodal`, sans OCR local) → génération d'un éventail large de questions (8 à 15) couvrant plusieurs expériences → réponses libres, aucune obligatoire → propositions de preuves reformulées à partir des réponses données, chacune éditable et validée une par une avant d'écrire en base (`SkillDB`/`EvidenceDB`, mécanisme existant — aucun nouveau statut, aucune nouvelle table).
+- Garde-fou principal : toute proposition dont l'extrait source cité par l'IA n'est pas retrouvé mot pour mot dans une réponse réellement donnée est rejetée automatiquement avant même d'être affichée.
+- Vérifié en conditions réelles (clé Gemini) : 10 questions générées couvrant les 3 expériences du Master CV + le poste recherché indiqué, réponse à une question ayant produit 3 propositions distinctes et correctement tracées, validation écrivant réellement une nouvelle compétence prouvée.
+- Chat vocal retranscrit : toujours backlog V2, comme prévu — le mécanisme textuel ne dépend d'aucune modalité de saisie particulière.
 
 ---
 

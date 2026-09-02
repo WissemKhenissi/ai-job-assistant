@@ -100,9 +100,11 @@ def _is_transient_overload(error: Exception) -> bool:
     )
 
 
-def generate_text(prompt: str, temperature: float = 0.4) -> str:
+def _call_gemini(contents, temperature: float) -> str:
     """
-    Envoie un prompt à Gemini et retourne le texte de la réponse.
+    Envoie `contents` (texte seul, ou liste de parties texte/image
+    pour un appel multimodal) à Gemini et retourne le texte de la
+    réponse.
 
     Lève GeminiNotConfiguredError si aucune clé n'est disponible, et
     GeminiRequestError pour toute autre défaillance (réseau, quota
@@ -132,7 +134,7 @@ def generate_text(prompt: str, temperature: float = 0.4) -> str:
 
             response = client.models.generate_content(
                 model=GEMINI_MODEL,
-                contents=prompt,
+                contents=contents,
                 config=config,
             )
 
@@ -165,3 +167,23 @@ def generate_text(prompt: str, temperature: float = 0.4) -> str:
     raise GeminiRequestError(
         f"Échec de l'appel à l'API Gemini : {derniere_erreur}"
     ) from derniere_erreur
+
+
+def generate_text(prompt: str, temperature: float = 0.4) -> str:
+    """Envoie un prompt texte à Gemini et retourne le texte de la réponse."""
+
+    return _call_gemini(prompt, temperature)
+
+
+def generate_multimodal(parts: list, temperature: float = 0.4) -> str:
+    """
+    Envoie un contenu multimodal (texte + images) à Gemini et retourne
+    le texte de la réponse.
+
+    `parts` est une liste d'objets `google.genai.types.Part`
+    (`Part.from_text` pour du texte, `Part.from_bytes` pour une
+    image) — construite par l'appelant, ce module ne sait pas d'où
+    viennent les images.
+    """
+
+    return _call_gemini(parts, temperature)

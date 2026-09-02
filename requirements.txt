@@ -5,6 +5,7 @@ pandas
 sqlalchemy
 python-dotenv
 python-docx
+pypdf
 reportlab
 trafilatura
 pytest

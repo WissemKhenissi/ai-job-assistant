@@ -16,12 +16,24 @@ Trois usages, trois garde-fous adaptés au risque de chacun :
   télétravail, compétences attendues) et commente en langage naturel
   le résultat déjà calculé par le moteur de matching honnête — l'IA
   ne recalcule jamais le score ni les statuts prouvé/déclaré/déduit.
+- `generate_interview_questions` / `propose_evidence_from_answers`
+  (services.ai.interview) : pose des questions de relance sur le
+  Master CV, puis propose des preuves à partir des réponses données
+  — jamais écrites automatiquement, toujours soumises à validation
+  explicite et éditable par le candidat.
 
 Dans tous les cas, tout repose sur un repli automatique vers le
 contenu déterministe si l'IA n'est pas configurée, échoue, ou que le
 garde-fou se déclenche.
 """
 
+from services.ai.interview import (
+    EvidenceProposal,
+    InterviewAnswer,
+    InterviewQuestion,
+    generate_interview_questions,
+    propose_evidence_from_answers,
+)
 from services.ai.job_analysis import (
     FitSynthesisResult,
     JobOfferAnalysis,
@@ -37,12 +49,17 @@ from services.ai.reformulation import (
 )
 
 __all__ = [
+    "EvidenceProposal",
     "FitSynthesisResult",
+    "InterviewAnswer",
+    "InterviewQuestion",
     "JobOfferAnalysis",
     "ReformulationResult",
     "analyze_job_offer_with_ai",
     "build_ai_letter",
     "generate_fit_synthesis",
+    "generate_interview_questions",
+    "propose_evidence_from_answers",
     "reformulate_cover_letter",
     "reformulate_cv_summary",
     "reformulate_targeted_cv",

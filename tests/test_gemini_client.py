@@ -15,6 +15,7 @@ from services.ai.gemini_client import (
     GeminiNotConfiguredError,
     GeminiRequestError,
     _is_transient_overload,
+    generate_multimodal,
     generate_text,
 )
 
@@ -118,6 +119,28 @@ def test_reussit_du_premier_coup_sans_nouvelle_tentative(
 
     assert resultat == "OK"
     assert faux_client.models.appels == 1
+
+
+def test_generate_multimodal_partage_la_meme_logique_de_retentative(
+    monkeypatch,
+):
+    """
+    generate_multimodal doit bénéficier du même retry/timeout que
+    generate_text — les deux passent par _call_gemini.
+    """
+
+    faux_client = _patch_client(
+        monkeypatch,
+        [
+            RuntimeError("503 UNAVAILABLE. High demand."),
+            "Réponse multimodale.",
+        ],
+    )
+
+    resultat = generate_multimodal(["partie 1", "partie 2"])
+
+    assert resultat == "Réponse multimodale."
+    assert faux_client.models.appels == 2
 
 
 def test_reessaie_apres_une_surcharge_puis_reussit(monkeypatch):
