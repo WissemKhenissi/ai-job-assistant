@@ -53,6 +53,7 @@ from services.cv.results import TargetedCV
 from services.job_service import get_job_offer_text
 from services.letter.generation import build_cover_letter
 from services.letter.results import CoverLetter, LetterParagraph
+from services.text_numbers import numbers_in
 
 
 # Longueur maximale du texte de l'offre transmise au prompt : l'offre
@@ -112,12 +113,6 @@ Réponds uniquement avec le corps de la lettre : pas d'objet, pas de formule d'a
 
 CONTRÔLE FINAL AVANT DE RÉPONDRE
 Vérifie mentalement : chaque affirmation est-elle retrouvable dans la fiche de faits ou dans l'offre ? Aucun chiffre, résultat, compétence ou motivation n'a été inventé ? La lettre est spécifique à ce candidat et à cette offre, elle ne répète pas simplement le CV, les lacunes éventuelles ne sont pas dissimulées par une fausse affirmation, le ton est naturel et sans cliché, la conclusion donne envie d'échanger."""
-
-
-def _digits(text: str) -> set[str]:
-    """Tous les nombres (suites de chiffres) présents dans un texte."""
-
-    return set(re.findall(r"\d+", text))
 
 
 def _get_motivations(candidate_id: str) -> str:
@@ -491,7 +486,7 @@ def build_ai_letter(
     # reformulation.py — c'est tout ce que la lettre a le droit
     # d'affirmer.
 
-    chiffres_inventes = _digits(corps_genere) - _digits(fiche)
+    chiffres_inventes = numbers_in(corps_genere) - numbers_in(fiche)
 
     if chiffres_inventes:
         return lettre_deterministe, [

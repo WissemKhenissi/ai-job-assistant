@@ -35,6 +35,8 @@ from models.job import JobOfferDB
 from models.matching import JobMatchDB
 from models.skill_match import JobSkillMatchDB
 
+from services.text_numbers import numbers_in
+
 from services.ai.gemini_client import (
     GeminiNotConfiguredError,
     GeminiRequestError,
@@ -48,10 +50,6 @@ MAX_JOB_EXCERPT = 6000
 
 ALLOWED_CONTRACT_TYPES = {"CDI", "CDD", "Freelance", "Stage"}
 ALLOWED_REMOTE_POLICIES = {"Sur site", "Hybride", "Télétravail complet"}
-
-
-def _digits(text: str) -> set[str]:
-    return set(re.findall(r"\d+", text))
 
 
 def _normalize_loose(text: str) -> str:
@@ -186,7 +184,7 @@ def analyze_job_offer_with_ai(job_text: str) -> JobOfferAnalysis:
     # inventé — on écarte la précision plutôt que de la garder telle
     # quelle dans ce cas.
     if remote_details_brut and (
-        _digits(remote_details_brut) - _digits(job_text)
+        numbers_in(remote_details_brut) - numbers_in(job_text)
     ):
         remote_details_brut = ""
 
@@ -345,7 +343,7 @@ def generate_fit_synthesis(
 
     # Garde-fou numérique : tout ce que le contexte fourni contient
     # est autorisé, le reste ne doit pas apparaître dans l'avis.
-    chiffres_inventes = _digits(reponse) - _digits(contexte)
+    chiffres_inventes = numbers_in(reponse) - numbers_in(contexte)
 
     if chiffres_inventes:
         return FitSynthesisResult(

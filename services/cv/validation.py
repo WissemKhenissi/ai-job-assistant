@@ -25,7 +25,6 @@ décide quoi faire d'un signalement — et l'utilisateur qui tranche.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from datetime import date
 
@@ -33,6 +32,8 @@ from database.db import SessionLocal
 from database.models import CandidateDB, EvidenceDB, ExperienceDB
 from models.matching import JobMatchDB
 from models.skill_match import JobSkillMatchDB
+
+from services.text_numbers import numbers_in
 
 
 # Un signalement bloquant met en cause la véracité du document ; un
@@ -76,10 +77,6 @@ class ValidationReport:
             }
             for issue in self.issues
         ]
-
-
-def _digits(text: str) -> set[str]:
-    return set(re.findall(r"\d+", text or ""))
 
 
 def validate_targeted_cv(
@@ -140,7 +137,7 @@ def validate_targeted_cv(
                     )
                     continue
 
-                chiffres_inventes = _digits(ligne.text) - _digits(
+                chiffres_inventes = numbers_in(ligne.text) - numbers_in(
                     preuve.description
                 )
 
@@ -179,7 +176,7 @@ def validate_targeted_cv(
 
         if candidate is not None and cv.summary:
 
-            chiffres_inventes = _digits(cv.summary) - _digits(
+            chiffres_inventes = numbers_in(cv.summary) - numbers_in(
                 candidate.summary or ""
             )
 

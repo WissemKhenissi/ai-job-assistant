@@ -30,7 +30,6 @@ une dépendance : le CV et la lettre restent générables sans elle.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, replace
 
 from services.ai.gemini_client import (
@@ -54,6 +53,7 @@ from services.cv.vocabulary import (
     seniority_terms_added,
 )
 from services.letter.results import CoverLetter, LetterParagraph
+from services.text_numbers import numbers_in
 
 
 # Longueur d'extrait d'offre transmise au prompt : assez pour donner
@@ -68,12 +68,6 @@ MAX_JOB_EXCERPT = 2000
 # « approche Data / KPI » que le texte source ne mentionnait pas —
 # terme autorisé, donc invisible pour les garde-fous, mais ajouté.
 REFORMULATION_TEMPERATURE = 0.2
-
-
-def _digits(text: str) -> set[str]:
-    """Tous les nombres (suites de chiffres) présents dans un texte."""
-
-    return set(re.findall(r"\d+", text))
 
 
 @dataclass(frozen=True)
@@ -100,7 +94,7 @@ def _motif_de_rejet(
     # serait la forme la plus grave d'invention : un fait chiffré
     # fabriqué. On ne tente pas de tout vérifier — seuls les nombres
     # sont assez concrets pour être contrôlés de façon fiable.
-    nombres_inventes = _digits(reformule) - _digits(source_text)
+    nombres_inventes = numbers_in(reformule) - numbers_in(source_text)
 
     if nombres_inventes:
         return (
