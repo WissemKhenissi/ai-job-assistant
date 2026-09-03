@@ -31,6 +31,7 @@ SERVICE_MODULES = (
     "services.interview_history_service",
     "services.cv.selection",
     "services.cv.validation",
+    "services.cv.vocabulary",
     "services.generated_cv_service",
     "services.job_requirements_service",
     "services.job_service",

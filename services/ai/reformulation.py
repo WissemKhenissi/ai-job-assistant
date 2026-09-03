@@ -7,12 +7,20 @@ ajouter une compétence, ni un chiffre, ni un fait absent du texte
 source — seulement le rendre plus fluide et plus adapté au vocabulaire
 de l'offre.
 
-Deux lignes de défense :
+Quatre lignes de défense :
 
-1. Le prompt l'interdit explicitement.
-2. Un garde-fou automatique vérifie qu'aucun nombre nouveau (donc
-   potentiellement un chiffre ou un pourcentage inventé) n'apparaît
-   dans le résultat ; si c'est le cas, la reformulation est rejetée.
+1. Le prompt l'interdit explicitement — les règles viennent de
+   services.cv.prompt_rules, qui répartit le cahier des charges de
+   rédaction entre les étapes capables de l'appliquer.
+2. Un garde-fou vérifie qu'aucun nombre nouveau (donc potentiellement
+   un chiffre ou un pourcentage inventé) n'apparaît dans le résultat.
+3. Un garde-fou vérifie qu'aucun terme désignant une compétence non
+   prouvée n'apparaît : sans lui, « adapte-toi au vocabulaire de
+   l'offre » suffirait à faire écrire au modèle une compétence que le
+   candidat ne possède pas.
+4. Un garde-fou vérifie qu'aucun mot de séniorité n'a été ajouté :
+   « expert » n'est ni un chiffre ni un nom de compétence, et
+   traversait donc les deux contrôles précédents.
 
 Si la reformulation échoue pour n'importe quelle raison — clé absente,
 erreur API, garde-fou déclenché — le texte déterministe d'origine est
@@ -31,7 +39,19 @@ from services.ai.gemini_client import (
     generate_text,
     is_configured,
 )
+from services.cv.prompt_rules import (
+    ANTI_INVENTION,
+    FORMULATION,
+    RESUME,
+    build_vocabulary_rules,
+)
 from services.cv.results import CVEvidenceLine, TargetedCV
+from services.cv.vocabulary import (
+    OfferVocabulary,
+    build_offer_vocabulary,
+    forbidden_terms_used,
+    seniority_terms_added,
+)
 from services.letter.results import CoverLetter, LetterParagraph
 
 
@@ -39,6 +59,14 @@ from services.letter.results import CoverLetter, LetterParagraph
 # le vocabulaire et le ton, sans faire exploser le coût du prompt sur
 # une annonce de plusieurs milliers de caractères.
 MAX_JOB_EXCERPT = 2000
+
+
+# Reformuler, c'est redire la même chose autrement : la créativité n'y
+# a aucune valeur, elle n'apporte que de l'enjolivement. Un essai à la
+# température par défaut (0.4) a fait apparaître dans un résumé une
+# « approche Data / KPI » que le texte source ne mentionnait pas —
+# terme autorisé, donc invisible pour les garde-fous, mais ajouté.
+REFORMULATION_TEMPERATURE = 0.2
 
 
 def _digits(text: str) -> set[str]:
@@ -57,6 +85,7 @@ class ReformulationResult:
 def _safe_reformulate(
     source_text: str,
     instructions: str,
+    forbidden_terms: tuple[str, ...] | list[str] = (),
 ) -> ReformulationResult:
     """
     Reformule un texte via Gemini, avec repli automatique sur le texte
@@ -82,33 +111,19 @@ def _safe_reformulate(
     prompt = (
         "Tu reformules un extrait de candidature déjà entièrement "
         "exact.\n\n"
-        "RÈGLES ABSOLUES :\n"
-        "- N'ajoute AUCUNE compétence, entreprise, chiffre, "
-        "pourcentage, durée ou fait qui n'est pas déjà présent dans "
-        "le texte source.\n"
-        "- N'affirme jamais une compétence ou une réussite qui n'y "
-        "figure pas.\n"
-        "- N'ajoute AUCUNE activité, action ou étape supplémentaire, "
-        "même plausible ou habituelle pour ce type de mission "
-        "(exemple interdit : transformer \"identification "
-        "d'opportunités\" en \"analyse de marché et identification "
-        "d'opportunités\" — \"analyse de marché\" n'était pas dans "
-        "le texte source, même si c'est un préalable plausible).\n"
-        "- Le texte reformulé doit décrire exactement les mêmes "
-        "actions que le texte source, ni plus, ni moins — seuls les "
-        "mots changent, jamais le nombre d'actions décrites.\n"
-        "- Tu peux reformuler, réordonner, rendre plus fluide et "
-        "plus direct — jamais enrichir le contenu factuel.\n"
-        "- Si tu ne peux pas reformuler sans ajouter d'information, "
-        "renvoie le texte source tel quel.\n"
-        "- Réponds uniquement avec le texte reformulé : pas de "
-        "commentaire, pas de guillemets, pas d'introduction.\n\n"
+        f"{ANTI_INVENTION}\n\n"
         f"{instructions}\n\n"
+        "FORMAT DE RÉPONSE\n"
+        "Réponds uniquement avec le texte reformulé : pas de "
+        "commentaire, pas de guillemets, pas d'introduction.\n\n"
         f"Texte source :\n{source_text}"
     )
 
     try:
-        reformule = generate_text(prompt)
+        reformule = generate_text(
+            prompt,
+            temperature=REFORMULATION_TEMPERATURE,
+        )
 
     except (GeminiNotConfiguredError, GeminiRequestError) as error:
         return ReformulationResult(
@@ -121,7 +136,7 @@ def _safe_reformulate(
         )
 
     # ------------------------------------------------------------
-    # GARDE-FOU : aucun nombre nouveau ne doit apparaître.
+    # GARDE-FOU 1 : aucun nombre nouveau ne doit apparaître.
     # ------------------------------------------------------------
     #
     # Un chiffre absent du texte source (marge, pourcentage, durée...)
@@ -140,6 +155,53 @@ def _safe_reformulate(
                 f"chiffres absents du texte source "
                 f"({', '.join(sorted(nombres_inventes))}). Texte "
                 "déterministe utilisé."
+            ),
+        )
+
+    # ------------------------------------------------------------
+    # GARDE-FOU 2 : aucune compétence non prouvée ne doit apparaître.
+    # ------------------------------------------------------------
+    #
+    # C'est le pendant du précédent : les chiffres protègent des faits
+    # inventés, les termes protègent des compétences inventées. La
+    # liste vient du référentiel, pas du jugement du modèle.
+
+    termes_interdits = forbidden_terms_used(
+        reformule,
+        forbidden_terms,
+        source_text,
+    )
+
+    if termes_interdits:
+        return ReformulationResult(
+            text=source_text,
+            was_reformulated=False,
+            warning=(
+                "Reformulation rejetée : elle affirmait des "
+                "compétences que le Master CV ne prouve pas "
+                f"({', '.join(sorted(termes_interdits))}). Texte "
+                "déterministe utilisé."
+            ),
+        )
+
+    # ------------------------------------------------------------
+    # GARDE-FOU 3 : aucun niveau rehaussé.
+    # ------------------------------------------------------------
+    #
+    # Ni un chiffre, ni un nom de compétence : « expert » passait
+    # entre les deux contrôles précédents alors qu'il transforme une
+    # expérience en expertise, ce que le cahier des charges interdit.
+
+    seniorite = seniority_terms_added(reformule, source_text)
+
+    if seniorite:
+        return ReformulationResult(
+            text=source_text,
+            was_reformulated=False,
+            warning=(
+                "Reformulation rejetée : elle rehaussait le niveau "
+                f"annoncé ({', '.join(seniorite)}) sans que le texte "
+                "source le dise. Texte déterministe utilisé."
             ),
         )
 
@@ -215,26 +277,73 @@ def reformulate_cover_letter(
 # CV CIBLE
 # ============================================================
 
+def _bloc_vocabulaire(vocabulary: OfferVocabulary | None) -> str:
+    """Règle de vocabulaire, ou rien si l'offre n'a pas été analysée."""
+
+    if vocabulary is None or vocabulary.is_empty:
+        return ""
+
+    return "\n\n" + build_vocabulary_rules(
+        vocabulary.authorized,
+        vocabulary.forbidden,
+    )
+
+
+def _ouverture(texte: str) -> str:
+    """Premier mot significatif d'une ligne, pour éviter les répétitions."""
+
+    mots = texte.strip().split()
+
+    if not mots:
+        return ""
+
+    mot = mots[0].strip(" ,;:.«»\"'").casefold()
+
+    return mot if len(mot) > 3 else ""
+
+
+def _bloc_repetitions(ouvertures: tuple[str, ...] | list[str]) -> str:
+
+    if not ouvertures:
+        return ""
+
+    return (
+        "\n\nRÉPÉTITIONS À ÉVITER\n"
+        "D'autres lignes de ce CV commencent déjà par : "
+        f"{', '.join(sorted(set(ouvertures)))}. N'ouvre pas "
+        "celle-ci de la même façon et varie la tournure."
+    )
+
+
 def reformulate_cv_line(
     text: str,
     job_text: str,
+    vocabulary: OfferVocabulary | None = None,
+    already_opened_with: tuple[str, ...] | list[str] = (),
 ) -> ReformulationResult:
 
     instructions = (
         "Cette ligne fait partie des compétences démontrées sur un "
         "CV ciblé pour l'offre ci-dessous. Reformule-la pour "
-        "qu'elle soit plus percutante et reprenne, si pertinent, le "
-        "vocabulaire de l'offre — sans changer le fond.\n\n"
-        f"Extrait de l'offre :\n{job_text[:MAX_JOB_EXCERPT]}"
+        "qu'elle soit plus percutante, sans changer le fond.\n\n"
+        f"{FORMULATION}"
+        + _bloc_vocabulaire(vocabulary)
+        + _bloc_repetitions(already_opened_with)
+        + f"\n\nExtrait de l'offre :\n{job_text[:MAX_JOB_EXCERPT]}"
     )
 
-    return _safe_reformulate(text, instructions)
+    return _safe_reformulate(
+        text,
+        instructions,
+        vocabulary.forbidden if vocabulary else (),
+    )
 
 
 def reformulate_cv_summary(
     summary: str,
     headline: str,
     job_text: str,
+    vocabulary: OfferVocabulary | None = None,
 ) -> ReformulationResult:
     """
     Reformule le résumé de profil (section "Profil" du CV) pour le
@@ -248,12 +357,17 @@ def reformulate_cv_summary(
         "ciblé pour l'offre ci-dessous"
         + (f' (accroche : "{headline}")' if headline.strip() else "")
         + ". Reformule-le pour qu'il mette en avant, avec le "
-        "vocabulaire de l'offre, ce qui est déjà écrit — sans "
-        "changer le fond ni la longueur de façon significative.\n\n"
-        f"Extrait de l'offre :\n{job_text[:MAX_JOB_EXCERPT]}"
+        "vocabulaire de l'offre, ce qui est déjà écrit.\n\n"
+        f"{RESUME}"
+        + _bloc_vocabulaire(vocabulary)
+        + f"\n\nExtrait de l'offre :\n{job_text[:MAX_JOB_EXCERPT]}"
     )
 
-    return _safe_reformulate(summary, instructions)
+    return _safe_reformulate(
+        summary,
+        instructions,
+        vocabulary.forbidden if vocabulary else (),
+    )
 
 
 def reformulate_targeted_cv(
@@ -271,10 +385,32 @@ def reformulate_targeted_cv(
 
     avertissements: list[str] = []
 
+    # ------------------------------------------------------------
+    # CADRE DE VOCABULAIRE
+    # ------------------------------------------------------------
+    #
+    # Son absence n'empêche pas de reformuler — les autres garde-fous
+    # tiennent — mais elle retire une protection, donc elle se dit.
+
+    vocabulaire: OfferVocabulary | None = None
+
+    try:
+        vocabulaire = build_offer_vocabulary(
+            cv.candidate_id,
+            cv.job_offer_id,
+        )
+
+    except Exception as error:
+        avertissements.append(
+            "Vocabulaire de l'offre indisponible "
+            f"({error}) : reformulation sans contrôle des termes."
+        )
+
     resultat_resume = reformulate_cv_summary(
         cv.summary,
         cv.headline,
         job_text,
+        vocabulaire,
     )
 
     if resultat_resume.warning:
@@ -282,16 +418,28 @@ def reformulate_targeted_cv(
 
     nouvelles_experiences = []
 
+    ouvertures: list[str] = []
+
     for experience in cv.experiences:
 
         nouvelles_lignes: list[CVEvidenceLine] = []
 
         for ligne in experience.lines:
 
-            resultat = reformulate_cv_line(ligne.text, job_text)
+            resultat = reformulate_cv_line(
+                ligne.text,
+                job_text,
+                vocabulaire,
+                tuple(ouvertures),
+            )
 
             if resultat.warning:
                 avertissements.append(resultat.warning)
+
+            ouverture = _ouverture(resultat.text)
+
+            if ouverture:
+                ouvertures.append(ouverture)
 
             nouvelles_lignes.append(
                 CVEvidenceLine(
