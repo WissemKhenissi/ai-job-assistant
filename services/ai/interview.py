@@ -104,6 +104,25 @@ class EvidenceProposal:
     id: str = field(default_factory=lambda: uuid4().hex)
 
 
+def _forme_comparable(texte: str) -> str:
+    """
+    Forme normalisée d'une question, pour repérer un doublon : sans
+    accents, minuscules, ponctuation et espaces multiples écrasés.
+    """
+
+    import unicodedata
+
+    normalise = unicodedata.normalize("NFKD", texte)
+
+    normalise = "".join(
+        caractere
+        for caractere in normalise
+        if not unicodedata.combining(caractere)
+    ).casefold()
+
+    return " ".join(re.sub(r"[^a-z0-9 ]", " ", normalise).split())
+
+
 def _strip_json_fences(text: str) -> str:
 
     texte = text.strip()
@@ -353,6 +372,7 @@ def generate_interview_questions(
     candidate_id: str,
     target_role: str = "",
     uploaded_files: list | None = None,
+    already_asked: list[str] | None = None,
 ) -> tuple[list[InterviewQuestion], str]:
     """
     Génère un éventail large de questions de relance.
@@ -382,6 +402,15 @@ def generate_interview_questions(
     else:
         prompt += "\nAucun poste recherché indiqué — reste généraliste.\n"
 
+    if already_asked:
+        prompt += (
+            "\nQUESTIONS DÉJÀ POSÉES lors de précédentes sessions — "
+            "n'en repose AUCUNE, ni sous une formulation différente. "
+            "Explore d'autres angles :\n"
+            + "\n".join(f"- {question}" for question in already_asked)
+            + "\n"
+        )
+
     prompt += f"\n{fiche}"
 
     if textes_documents:
@@ -406,6 +435,14 @@ def generate_interview_questions(
     if not isinstance(donnees, list):
         return [], "Format de réponse inattendu : réessayez."
 
+    # Le prompt seul ne suffit pas : l'IA repose volontiers la même
+    # question sous une autre formulation. On filtre donc aussi de
+    # façon déterministe sur la forme normalisée.
+    deja_vues = {
+        _forme_comparable(question)
+        for question in (already_asked or [])
+    }
+
     questions: list[InterviewQuestion] = []
 
     for item in donnees[:MAX_QUESTIONS]:
@@ -417,6 +454,13 @@ def generate_interview_questions(
 
         if not texte_question:
             continue
+
+        forme = _forme_comparable(texte_question)
+
+        if forme in deja_vues:
+            continue
+
+        deja_vues.add(forme)
 
         experience_id = item.get("experience_id")
 

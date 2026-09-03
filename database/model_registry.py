@@ -6,6 +6,7 @@ from database.models import (
     EducationDB,
     EvidenceDB,
     ExperienceDB,
+    InterviewExchangeDB,
     SkillCatalogDB,
     SkillDB,
 )
@@ -23,6 +24,7 @@ __all__ = [
     "EducationDB",
     "EvidenceDB",
     "ExperienceDB",
+    "InterviewExchangeDB",
     "JobOfferDB",
     "JobMatchDB",
     "JobSkillMatchDB",

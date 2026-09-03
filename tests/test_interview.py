@@ -432,3 +432,90 @@ def test_transcription_erreur_api(monkeypatch):
 
     assert texte == ""
     assert "quota dépassé" in avertissement
+
+
+# ============================================================
+# QUESTIONS DEJA POSEES
+# ============================================================
+
+def test_une_question_deja_posee_est_ecartee(session_factory, monkeypatch):
+    """
+    Le prompt demande à l'IA de ne pas se répéter, mais rien ne
+    garantit qu'il soit suivi : le filtre déterministe est la vraie
+    protection contre une question reposée à l'identique.
+    """
+
+    _preparer_candidat_avec_experience(session_factory)
+
+    monkeypatch.setattr(interview, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        interview,
+        "generate_multimodal",
+        lambda *a, **k: json.dumps(
+            [
+                {"question": "Avez-vous géré un budget ?", "experience_id": None},
+                {"question": "Parlez-vous anglais ?", "experience_id": None},
+            ]
+        ),
+    )
+
+    questions, _avertissement = interview.generate_interview_questions(
+        CANDIDATE_ID,
+        already_asked=["Avez-vous géré un budget ?"],
+    )
+
+    intitules = [q.question for q in questions]
+
+    assert "Avez-vous géré un budget ?" not in intitules
+    assert "Parlez-vous anglais ?" in intitules
+
+
+def test_le_filtre_ignore_casse_accents_et_ponctuation(
+    session_factory, monkeypatch
+):
+    """
+    Une même question reformulée en changeant la casse ou la
+    ponctuation reste la même question pour le candidat.
+    """
+
+    _preparer_candidat_avec_experience(session_factory)
+
+    monkeypatch.setattr(interview, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        interview,
+        "generate_multimodal",
+        lambda *a, **k: json.dumps(
+            [{"question": "AVEZ-VOUS GERE UN BUDGET ???", "experience_id": None}]
+        ),
+    )
+
+    questions, avertissement = interview.generate_interview_questions(
+        CANDIDATE_ID,
+        already_asked=["Avez-vous géré un budget ?"],
+    )
+
+    assert questions == []
+    assert avertissement
+
+
+def test_les_questions_deja_posees_atteignent_le_prompt(
+    session_factory, monkeypatch
+):
+    _preparer_candidat_avec_experience(session_factory)
+
+    monkeypatch.setattr(interview, "is_configured", lambda: True)
+
+    parts_recus = []
+
+    def _generate_multimodal(parts, *a, **k):
+        parts_recus.append(parts)
+        return json.dumps([])
+
+    monkeypatch.setattr(interview, "generate_multimodal", _generate_multimodal)
+
+    interview.generate_interview_questions(
+        CANDIDATE_ID, already_asked=["Une question déjà posée ?"]
+    )
+
+    # .text plutôt que str() : la repr d'un Part Gemini tronque le contenu.
+    assert "Une question déjà posée ?" in parts_recus[0][0].text

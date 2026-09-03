@@ -433,6 +433,41 @@ def update_skill(skill_id: str, **fields) -> None:
         db.close()
 
 
+def delete_skill(skill_id: str) -> None:
+    """
+    Supprime une compétence ET les preuves qui lui sont rattachées.
+
+    Supprimer la compétence seule laisserait des EvidenceDB orphelines,
+    pointant vers un skill_id inexistant : elles resteraient comptées
+    par le moteur de matching, qui continuerait de croire la compétence
+    "prouvée". La suppression doit donc emporter ses preuves.
+    """
+
+    db = SessionLocal()
+
+    try:
+        skill = db.get(SkillDB, skill_id)
+
+        if skill is None:
+            return
+
+        (
+            db.query(EvidenceDB)
+            .filter(EvidenceDB.skill_id == skill_id)
+            .delete(synchronize_session=False)
+        )
+
+        db.delete(skill)
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
+
+
 # ============================================================
 # ECRITURE — PREUVE
 # ============================================================

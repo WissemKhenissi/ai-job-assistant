@@ -42,6 +42,7 @@ from services.ai.job_analysis import (
     generate_fit_synthesis,
 )
 from services.ai.letter_authoring import build_ai_letter
+from services.ai.skill_suggestions import suggest_skills_for_role
 from services.ai.reformulation import (
     ReformulationResult,
     reformulate_cover_letter,
@@ -64,5 +65,6 @@ __all__ = [
     "reformulate_cover_letter",
     "reformulate_cv_summary",
     "reformulate_targeted_cv",
+    "suggest_skills_for_role",
     "transcribe_audio",
 ]

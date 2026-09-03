@@ -456,3 +456,76 @@ def test_delete_certification_la_retire_de_la_liste(
     delete_certification(certification_id)
 
     assert get_certifications(CANDIDATE_ID) == []
+
+
+# ============================================================
+# SUPPRESSION D'UNE COMPETENCE
+# ============================================================
+
+def test_delete_skill_supprime_aussi_ses_preuves(session_factory):
+    """
+    Supprimer la compétence seule laisserait des preuves orphelines,
+    que le moteur de matching continuerait de compter : la compétence
+    resterait "prouvée" alors qu'elle n'existe plus.
+    """
+
+    from database.models import EvidenceDB
+    from services.profile_service import (
+        add_evidence,
+        add_skill,
+        delete_skill,
+        get_skills,
+    )
+
+    session = session_factory()
+    add_candidate(session)
+    session.close()
+
+    skill_id = add_skill(candidate_id=CANDIDATE_ID, name="Gestion de budget")
+
+    add_evidence(
+        candidate_id=CANDIDATE_ID,
+        skill_id=skill_id,
+        description="Budget de 50k€ piloté par trimestre.",
+    )
+
+    delete_skill(skill_id)
+
+    assert get_skills(CANDIDATE_ID) == []
+
+    session = session_factory()
+    restantes = (
+        session.query(EvidenceDB)
+        .filter(EvidenceDB.skill_id == skill_id)
+        .all()
+    )
+    session.close()
+
+    assert restantes == []
+
+
+def test_delete_skill_ne_touche_pas_aux_autres_competences(session_factory):
+    from services.profile_service import add_skill, delete_skill, get_skills
+
+    session = session_factory()
+    add_candidate(session)
+    session.close()
+
+    a_supprimer = add_skill(candidate_id=CANDIDATE_ID, name="À supprimer")
+    add_skill(candidate_id=CANDIDATE_ID, name="À conserver")
+
+    delete_skill(a_supprimer)
+
+    assert [s.name for s in get_skills(CANDIDATE_ID)] == ["À conserver"]
+
+
+def test_delete_skill_sur_un_identifiant_inconnu_ne_leve_rien(
+    session_factory,
+):
+    from services.profile_service import delete_skill
+
+    session = session_factory()
+    add_candidate(session)
+    session.close()
+
+    delete_skill("skill-inexistant")

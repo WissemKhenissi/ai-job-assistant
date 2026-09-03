@@ -1,11 +1,12 @@
 """
 Page "Mon Master CV" : profil, expériences, compétences et entretien
-IA d'enrichissement, réunis en une seule page.
+IA d'enrichissement.
 
-Remplace les trois anciennes pages séparées de app.py ("Mon profil",
-"Mes expériences", "Mes compétences") — la logique de chaque section
-n'a pas changé, seul le regroupement est nouveau. Package sur le
-modèle de `ui/job_matching/`.
+Éclatée en onglets — même motif que `ui/job_matching/`. Le tout tenait
+auparavant sur un seul défilement interminable, au point que le bouton
+d'envoi de l'entretien passait inaperçu en bas de page. L'entretien
+(la *reconstruction* du Master CV) vit désormais à part de son
+*résultat* (profil, expériences, compétences).
 """
 
 from __future__ import annotations
@@ -23,23 +24,32 @@ def render_master_cv_page(candidate, experiences) -> None:
 
     st.header("Mon Master CV", divider="blue")
 
-    render_profile_page(
-        candidate,
-        experiences_count=len(experiences),
-        skills_count=len(get_skills(candidate.id)),
+    onglet_profil, onglet_experiences, onglet_competences, onglet_entretien = (
+        st.tabs(
+            [
+                "👤 Profil",
+                "💼 Expériences",
+                "🧠 Compétences",
+                "🎙️ Entretien IA",
+            ]
+        )
     )
 
-    st.divider()
+    with onglet_profil:
+        render_profile_page(
+            candidate,
+            experiences_count=len(experiences),
+            skills_count=len(get_skills(candidate.id)),
+        )
 
-    render_experiences_section(experiences)
+    with onglet_experiences:
+        render_experiences_section(experiences)
 
-    st.divider()
+    with onglet_competences:
+        render_skills_section(candidate.id)
 
-    render_skills_section(candidate.id)
-
-    st.divider()
-
-    render_interview_section(candidate.id)
+    with onglet_entretien:
+        render_interview_section(candidate.id)
 
 
 __all__ = ["render_master_cv_page"]

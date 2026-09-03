@@ -1,6 +1,6 @@
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import Date, String, Text
+from sqlalchemy import Date, DateTime, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -443,4 +443,79 @@ class CertificationDB(Base):
     description: Mapped[str] = mapped_column(
         Text,
         default=""
+    )
+
+# ============================================================
+# HISTORIQUE D'ENTRETIEN IA
+# ============================================================
+
+class InterviewExchangeDB(Base):
+    """
+    Une question posée par l'entretien IA, et la réponse du candidat.
+
+    Persister ces échanges répond à trois besoins qui ne peuvent pas
+    être satisfaits par la seule session Streamlit :
+
+    - ne rien perdre : la réponse est écrite dès l'envoi, avant même
+      l'extraction des preuves ;
+    - ne pas reposer deux fois la même question d'une session à
+      l'autre ;
+    - permettre de revenir compléter ou corriger une réponse déjà
+      donnée.
+
+    Une preuve validée n'est PAS stockée ici : elle rejoint EvidenceDB
+    comme n'importe quelle autre preuve. Cette table ne conserve que
+    la matière brute de l'entretien.
+    """
+
+    __tablename__ = "interview_exchanges"
+
+    id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True
+    )
+
+    candidate_id: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        index=True
+    )
+
+    question: Mapped[str] = mapped_column(
+        Text,
+        nullable=False
+    )
+
+    answer: Mapped[str] = mapped_column(
+        Text,
+        default=""
+    )
+
+    experience_id: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True
+    )
+
+    experience_label: Mapped[str] = mapped_column(
+        String,
+        default=""
+    )
+
+    # Poste visé au moment de la session, s'il a été renseigné.
+    target_role: Mapped[str] = mapped_column(
+        String,
+        default=""
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
+        nullable=False
     )

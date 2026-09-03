@@ -33,6 +33,12 @@ from services.ai.interview import (
     propose_evidence_from_answers,
     transcribe_audio,
 )
+from services.interview_history_service import (
+    get_asked_questions,
+    get_exchanges,
+    save_answer,
+    save_questions,
+)
 from services.profile_service import add_evidence, add_skill
 
 
@@ -42,6 +48,7 @@ _STATE_KEY = "master_cv_interview"
 def _etat_initial() -> dict:
     return {
         "questions": [],
+        "exchange_ids": [],
         "proposals": None,
         "warning": "",
         "transcription": "",
@@ -71,6 +78,104 @@ def _combiner(texte: str, transcription: str) -> str:
     return texte or transcription
 
 
+def _render_historique(candidate_id: str) -> None:
+    """
+    Échanges des sessions précédentes : réponses relisibles,
+    modifiables et ré-analysables.
+
+    C'est ce qui permet de revenir compléter une réponse donnée trop
+    vite, sans avoir à refaire tout un entretien — et de vérifier ce
+    qui a réellement été enregistré.
+    """
+
+    echanges = get_exchanges(candidate_id)
+
+    if not echanges:
+        return
+
+    repondus = [e for e in echanges if e["answer"].strip()]
+
+    with st.expander(
+        f"🗂️ Historique — {len(echanges)} question(s) posée(s), "
+        f"{len(repondus)} avec réponse"
+    ):
+
+        st.caption(
+            "Les questions déjà posées ne seront plus reproposées. "
+            "Vous pouvez compléter ou corriger une réponse, puis la "
+            "faire ré-analyser."
+        )
+
+        for echange in echanges:
+
+            with st.container(border=True):
+
+                if echange["experience_label"]:
+                    st.caption(f"À propos de : {echange['experience_label']}")
+
+                st.markdown(f"**{echange['question']}**")
+
+                reponse = st.text_area(
+                    "Votre réponse",
+                    value=echange["answer"],
+                    key=f"{_STATE_KEY}_hist_{echange['id']}",
+                    height=100,
+                    label_visibility="collapsed",
+                )
+
+                col_enregistrer, col_analyser = st.columns(2)
+
+                with col_enregistrer:
+
+                    if st.button(
+                        "💾 Enregistrer",
+                        key=f"{_STATE_KEY}_hist_save_{echange['id']}",
+                        use_container_width=True,
+                    ):
+                        save_answer(echange["id"], reponse)
+                        st.success("Réponse enregistrée.")
+                        st.rerun()
+
+                with col_analyser:
+
+                    if st.button(
+                        "🤖 Analyser cette réponse",
+                        key=f"{_STATE_KEY}_hist_run_{echange['id']}",
+                        use_container_width=True,
+                    ):
+
+                        if not reponse.strip():
+                            st.warning("Cette réponse est vide.")
+
+                        else:
+
+                            save_answer(echange["id"], reponse)
+
+                            with st.spinner("Analyse (Gemini)..."):
+                                propositions, avertissement = (
+                                    propose_evidence_from_answers(
+                                        [
+                                            InterviewAnswer(
+                                                question=echange["question"],
+                                                answer=reponse,
+                                                experience_id=echange[
+                                                    "experience_id"
+                                                ],
+                                                experience_label=echange[
+                                                    "experience_label"
+                                                ],
+                                            )
+                                        ]
+                                    )
+                                )
+
+                            etat = st.session_state[_STATE_KEY]
+                            etat["proposals"] = propositions
+                            etat["warning"] = avertissement
+                            etat["transcription"] = reponse
+                            st.rerun()
+
+
 def render_interview_section(candidate_id: str) -> None:
 
     st.subheader("🎙️ Entretien IA")
@@ -93,6 +198,10 @@ def render_interview_section(candidate_id: str) -> None:
         return
 
     etat = st.session_state.setdefault(_STATE_KEY, _etat_initial())
+
+    # Toujours visible, quelle que soit l'étape en cours : c'est la
+    # mémoire de l'entretien, indépendante de la session Streamlit.
+    _render_historique(candidate_id)
 
     # ============================================================
     # ETAPE 1 : DEMARRER L'ENTRETIEN
@@ -120,6 +229,7 @@ def render_interview_section(candidate_id: str) -> None:
                     candidate_id,
                     target_role=poste_recherche,
                     uploaded_files=fichiers,
+                    already_asked=get_asked_questions(candidate_id),
                 )
 
             if not questions:
@@ -128,6 +238,12 @@ def render_interview_section(candidate_id: str) -> None:
                 )
                 return
 
+            # Persistées immédiatement : la prochaine session saura
+            # ne pas reposer ces questions, même si celle-ci est
+            # abandonnée sans réponse.
+            etat["exchange_ids"] = save_questions(
+                candidate_id, questions, target_role=poste_recherche
+            )
             etat["questions"] = questions
             etat["warning"] = avertissement
             st.rerun()
@@ -231,6 +347,14 @@ def render_interview_section(candidate_id: str) -> None:
                         )
                     ]
 
+                    # Écrit avant l'extraction : si l'analyse échoue,
+                    # la réponse reste retrouvable dans l'historique.
+                    # En mode libre, elle est rattachée au premier
+                    # échange de la session, les autres questions
+                    # n'ayant pas reçu de réponse individuelle.
+                    if etat["exchange_ids"] and texte_final.strip():
+                        save_answer(etat["exchange_ids"][0], texte_final)
+
                     propositions, avertissement = propose_evidence_from_answers(
                         reponses,
                         inspiration_questions=etat["questions"],
@@ -317,10 +441,20 @@ def render_interview_section(candidate_id: str) -> None:
                     if avert:
                         avertissements.append(avert)
 
+                    reponse_texte = _combiner(texte_tape, transcription)
+
+                    # Écrite avant l'extraction, question par question.
+                    if reponse_texte.strip() and indice < len(
+                        etat["exchange_ids"]
+                    ):
+                        save_answer(
+                            etat["exchange_ids"][indice], reponse_texte
+                        )
+
                     reponses.append(
                         InterviewAnswer(
                             question=question.question,
-                            answer=_combiner(texte_tape, transcription),
+                            answer=reponse_texte,
                             experience_id=question.experience_id,
                             experience_label=question.experience_label,
                         )
