@@ -1,23 +1,23 @@
 """
 Entretien IA d'enrichissement du Master CV.
 
-Un seul round, volontairement large plutôt que profond (préférence
-explicite de l'utilisateur, retenue après discussion) :
+Le parcours se déroule **expérience par expérience**, en commençant
+par la plus récente (structure choisie par l'utilisateur après avoir
+comparé plusieurs options) :
 
-1. `generate_interview_questions` lit tout le profil du candidat (et,
-   en option, un CV externe ou des captures d'écran fournis) et
-   propose un éventail large de questions couvrant plusieurs
-   expériences passées — jamais une seule ligne de questions en
-   profondeur sur une expérience isolée.
-2. Le candidat répond à ce qu'il veut, dans l'interface (aucune
-   question n'est obligatoire) — à l'écrit, ou à l'oral (chaque
-   réponse orale est transcrite par `transcribe_audio` avant d'être
-   traitée comme n'importe quelle réponse texte, pour que le garde-fou
-   de traçabilité ci-dessous s'applique de la même façon quelle que
-   soit la modalité de saisie).
-3. `propose_evidence_from_answers` ne relit QUE les réponses
-   effectivement données dans cette session — jamais le reste du
-   profil — et propose des formulations courtes prêtes pour le
+1. Le candidat **raconte** librement une expérience, à l'écrit ou à
+   l'oral. Aucun appel IA à ce stade : on le laisse parler.
+2. `generate_followup_questions` lit ce récit, la fiche de CETTE
+   expérience et le poste recherché, puis pose une série de relances
+   ciblées — outils, méthodes, résultats, formations, interlocuteurs,
+   arbitrages — sans jamais redemander ce qui a déjà été dit.
+3. Le candidat y répond, toujours en un seul bloc, à l'écrit ou à
+   l'oral (toute réponse orale passe d'abord par `transcribe_audio`,
+   pour que le garde-fou de traçabilité ci-dessous s'applique de la
+   même façon quelle que soit la modalité de saisie).
+4. `propose_evidence_from_answers` ne relit QUE ce que le candidat a
+   effectivement dit dans cette session — jamais le reste du profil —
+   et propose des lignes d'expérience et compétences prêtes pour le
    Master CV, chacune reliée à l'extrait de réponse qui la justifie.
 
 Rien n'est jamais écrit automatiquement : chaque proposition est
@@ -58,8 +58,8 @@ from services.ai.gemini_client import (
 
 # Nombre de questions visé — un éventail large, pas une exploration
 # exhaustive qui découragerait de répondre.
-MIN_QUESTIONS = 8
-MAX_QUESTIONS = 15
+MIN_FOLLOWUP_QUESTIONS = 4
+MAX_FOLLOWUP_QUESTIONS = 8
 
 # Types MIME image acceptés pour les captures d'écran, transmises à
 # Gemini telles quelles (pas d'extraction locale).
@@ -135,52 +135,62 @@ def _strip_json_fences(text: str) -> str:
 
 
 # ============================================================
-# FICHE DU PROFIL COMPLET
+# FICHE D'UNE EXPERIENCE
 # ============================================================
 
-def _build_full_profile_sheet(
+def _build_experience_sheet(
     candidate_id: str,
-) -> tuple[str, dict[str, str]]:
+    experience_id: str,
+) -> tuple[str, str]:
     """
-    Sérialise tout le Master CV (sans filtrage par statut ni par
-    offre, contrairement à letter_authoring qui cible une
-    candidature précise) et renvoie, en plus, le dictionnaire
-    experience_id -> libellé lisible ("Poste — Entreprise") utilisé
-    pour attribuer les questions et, plus tard, les preuves validées.
+    Sérialise UNE expérience (contexte, réalisations) et retourne
+    aussi son libellé lisible.
+
+    L'entretien se déroule expérience par expérience : donner à l'IA
+    tout le Master CV la ferait dériver vers d'autres postes, alors
+    que l'enjeu est de creuser celui dont le candidat vient de parler.
     """
 
     db = SessionLocal()
 
     try:
 
-        candidate = db.get(CandidateDB, candidate_id)
+        experience = db.get(ExperienceDB, experience_id)
 
-        if candidate is None:
-            return "", {}
+        if experience is None or experience.candidate_id != candidate_id:
+            return "", ""
 
-        experiences = (
-            db.query(ExperienceDB)
-            .filter(ExperienceDB.candidate_id == candidate_id)
-            .order_by(ExperienceDB.start_date.desc())
-            .all()
+        fin = (
+            experience.end_date.strftime("%Y")
+            if experience.end_date
+            else "aujourd'hui"
         )
 
-        experience_ids = [experience.id for experience in experiences]
+        libelle = f"{experience.job_title} — {experience.company}"
+
+        lignes_fiche = [
+            f"Poste : {experience.job_title}",
+            f"Entreprise : {experience.company}",
+            f"Période : {experience.start_date.strftime('%Y')}–{fin}",
+        ]
+
+        if experience.description:
+            lignes_fiche.append(f"Description : {experience.description}")
+
+        if experience.business_context:
+            lignes_fiche.append(f"Contexte : {experience.business_context}")
 
         achievements = (
             db.query(AchievementDB)
-            .filter(AchievementDB.experience_id.in_(experience_ids))
+            .filter(AchievementDB.experience_id == experience_id)
             .all()
-            if experience_ids
-            else []
         )
 
-        achievements_par_experience: dict[str, list] = {}
-
         for achievement in achievements:
-            achievements_par_experience.setdefault(
-                achievement.experience_id, []
-            ).append(achievement)
+            lignes_fiche.append(
+                f"Réalisation déjà documentée : {achievement.title}"
+                + (f" — {achievement.result}" if achievement.result else "")
+            )
 
         skills = (
             db.query(SkillDB)
@@ -188,118 +198,13 @@ def _build_full_profile_sheet(
             .all()
         )
 
-        educations = (
-            db.query(EducationDB)
-            .filter(EducationDB.candidate_id == candidate_id)
-            .all()
-        )
-
-        certifications = (
-            db.query(CertificationDB)
-            .filter(CertificationDB.candidate_id == candidate_id)
-            .all()
-        )
-
-        # ----------------------------------------------------
-        # LIBELLES
-        # ----------------------------------------------------
-
-        libelles = {
-            experience.id: (
-                f"{experience.job_title} — {experience.company}"
-            )
-            for experience in experiences
-        }
-
-        # ----------------------------------------------------
-        # SERIALISATION
-        # ----------------------------------------------------
-
-        sections = []
-
-        identite = [f"Nom : {candidate.first_name} {candidate.last_name}"]
-
-        if candidate.headline:
-            identite.append(f"Accroche actuelle : {candidate.headline}")
-
-        if candidate.summary:
-            identite.append(f"Résumé actuel : {candidate.summary}")
-
-        sections.append("CANDIDAT\n" + "\n".join(identite))
-
-        if experiences:
-
-            blocs = []
-
-            for experience in experiences:
-
-                fin = (
-                    experience.end_date.strftime("%Y")
-                    if experience.end_date
-                    else "aujourd'hui"
-                )
-
-                entete = (
-                    f"- [id={experience.id}] "
-                    f"{experience.job_title} — {experience.company} "
-                    f"({experience.start_date.strftime('%Y')}–{fin})"
-                )
-
-                bloc = [entete]
-
-                if experience.description:
-                    bloc.append(f"  Description : {experience.description}")
-
-                if experience.business_context:
-                    bloc.append(
-                        f"  Contexte : {experience.business_context}"
-                    )
-
-                for achievement in achievements_par_experience.get(
-                    experience.id, []
-                ):
-                    bloc.append(
-                        f"  Réalisation : {achievement.title}"
-                        + (
-                            f" — {achievement.result}"
-                            if achievement.result
-                            else ""
-                        )
-                    )
-
-                blocs.append("\n".join(bloc))
-
-            sections.append(
-                "EXPÉRIENCES (chacune avec son identifiant [id=...], à "
-                "reprendre tel quel si une question s'y rapporte)\n"
-                + "\n".join(blocs)
-            )
-
         if skills:
-            sections.append(
-                "COMPÉTENCES DÉJÀ DÉCLARÉES\n"
+            lignes_fiche.append(
+                "Compétences déjà déclarées (ne pas les redemander) : "
                 + ", ".join(sorted({skill.name for skill in skills}))
             )
 
-        if educations:
-            sections.append(
-                "FORMATION\n"
-                + "\n".join(
-                    f"- {education.degree} — {education.institution}"
-                    for education in educations
-                )
-            )
-
-        if certifications:
-            sections.append(
-                "CERTIFICATIONS\n"
-                + "\n".join(
-                    f"- {certification.name}"
-                    for certification in certifications
-                )
-            )
-
-        return "\n\n".join(sections), libelles
+        return "\n".join(lignes_fiche), libelle
 
     finally:
 
@@ -307,7 +212,7 @@ def _build_full_profile_sheet(
 
 
 # ============================================================
-# GENERATION DES QUESTIONS
+# RELANCE SUR UNE EXPERIENCE
 # ============================================================
 
 def _build_image_parts(uploaded_files: list) -> tuple[list, str]:
@@ -355,31 +260,42 @@ def _build_image_parts(uploaded_files: list) -> tuple[list, str]:
     return image_parts, "\n\n".join(textes_documents)
 
 
-QUESTION_RULES = """Tu aides un candidat à enrichir son Master CV (le référentiel unique de son parcours, utilisé ensuite pour générer des CV ciblés et des lettres de motivation honnêtes).
+FOLLOWUP_RULES = """Tu aides un candidat à documenter UNE expérience professionnelle pour son Master CV (le référentiel unique de son parcours, qui servira ensuite à générer des CV ciblés et des lettres de motivation honnêtes).
 
-Ta mission : proposer un ÉVENTAIL LARGE de questions de relance, entre {min_q} et {max_q}, qui couvrent PLUSIEURS expériences passées différentes — jamais une exploration en profondeur d'une seule expérience isolée. L'objectif est de faire émerger des compétences ou des détails d'expérience réels mais non encore écrits dans le Master CV.
+Le candidat vient de raconter cette expérience avec ses propres mots. Ta mission : poser entre {min_q} et {max_q} questions de relance pour faire émerger ce qu'il n'a PAS dit et qui a de la valeur sur un CV.
+
+CREUSE EN PRIORITÉ :
+- les outils, logiciels et technologies réellement utilisés ;
+- les méthodes de travail et rituels (cadrage, priorisation, suivi, tests) ;
+- les résultats concrets et, quand ils existent, les chiffres ;
+- les formations, certifications ou montées en compétence liées à ce poste ;
+- les interlocuteurs et parties prenantes, et la nature de la collaboration ;
+- les décisions ou arbitrages dont il a été responsable.
 
 RÈGLES :
-- Base-toi sur les expériences listées ci-dessous et, si un poste recherché est indiqué, priorise les questions qui aideraient à documenter ce qui compte pour CE type de poste — sans jamais te limiter à une seule expérience.
-- Si des documents ou captures d'écran sont fournis en plus, utilise-les comme contexte supplémentaire (ils peuvent mentionner des expériences ou compétences absentes du Master CV actuel) — pose des questions dessus aussi si pertinent.
-- Chaque question doit être concrète et vérifiable (pas "Êtes-vous rigoureux ?" mais "Avez-vous eu à arbitrer entre plusieurs priorités concurrentes sur tel projet, et comment ?").
-- N'affirme jamais rien sur le candidat : tu poses des questions, tu n'apportes aucune réponse toi-même.
-- Réponds UNIQUEMENT avec un tableau JSON valide, sans texte autour, sans balisage markdown, où chaque élément est : {{"question": "...", "experience_id": "l'un des identifiants [id=...] ci-dessus, ou null si la question est transversale"}}.
+- Ne repose JAMAIS une question dont la réponse figure déjà dans son récit ou dans la fiche ci-dessous.
+- Reste sur CETTE expérience : ne demande rien sur d'autres postes.
+- Des questions concrètes et vérifiables, jamais sur la personnalité ("êtes-vous rigoureux ?" est interdit).
+- Si un poste recherché est indiqué, priorise ce qui compte pour ce type de poste.
+- N'affirme rien sur le candidat : tu poses des questions, tu n'y réponds pas à sa place.
+- Réponds UNIQUEMENT avec un tableau JSON de chaînes, sans texte autour, sans balisage markdown : ["Question 1", "Question 2"].
 """
 
 
-def generate_interview_questions(
+def generate_followup_questions(
     candidate_id: str,
+    experience_id: str,
+    narration: str,
     target_role: str = "",
     uploaded_files: list | None = None,
     already_asked: list[str] | None = None,
 ) -> tuple[list[InterviewQuestion], str]:
     """
-    Génère un éventail large de questions de relance.
+    Questions de relance sur une expérience, à partir du récit que le
+    candidat vient d'en faire.
 
-    Ne lève jamais d'exception : retourne une liste vide avec un
-    avertissement en cas d'échec (clé absente, erreur API, réponse
-    illisible).
+    Ne lève jamais d'exception : retourne une liste vide et un
+    avertissement en cas d'échec.
     """
 
     if not is_configured():
@@ -388,30 +304,35 @@ def generate_interview_questions(
             "indisponible."
         )
 
-    fiche, libelles = _build_full_profile_sheet(candidate_id)
+    if not narration.strip():
+        return [], "Racontez d'abord cette expérience."
+
+    fiche, libelle = _build_experience_sheet(candidate_id, experience_id)
 
     if not fiche:
-        return [], "Candidat introuvable."
+        return [], "Expérience introuvable."
 
     image_parts, textes_documents = _build_image_parts(uploaded_files)
 
-    prompt = QUESTION_RULES.format(min_q=MIN_QUESTIONS, max_q=MAX_QUESTIONS)
+    prompt = FOLLOWUP_RULES.format(
+        min_q=MIN_FOLLOWUP_QUESTIONS, max_q=MAX_FOLLOWUP_QUESTIONS
+    )
 
     if target_role.strip():
-        prompt += f"\nPoste recherché indiqué par le candidat : {target_role.strip()}\n"
-    else:
-        prompt += "\nAucun poste recherché indiqué — reste généraliste.\n"
+        prompt += (
+            f"\nPoste recherché par le candidat : {target_role.strip()}\n"
+        )
 
     if already_asked:
         prompt += (
-            "\nQUESTIONS DÉJÀ POSÉES lors de précédentes sessions — "
-            "n'en repose AUCUNE, ni sous une formulation différente. "
-            "Explore d'autres angles :\n"
+            "\nQUESTIONS DÉJÀ POSÉES — n'en repose AUCUNE, ni sous "
+            "une formulation différente :\n"
             + "\n".join(f"- {question}" for question in already_asked)
             + "\n"
         )
 
-    prompt += f"\n{fiche}"
+    prompt += f"\nFICHE DE L'EXPÉRIENCE\n{fiche}"
+    prompt += f"\n\nRÉCIT DU CANDIDAT\n{narration.strip()}"
 
     if textes_documents:
         prompt += f"\n\nDOCUMENTS FOURNIS EN COMPLÉMENT\n{textes_documents}"
@@ -421,10 +342,10 @@ def generate_interview_questions(
     parts = [types.Part.from_text(text=prompt)] + image_parts
 
     try:
-        reponse = generate_multimodal(parts, temperature=0.6)
+        reponse = generate_multimodal(parts, temperature=0.5)
 
     except (GeminiNotConfiguredError, GeminiRequestError) as error:
-        return [], f"Génération des questions impossible ({error})."
+        return [], f"Génération des relances impossible ({error})."
 
     try:
         donnees = json.loads(_strip_json_fences(reponse))
@@ -436,8 +357,7 @@ def generate_interview_questions(
         return [], "Format de réponse inattendu : réessayez."
 
     # Le prompt seul ne suffit pas : l'IA repose volontiers la même
-    # question sous une autre formulation. On filtre donc aussi de
-    # façon déterministe sur la forme normalisée.
+    # question sous une autre formulation.
     deja_vues = {
         _forme_comparable(question)
         for question in (already_asked or [])
@@ -445,12 +365,12 @@ def generate_interview_questions(
 
     questions: list[InterviewQuestion] = []
 
-    for item in donnees[:MAX_QUESTIONS]:
+    for element in donnees[:MAX_FOLLOWUP_QUESTIONS]:
 
-        if not isinstance(item, dict):
+        if not isinstance(element, str):
             continue
 
-        texte_question = str(item.get("question") or "").strip()
+        texte_question = element.strip()
 
         if not texte_question:
             continue
@@ -462,25 +382,19 @@ def generate_interview_questions(
 
         deja_vues.add(forme)
 
-        experience_id = item.get("experience_id")
-
-        if experience_id not in libelles:
-            experience_id = None
-
         questions.append(
             InterviewQuestion(
                 question=texte_question,
                 experience_id=experience_id,
-                experience_label=(
-                    libelles.get(experience_id, "") if experience_id else ""
-                ),
+                experience_label=libelle,
             )
         )
 
     if not questions:
-        return [], "Aucune question exploitable n'a été générée."
+        return [], "Aucune relance exploitable n'a été générée."
 
     return questions, ""
+
 
 
 # ============================================================

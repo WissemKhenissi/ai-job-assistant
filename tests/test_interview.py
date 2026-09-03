@@ -50,8 +50,14 @@ def _preparer_candidat_avec_experience(session_factory):
 
 
 # ============================================================
-# GENERATION DES QUESTIONS
+# RELANCES SUR UNE EXPERIENCE
 # ============================================================
+
+NARRATION = (
+    "J'ai piloté la refonte du tunnel d'achat pendant deux ans, avec "
+    "une équipe de cinq développeurs."
+)
+
 
 def test_sans_cle_configuree_retourne_un_avertissement(
     session_factory, monkeypatch
@@ -60,30 +66,46 @@ def test_sans_cle_configuree_retourne_un_avertissement(
 
     monkeypatch.setattr(interview, "is_configured", lambda: False)
 
-    questions, avertissement = interview.generate_interview_questions(
-        CANDIDATE_ID
+    questions, avertissement = interview.generate_followup_questions(
+        CANDIDATE_ID, EXPERIENCE_ID, NARRATION
     )
 
     assert questions == []
     assert "GEMINI_API_KEY" in avertissement
 
 
-def test_un_candidat_introuvable_retourne_un_avertissement(
-    session_factory, monkeypatch
-):
-    session_factory()  # base vide, aucun candidat
+def test_sans_recit_aucune_relance(session_factory, monkeypatch):
+    """
+    Les relances se construisent sur le récit : sans récit, il n'y a
+    rien à creuser.
+    """
+
+    _preparer_candidat_avec_experience(session_factory)
 
     monkeypatch.setattr(interview, "is_configured", lambda: True)
 
-    questions, avertissement = interview.generate_interview_questions(
-        "candidat-inconnu"
+    questions, avertissement = interview.generate_followup_questions(
+        CANDIDATE_ID, EXPERIENCE_ID, "   "
     )
 
     assert questions == []
-    assert avertissement
+    assert "Racontez" in avertissement
 
 
-def test_des_questions_valides_sont_extraites(session_factory, monkeypatch):
+def test_une_experience_inconnue_est_signalee(session_factory, monkeypatch):
+    _preparer_candidat_avec_experience(session_factory)
+
+    monkeypatch.setattr(interview, "is_configured", lambda: True)
+
+    questions, avertissement = interview.generate_followup_questions(
+        CANDIDATE_ID, "experience-inexistante", NARRATION
+    )
+
+    assert questions == []
+    assert "introuvable" in avertissement.lower()
+
+
+def test_des_relances_valides_sont_extraites(session_factory, monkeypatch):
     _preparer_candidat_avec_experience(session_factory)
 
     monkeypatch.setattr(interview, "is_configured", lambda: True)
@@ -92,56 +114,25 @@ def test_des_questions_valides_sont_extraites(session_factory, monkeypatch):
         "generate_multimodal",
         lambda *a, **k: json.dumps(
             [
-                {
-                    "question": "Avez-vous géré un budget sur ce poste ?",
-                    "experience_id": EXPERIENCE_ID,
-                },
-                {
-                    "question": "Quelles langues parlez-vous couramment ?",
-                    "experience_id": None,
-                },
+                "Quels outils utilisiez-vous pour le suivi ?",
+                "Quels résultats chiffrés avez-vous obtenus ?",
             ]
         ),
     )
 
-    questions, avertissement = interview.generate_interview_questions(
-        CANDIDATE_ID
+    questions, avertissement = interview.generate_followup_questions(
+        CANDIDATE_ID, EXPERIENCE_ID, NARRATION
     )
 
     assert avertissement == ""
     assert len(questions) == 2
-    assert questions[0].experience_id == EXPERIENCE_ID
-    assert questions[0].experience_label == "Chef de projet — Groupe Meridiem"
-    assert questions[1].experience_id is None
 
-
-def test_un_experience_id_inconnu_est_ignore(session_factory, monkeypatch):
-    """
-    Un identifiant d'expérience halluciné par l'IA (n'existant pas
-    dans le Master CV) ne doit jamais être conservé tel quel.
-    """
-
-    _preparer_candidat_avec_experience(session_factory)
-
-    monkeypatch.setattr(interview, "is_configured", lambda: True)
-    monkeypatch.setattr(
-        interview,
-        "generate_multimodal",
-        lambda *a, **k: json.dumps(
-            [
-                {
-                    "question": "Question orpheline ?",
-                    "experience_id": "experience-qui-n-existe-pas",
-                }
-            ]
-        ),
+    # Toutes les relances sont rattachées à l'expérience traitée :
+    # c'est ce rattachement qui permet ensuite un CV ciblé cohérent.
+    assert all(q.experience_id == EXPERIENCE_ID for q in questions)
+    assert all(
+        q.experience_label == "Chef de projet — Groupe Meridiem" for q in questions
     )
-
-    questions, _avertissement = interview.generate_interview_questions(
-        CANDIDATE_ID
-    )
-
-    assert questions[0].experience_id is None
 
 
 def test_une_reponse_illisible_retourne_un_avertissement(
@@ -154,15 +145,17 @@ def test_une_reponse_illisible_retourne_un_avertissement(
         interview, "generate_multimodal", lambda *a, **k: "pas du JSON"
     )
 
-    questions, avertissement = interview.generate_interview_questions(
-        CANDIDATE_ID
+    questions, avertissement = interview.generate_followup_questions(
+        CANDIDATE_ID, EXPERIENCE_ID, NARRATION
     )
 
     assert questions == []
     assert avertissement
 
 
-def test_le_prompt_mentionne_le_poste_recherche(session_factory, monkeypatch):
+def test_le_recit_et_le_poste_atteignent_le_prompt(
+    session_factory, monkeypatch
+):
     _preparer_candidat_avec_experience(session_factory)
 
     monkeypatch.setattr(interview, "is_configured", lambda: True)
@@ -175,15 +168,104 @@ def test_le_prompt_mentionne_le_poste_recherche(session_factory, monkeypatch):
 
     monkeypatch.setattr(interview, "generate_multimodal", _generate_multimodal)
 
-    interview.generate_interview_questions(
-        CANDIDATE_ID, target_role="Product Owner"
+    interview.generate_followup_questions(
+        CANDIDATE_ID,
+        EXPERIENCE_ID,
+        NARRATION,
+        target_role="Product Owner",
     )
 
-    assert parts_recus
-    # Le texte est encapsulé dans un Part Gemini : on vérifie sa présence
-    # via la représentation du premier élément (le prompt texte).
-    texte_prompt = str(parts_recus[0][0])
-    assert "Product Owner" in texte_prompt
+    prompt = parts_recus[0][0].text
+
+    assert "Product Owner" in prompt
+    assert "tunnel d'achat" in prompt
+    # La fiche de l'expérience traitée doit être présente.
+    assert "Groupe Meridiem" in prompt
+
+
+def test_une_question_deja_posee_est_ecartee(session_factory, monkeypatch):
+    """
+    Le prompt demande à l'IA de ne pas se répéter, mais rien ne
+    garantit qu'il soit suivi : le filtre déterministe est la vraie
+    protection contre une question reposée à l'identique.
+    """
+
+    _preparer_candidat_avec_experience(session_factory)
+
+    monkeypatch.setattr(interview, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        interview,
+        "generate_multimodal",
+        lambda *a, **k: json.dumps(
+            ["Quels outils utilisiez-vous ?", "Combien étiez-vous ?"]
+        ),
+    )
+
+    questions, _avertissement = interview.generate_followup_questions(
+        CANDIDATE_ID,
+        EXPERIENCE_ID,
+        NARRATION,
+        already_asked=["Quels outils utilisiez-vous ?"],
+    )
+
+    intitules = [q.question for q in questions]
+
+    assert "Quels outils utilisiez-vous ?" not in intitules
+    assert "Combien étiez-vous ?" in intitules
+
+
+def test_le_filtre_ignore_casse_accents_et_ponctuation(
+    session_factory, monkeypatch
+):
+    """
+    Une même question reformulée en changeant la casse ou la
+    ponctuation reste la même question pour le candidat.
+    """
+
+    _preparer_candidat_avec_experience(session_factory)
+
+    monkeypatch.setattr(interview, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        interview,
+        "generate_multimodal",
+        lambda *a, **k: json.dumps(["QUELS OUTILS UTILISIEZ-VOUS ???"]),
+    )
+
+    questions, avertissement = interview.generate_followup_questions(
+        CANDIDATE_ID,
+        EXPERIENCE_ID,
+        NARRATION,
+        already_asked=["Quels outils utilisiez-vous ?"],
+    )
+
+    assert questions == []
+    assert avertissement
+
+
+def test_les_questions_deja_posees_atteignent_le_prompt(
+    session_factory, monkeypatch
+):
+    _preparer_candidat_avec_experience(session_factory)
+
+    monkeypatch.setattr(interview, "is_configured", lambda: True)
+
+    parts_recus = []
+
+    def _generate_multimodal(parts, *a, **k):
+        parts_recus.append(parts)
+        return json.dumps([])
+
+    monkeypatch.setattr(interview, "generate_multimodal", _generate_multimodal)
+
+    interview.generate_followup_questions(
+        CANDIDATE_ID,
+        EXPERIENCE_ID,
+        NARRATION,
+        already_asked=["Une question déjà posée ?"],
+    )
+
+    # .text plutôt que str() : la repr d'un Part Gemini tronque le contenu.
+    assert "Une question déjà posée ?" in parts_recus[0][0].text
 
 
 # ============================================================
@@ -434,88 +516,3 @@ def test_transcription_erreur_api(monkeypatch):
     assert "quota dépassé" in avertissement
 
 
-# ============================================================
-# QUESTIONS DEJA POSEES
-# ============================================================
-
-def test_une_question_deja_posee_est_ecartee(session_factory, monkeypatch):
-    """
-    Le prompt demande à l'IA de ne pas se répéter, mais rien ne
-    garantit qu'il soit suivi : le filtre déterministe est la vraie
-    protection contre une question reposée à l'identique.
-    """
-
-    _preparer_candidat_avec_experience(session_factory)
-
-    monkeypatch.setattr(interview, "is_configured", lambda: True)
-    monkeypatch.setattr(
-        interview,
-        "generate_multimodal",
-        lambda *a, **k: json.dumps(
-            [
-                {"question": "Avez-vous géré un budget ?", "experience_id": None},
-                {"question": "Parlez-vous anglais ?", "experience_id": None},
-            ]
-        ),
-    )
-
-    questions, _avertissement = interview.generate_interview_questions(
-        CANDIDATE_ID,
-        already_asked=["Avez-vous géré un budget ?"],
-    )
-
-    intitules = [q.question for q in questions]
-
-    assert "Avez-vous géré un budget ?" not in intitules
-    assert "Parlez-vous anglais ?" in intitules
-
-
-def test_le_filtre_ignore_casse_accents_et_ponctuation(
-    session_factory, monkeypatch
-):
-    """
-    Une même question reformulée en changeant la casse ou la
-    ponctuation reste la même question pour le candidat.
-    """
-
-    _preparer_candidat_avec_experience(session_factory)
-
-    monkeypatch.setattr(interview, "is_configured", lambda: True)
-    monkeypatch.setattr(
-        interview,
-        "generate_multimodal",
-        lambda *a, **k: json.dumps(
-            [{"question": "AVEZ-VOUS GERE UN BUDGET ???", "experience_id": None}]
-        ),
-    )
-
-    questions, avertissement = interview.generate_interview_questions(
-        CANDIDATE_ID,
-        already_asked=["Avez-vous géré un budget ?"],
-    )
-
-    assert questions == []
-    assert avertissement
-
-
-def test_les_questions_deja_posees_atteignent_le_prompt(
-    session_factory, monkeypatch
-):
-    _preparer_candidat_avec_experience(session_factory)
-
-    monkeypatch.setattr(interview, "is_configured", lambda: True)
-
-    parts_recus = []
-
-    def _generate_multimodal(parts, *a, **k):
-        parts_recus.append(parts)
-        return json.dumps([])
-
-    monkeypatch.setattr(interview, "generate_multimodal", _generate_multimodal)
-
-    interview.generate_interview_questions(
-        CANDIDATE_ID, already_asked=["Une question déjà posée ?"]
-    )
-
-    # .text plutôt que str() : la repr d'un Part Gemini tronque le contenu.
-    assert "Une question déjà posée ?" in parts_recus[0][0].text
