@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, String, Text
+from sqlalchemy import JSON, Date, DateTime, Float, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -517,5 +517,105 @@ class InterviewExchangeDB(Base):
         DateTime,
         default=datetime.utcnow,
         onupdate=datetime.utcnow,
+        nullable=False
+    )
+
+
+# ============================================================
+# CV GENERE : TRACE DES DECISIONS
+# ============================================================
+
+class GeneratedCVDB(Base):
+    """
+    Trace d'un CV ciblé produit pour une offre.
+
+    Le fichier exporté ne dit pas POURQUOI telle expérience y figure
+    et telle autre non. Cette table conserve les décisions : ce qui a
+    été retenu, ce qui a été écarté, et le résultat des contrôles
+    automatiques au moment de la génération.
+
+    Un CV généré n'est pas un nouveau profil : c'est une vue ciblée et
+    datée du Master CV pour une opportunité donnée.
+    """
+
+    __tablename__ = "generated_cvs"
+
+    id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True
+    )
+
+    candidate_id: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        index=True
+    )
+
+    job_offer_id: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        index=True
+    )
+
+    # "deterministe" ou "ia" : d'ou vient le texte affiche.
+    mode: Mapped[str] = mapped_column(
+        String,
+        default="deterministe"
+    )
+
+    # Modele utilise quand le mode est "ia" — pour pouvoir relire une
+    # generation ancienne en sachant quel modele l'a produite.
+    llm_model: Mapped[str] = mapped_column(
+        String,
+        default=""
+    )
+
+    selected_experience_ids: Mapped[list] = mapped_column(
+        JSON,
+        default=list,
+        nullable=False
+    )
+
+    selected_evidence_ids: Mapped[list] = mapped_column(
+        JSON,
+        default=list,
+        nullable=False
+    )
+
+    selected_skills: Mapped[list] = mapped_column(
+        JSON,
+        default=list,
+        nullable=False
+    )
+
+    # Competences volontairement laissees de cote, avec leur motif
+    # (declaree sans preuve, seulement deduite, absente).
+    excluded_skills: Mapped[list] = mapped_column(
+        JSON,
+        default=list,
+        nullable=False
+    )
+
+    match_score_at_generation: Mapped[float] = mapped_column(
+        Float,
+        default=0.0,
+        nullable=False
+    )
+
+    # "ok" ou "avertissements" : resultat des controles deterministes.
+    validation_status: Mapped[str] = mapped_column(
+        String,
+        default="ok"
+    )
+
+    validation_issues: Mapped[list] = mapped_column(
+        JSON,
+        default=list,
+        nullable=False
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
         nullable=False
     )

@@ -30,6 +30,8 @@ SERVICE_MODULES = (
     "services.application_service",
     "services.interview_history_service",
     "services.cv.selection",
+    "services.cv.validation",
+    "services.generated_cv_service",
     "services.job_requirements_service",
     "services.job_service",
     "services.market_memory_service",

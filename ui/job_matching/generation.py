@@ -28,7 +28,10 @@ from services.ai.gemini_client import is_configured as ai_is_configured
 from services.ai.letter_authoring import build_ai_letter
 from services.ai.reformulation import reformulate_targeted_cv
 from services.application_service import record_application
+from services.ai.gemini_client import GEMINI_MODEL
 from services.cv import build_targeted_cv, export_docx, export_pdf
+from services.cv.validation import validate_targeted_cv
+from services.generated_cv_service import record_generated_cv
 from services.job_service import get_job_offer_text
 from services.letter import (
     build_cover_letter,
@@ -62,6 +65,74 @@ SECTION_LABELS = {
     "langues": "Langues",
     "interets": "Centres d'intérêt",
 }
+
+
+def _controler_et_tracer(
+    candidate_id: str,
+    job_offer_id: str,
+    cv,
+    mode: str,
+) -> list[dict]:
+    """
+    Contrôle déterministe du CV produit, puis trace de la génération.
+
+    Le contrôle est du code, pas une IA : tout ce qu'il vérifie est
+    confrontable exactement au Master CV. La trace enregistre les
+    décisions (retenu / écarté et pourquoi), afin de pouvoir répondre
+    plus tard à « pourquoi cette expérience figure-t-elle ici ? ».
+
+    Ne fait jamais échouer la génération : un défaut de trace ne doit
+    pas priver l'utilisateur de son CV.
+    """
+
+    rapport = validate_targeted_cv(cv, candidate_id, job_offer_id)
+
+    try:
+        record_generated_cv(
+            candidate_id=candidate_id,
+            job_offer_id=job_offer_id,
+            cv=cv,
+            mode=mode,
+            llm_model=GEMINI_MODEL if mode == "ia" else "",
+            validation_status=rapport.status,
+            validation_issues=rapport.as_dicts(),
+        )
+
+    except Exception:
+        pass
+
+    return rapport.as_dicts()
+
+
+def _render_controle(signalements: list[dict]) -> None:
+
+    if not signalements:
+        st.success(
+            "✅ Contrôle automatique : chaque ligne remonte à une "
+            "preuve du Master CV, aucun chiffre ajouté, aucune "
+            "compétence non prouvée."
+        )
+        return
+
+    bloquants = [
+        item for item in signalements if item["severity"] == "bloquant"
+    ]
+
+    entete = (
+        f"⚠️ Contrôle automatique : {len(bloquants)} anomalie(s) "
+        "sérieuse(s)"
+        if bloquants
+        else f"ℹ️ Contrôle automatique : {len(signalements)} remarque(s)"
+    )
+
+    with st.expander(entete, expanded=bool(bloquants)):
+
+        for item in signalements:
+
+            if item["severity"] == "bloquant":
+                st.error(item["message"])
+            else:
+                st.warning(item["message"])
 
 
 def _render_facts_panel(cv, candidate) -> None:
@@ -200,6 +271,9 @@ def render_generation_tab(
             "letter": letter_ia,
             "mode": "ia",
             "warnings": avertissements_cv + avertissements_lettre,
+            "validation": _controler_et_tracer(
+                candidate_id, job_offer_id, cv_ia, mode="ia"
+            ),
         }
 
     elif generer_det:
@@ -223,6 +297,12 @@ def render_generation_tab(
             "letter": letter_deterministe,
             "mode": "deterministe",
             "warnings": [],
+            "validation": _controler_et_tracer(
+                candidate_id,
+                job_offer_id,
+                cv_deterministe,
+                mode="deterministe",
+            ),
         }
 
     etat = st.session_state.get(etat_key)
@@ -240,6 +320,8 @@ def render_generation_tab(
 
     for avertissement in etat["warnings"]:
         st.warning(avertissement)
+
+    _render_controle(etat.get("validation", []))
 
     if not cv.skills:
 
