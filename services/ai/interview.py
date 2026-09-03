@@ -48,6 +48,7 @@ from database.models import (
 )
 
 from services.ai.gemini_client import (
+    GEMINI_AUDIO_TIMEOUT_MS,
     GeminiNotConfiguredError,
     GeminiRequestError,
     generate_multimodal,
@@ -488,7 +489,13 @@ def transcribe_audio(audio_bytes: bytes, mime_type: str = "audio/wav") -> tuple[
     ]
 
     try:
-        texte = generate_multimodal(parts, temperature=0.0)
+        # Délai allongé : un enregistrement de plusieurs minutes met
+        # bien plus de 30 s à être téléversé et traité.
+        texte = generate_multimodal(
+            parts,
+            temperature=0.0,
+            timeout_ms=GEMINI_AUDIO_TIMEOUT_MS,
+        )
 
     except (GeminiNotConfiguredError, GeminiRequestError) as error:
         return "", f"Transcription audio impossible ({error})."
@@ -507,6 +514,7 @@ RÈGLES ABSOLUES :
 - Chaque proposition doit être directement retrouvable dans une réponse précise — cite l'extrait qui la justifie.
 - N'invente aucun chiffre, aucun résultat, aucune compétence qui ne soit pas clairement énoncée dans la réponse.
 - Une réponse vague ou évasive ne doit donner lieu à aucune proposition plutôt qu'à une proposition exagérée.
+- En revanche, juge chaque réponse SUR SON CONTENU, même si elle ne répond pas à la question posée : le candidat peut raconter tout autre chose que ce qui lui était demandé, et ce qu'il raconte reste exploitable. La question n'est qu'un contexte, jamais un filtre.
 - Associe si possible chaque proposition à un nom de compétence court (ex. "Gestion de budget", "Négociation fournisseur").
 - Réponds UNIQUEMENT avec un tableau JSON valide, sans texte autour, sans balisage markdown : [{"text": "phrase courte prête pour le Master CV", "skill_name": "...", "source_excerpt": "extrait exact de la réponse qui justifie cette phrase"}].
 - Si aucune réponse n'apporte de matière exploitable, réponds avec un tableau vide []."""
@@ -570,7 +578,12 @@ def propose_evidence_from_answers(
     prompt += "\n\n" + "\n\n".join(blocs)
 
     try:
-        reponse = generate_multimodal([prompt], temperature=0.3)
+        # Température basse : extraire des faits d'une réponse est une
+        # tâche de lecture, pas de création. À 0.3, la même réponse
+        # donnait tantôt une proposition, tantôt aucune — variabilité
+        # inacceptable pour l'utilisateur, qui croit alors que rien
+        # n'a été pris en compte.
+        reponse = generate_multimodal([prompt], temperature=0.1)
 
     except (GeminiNotConfiguredError, GeminiRequestError) as error:
         return [], f"Génération des propositions impossible ({error})."

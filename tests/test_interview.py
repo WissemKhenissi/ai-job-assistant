@@ -393,6 +393,31 @@ def test_transcription_reussie(monkeypatch):
     assert avertissement == ""
 
 
+def test_transcription_utilise_un_delai_allonge(monkeypatch):
+    """
+    Un enregistrement de plusieurs minutes dépasse largement le délai
+    par défaut de 30 s : la transcription doit demander explicitement
+    le délai long, sinon elle échoue systématiquement sur les réponses
+    orales un peu développées — exactement le cas d'usage visé.
+    """
+
+    from services.ai.gemini_client import GEMINI_AUDIO_TIMEOUT_MS
+
+    monkeypatch.setattr(interview, "is_configured", lambda: True)
+
+    delais_recus = []
+
+    def _generate_multimodal(parts, temperature=0.4, timeout_ms=None):
+        delais_recus.append(timeout_ms)
+        return "transcription"
+
+    monkeypatch.setattr(interview, "generate_multimodal", _generate_multimodal)
+
+    interview.transcribe_audio(b"donnees-audio")
+
+    assert delais_recus == [GEMINI_AUDIO_TIMEOUT_MS]
+
+
 def test_transcription_erreur_api(monkeypatch):
     from services.ai.gemini_client import GeminiRequestError
 

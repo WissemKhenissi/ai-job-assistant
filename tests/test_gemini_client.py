@@ -55,7 +55,7 @@ def _patch_client(monkeypatch, comportements):
     monkeypatch.setattr(
         gemini_client,
         "_get_client",
-        lambda: faux_client,
+        lambda *args, **kwargs: faux_client,
     )
     # Pas d'attente réelle entre les tentatives dans les tests.
     monkeypatch.setattr(gemini_client.time, "sleep", lambda _: None)
@@ -199,7 +199,7 @@ def test_une_reponse_vide_est_une_erreur(monkeypatch):
 
 def test_sans_client_configure_leve_l_erreur_dediee(monkeypatch):
 
-    def _get_client_sans_cle():
+    def _get_client_sans_cle(*args, **kwargs):
         raise GeminiNotConfiguredError("pas de clé")
 
     monkeypatch.setattr(

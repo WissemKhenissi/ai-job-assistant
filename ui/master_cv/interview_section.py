@@ -44,6 +44,7 @@ def _etat_initial() -> dict:
         "questions": [],
         "proposals": None,
         "warning": "",
+        "transcription": "",
     }
 
 
@@ -185,8 +186,25 @@ def render_interview_section(candidate_id: str) -> None:
                 key=f"{_STATE_KEY}_libre_audio",
             )
 
+            # Valider l'enregistrement dans le widget micro ne déclenche
+            # rien par lui-même : sans ce rappel, on croit avoir envoyé
+            # sa réponse alors que rien n'est parti (cas vécu).
+            if audio_libre is not None or texte_libre.strip():
+                st.info(
+                    "Votre réponse est prête — cliquez sur "
+                    "**« Analyser ma réponse »** ci-dessous pour que "
+                    "l'IA en extraie vos compétences."
+                )
+
+            # Volontairement jamais désactivé : Streamlit n'enregistre
+            # le texte tapé qu'au premier clic (qui sert de "blur"), donc
+            # un bouton désactivé imposerait un premier clic sans effet —
+            # précisément le "rien ne se passe" qu'on cherche à éviter.
             envoyer = st.button(
-                "Envoyer ma réponse", type="primary", key=f"{_STATE_KEY}_envoyer_libre"
+                "🤖 Analyser ma réponse",
+                type="primary",
+                key=f"{_STATE_KEY}_envoyer_libre",
+                use_container_width=True,
             )
 
             if st.button("Recommencer l'entretien"):
@@ -223,6 +241,7 @@ def render_interview_section(candidate_id: str) -> None:
 
                 etat["proposals"] = propositions
                 etat["warning"] = " ".join(avertissements)
+                etat["transcription"] = texte_final
                 st.rerun()
 
             return
@@ -252,8 +271,24 @@ def render_interview_section(candidate_id: str) -> None:
                     key=f"{_STATE_KEY}_audio_{indice}",
                 )
 
+        reponses_en_attente = any(
+            st.session_state.get(f"{_STATE_KEY}_reponse_{indice}", "").strip()
+            or st.session_state.get(f"{_STATE_KEY}_audio_{indice}") is not None
+            for indice in range(len(etat["questions"]))
+        )
+
+        if reponses_en_attente:
+            st.info(
+                "Vos réponses sont prêtes — cliquez sur "
+                "**« Analyser mes réponses »** ci-dessous pour que "
+                "l'IA en extraie vos compétences."
+            )
+
         envoyer = st.button(
-            "Envoyer mes réponses", type="primary", key=f"{_STATE_KEY}_envoyer"
+            "🤖 Analyser mes réponses",
+            type="primary",
+            key=f"{_STATE_KEY}_envoyer",
+            use_container_width=True,
         )
 
         if st.button("Recommencer l'entretien"):
@@ -300,6 +335,11 @@ def render_interview_section(candidate_id: str) -> None:
 
             etat["proposals"] = propositions
             etat["warning"] = " ".join(avertissements)
+            etat["transcription"] = "\n\n".join(
+                f"{reponse.question}\n{reponse.answer}"
+                for reponse in reponses
+                if reponse.answer.strip()
+            )
             st.rerun()
 
         return
@@ -311,8 +351,22 @@ def render_interview_section(candidate_id: str) -> None:
     if etat["warning"]:
         st.info(etat["warning"])
 
+    # Ce que l'IA a réellement entendu / lu : sans cet affichage, une
+    # réponse orale disparaît sans laisser de trace visible, et une
+    # erreur de transcription reste invisible jusqu'à se retrouver
+    # dans le Master CV.
+    if etat.get("transcription"):
+
+        with st.expander("📝 Ce que l'IA a retenu de votre réponse"):
+            st.write(etat["transcription"])
+
     if not etat["proposals"]:
-        st.success("Aucune proposition à valider pour cette session.")
+        st.warning(
+            "Aucune proposition exploitable n'a été extraite de cette "
+            "réponse. Si votre réponse était pourtant détaillée, "
+            "vérifiez la transcription ci-dessus : l'IA n'a peut-être "
+            "pas capté l'enregistrement."
+        )
 
     for proposition in list(etat["proposals"]):
 

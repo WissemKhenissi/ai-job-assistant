@@ -43,6 +43,13 @@ GEMINI_MODEL = "gemini-flash-lite-latest"
 # jamais si l'appel ne se termine jamais.
 GEMINI_TIMEOUT_MS = 30_000
 
+# Un enregistrement de plusieurs minutes (le candidat qui répond à
+# toutes les questions d'un coup à l'oral) est nettement plus long à
+# téléverser et à traiter qu'un prompt texte : 30 s ne suffisent pas,
+# et l'appel échouerait systématiquement sans que la cause soit
+# évidente pour l'utilisateur.
+GEMINI_AUDIO_TIMEOUT_MS = 180_000
+
 
 class GeminiNotConfiguredError(RuntimeError):
     """Aucune clé GEMINI_API_KEY n'est configurée dans .env."""
@@ -58,7 +65,7 @@ def is_configured() -> bool:
     return bool(os.environ.get("GEMINI_API_KEY", "").strip())
 
 
-def _get_client():
+def _get_client(timeout_ms: int | None = None):
 
     from google import genai
     from google.genai import types
@@ -74,7 +81,9 @@ def _get_client():
 
     return genai.Client(
         api_key=api_key,
-        http_options=types.HttpOptions(timeout=GEMINI_TIMEOUT_MS),
+        http_options=types.HttpOptions(
+            timeout=timeout_ms or GEMINI_TIMEOUT_MS
+        ),
     )
 
 
@@ -100,7 +109,11 @@ def _is_transient_overload(error: Exception) -> bool:
     )
 
 
-def _call_gemini(contents, temperature: float) -> str:
+def _call_gemini(
+    contents,
+    temperature: float,
+    timeout_ms: int | None = None,
+) -> str:
     """
     Envoie `contents` (texte seul, ou liste de parties texte/image
     pour un appel multimodal) à Gemini et retourne le texte de la
@@ -116,7 +129,7 @@ def _call_gemini(contents, temperature: float) -> str:
 
     from google.genai import types
 
-    client = _get_client()
+    client = _get_client(timeout_ms)
 
     config = types.GenerateContentConfig(temperature=temperature)
 
@@ -175,7 +188,11 @@ def generate_text(prompt: str, temperature: float = 0.4) -> str:
     return _call_gemini(prompt, temperature)
 
 
-def generate_multimodal(parts: list, temperature: float = 0.4) -> str:
+def generate_multimodal(
+    parts: list,
+    temperature: float = 0.4,
+    timeout_ms: int | None = None,
+) -> str:
     """
     Envoie un contenu multimodal (texte + images) à Gemini et retourne
     le texte de la réponse.
@@ -186,4 +203,4 @@ def generate_multimodal(parts: list, temperature: float = 0.4) -> str:
     viennent les images.
     """
 
-    return _call_gemini(parts, temperature)
+    return _call_gemini(parts, temperature, timeout_ms)
