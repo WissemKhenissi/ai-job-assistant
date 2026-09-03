@@ -68,6 +68,35 @@ DEFAULT_MAX_LINES_PER_EXPERIENCE = 5
 DEFAULT_MAX_ACHIEVEMENTS_PER_EXPERIENCE = 2
 
 
+# ============================================================
+# NIVEAUX DE COMPETENCE AFFICHABLES
+# ============================================================
+#
+# Le CV n'a longtemps montré que le prouvé. C'est le réglage le plus
+# sûr, mais il rend invisibles des compétences que le candidat a
+# lui-même déclarées, faute d'avoir documenté une preuve — et sur un
+# profil produit, ce sont justement les compétences cœur du métier.
+#
+# Le seuil devient donc un choix, assumé et tracé :
+#
+#   PROVEN_ONLY    le système garantit chaque compétence affichée.
+#   WITH_DECLARED  le candidat atteste de ses propres déclarations.
+#   WITH_INFERRED  le candidat assume en plus les déductions du
+#                  moteur, qu'il n'avait pas formulées lui-même.
+#
+# « missing » n'y figure pas et n'y figurera pas : une compétence
+# absente du Master CV serait une affirmation que le candidat n'a
+# jamais faite, écrite à sa place.
+
+PROVEN_ONLY = ("proven",)
+
+WITH_DECLARED = ("proven", "declared")
+
+WITH_INFERRED = ("proven", "declared", "inferred")
+
+DISPLAYABLE_STATUSES = frozenset(WITH_INFERRED)
+
+
 class MissingAnalysisError(RuntimeError):
     """L'offre n'a pas encore été analysée pour ce candidat."""
 
@@ -81,6 +110,7 @@ def build_targeted_cv(
     max_achievements_per_experience: int = (
         DEFAULT_MAX_ACHIEVEMENTS_PER_EXPERIENCE
     ),
+    skill_levels: tuple[str, ...] = PROVEN_ONLY,
 ) -> TargetedCV:
     """
     Construit le CV ciblé d'un candidat pour une offre analysée.
@@ -94,6 +124,11 @@ def build_targeted_cv(
     chronologie se remarque et appelle une question gênante en
     entretien (§18). Une expérience sans ligne retenue apparaît alors
     réduite à son poste, son entreprise et ses dates.
+
+    `skill_levels` fixe le seuil de la rubrique compétences. Les
+    **lignes** d'expérience, elles, restent toujours issues d'une
+    preuve : une compétence déclarée sans preuve peut être annoncée,
+    elle ne peut pas être racontée.
     """
 
     db = SessionLocal()
@@ -577,16 +612,28 @@ def build_targeted_cv(
         # ====================================================
         #
         # Reprend la catégorie du référentiel skill_catalog (Product,
-        # Data, Business...) pour présenter les compétences prouvées
-        # groupées, comme sur un CV classique.
+        # Data, Business...) pour présenter les compétences groupées,
+        # comme sur un CV classique. L'ordre suit celui de l'annonce :
+        # ce qu'elle demande en premier apparaît en premier.
+
+        niveaux_affichables = tuple(
+            niveau
+            for niveau in skill_levels
+            if niveau in DISPLAYABLE_STATUSES
+        ) or PROVEN_ONLY
+
+        affichables = [
+            row for row in skill_matches
+            if row.status in niveaux_affichables
+        ]
 
         skill_groups: list[CVSkillGroup] = []
 
-        if proven:
+        if affichables:
 
             par_categorie: dict[str, list[str]] = {}
 
-            for row in proven:
+            for row in affichables:
 
                 catalog_skill = find_skill_by_name(row.skill)
 
@@ -668,7 +715,8 @@ def build_targeted_cv(
             job_offer_title=job_offer.title or "",
             job_offer_company=(job_offer.company or "").strip(),
             cv_title=clean_job_title(job_offer.title or ""),
-            skills=[row.skill for row in proven],
+            skills=[row.skill for row in affichables],
+            skill_levels=niveaux_affichables,
             skill_groups=skill_groups,
             experiences=experiences,
             achievements=achievements,

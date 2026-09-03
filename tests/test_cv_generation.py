@@ -638,6 +638,101 @@ def test_une_realisation_chiffree_passe_devant_une_qualitative(
     assert realisations[0].achievement_id == "achievement-b-chiffre"
 
 
+# ============================================================
+# SEUIL DES COMPETENCES AFFICHEES
+# ============================================================
+
+def test_par_defaut_seul_le_prouve_figure(session_factory):
+    from services.cv import build_targeted_cv
+
+    session = session_factory()
+    _prepare_profile(session, avec_preuve=False)
+    _add_job_offer(session, "Gestion de projet.")
+    session.close()
+
+    _analyser(["Gestion de projet"])
+
+    cv = build_targeted_cv(CANDIDATE_ID, JOB_OFFER_ID)
+
+    assert cv.skills == []
+
+
+def test_une_competence_declaree_peut_etre_affichee(session_factory):
+    """
+    Le candidat l'a écrite dans son Master CV : ce sont ses propres
+    mots, pas une invention du système.
+    """
+
+    from services.cv import build_targeted_cv
+    from services.cv.selection import WITH_DECLARED
+
+    session = session_factory()
+    _prepare_profile(session, avec_preuve=False)
+    _add_job_offer(session, "Gestion de projet.")
+    session.close()
+
+    _analyser(["Gestion de projet"])
+
+    cv = build_targeted_cv(
+        CANDIDATE_ID, JOB_OFFER_ID, skill_levels=WITH_DECLARED
+    )
+
+    assert cv.skills == ["Gestion de projet"]
+    assert cv.skill_levels == WITH_DECLARED
+
+
+def test_une_competence_absente_du_master_cv_n_est_jamais_affichee(
+    session_factory,
+):
+    """
+    La limite qui ne se règle pas : « missing » n'est pas un niveau
+    affichable, quoi qu'on demande.
+    """
+
+    from services.cv import build_targeted_cv
+
+    session = session_factory()
+    _prepare_profile(session)
+    _add_job_offer(session, "Gestion de projet et Kubernetes.")
+    _lier_preuves_a_l_experience(session)
+    session.close()
+
+    _analyser(["Gestion de projet", "Kubernetes"])
+
+    cv = build_targeted_cv(
+        CANDIDATE_ID,
+        JOB_OFFER_ID,
+        skill_levels=("proven", "declared", "inferred", "missing"),
+    )
+
+    assert "Kubernetes" in cv.missing_skills
+    assert "Kubernetes" not in cv.skills
+
+
+def test_les_lignes_restent_issues_de_preuves(session_factory):
+    """
+    Une compétence déclarée peut être annoncée, elle ne peut pas être
+    racontée : les puces d'expérience viennent toujours d'une preuve.
+    """
+
+    from services.cv import build_targeted_cv
+    from services.cv.selection import WITH_INFERRED
+
+    session = session_factory()
+    _prepare_profile(session, avec_preuve=False)
+    _add_job_offer(session, "Gestion de projet.")
+    session.close()
+
+    _analyser(["Gestion de projet"])
+
+    cv = build_targeted_cv(
+        CANDIDATE_ID, JOB_OFFER_ID, skill_levels=WITH_INFERRED
+    )
+
+    assert cv.skills == ["Gestion de projet"]
+    assert cv.total_lines == 0
+
+
 def test_le_titre_du_cv_est_l_intitule_du_poste_vise(session_factory):
     """
     Sans titre, le recruteur doit deviner à quelle candidature le CV

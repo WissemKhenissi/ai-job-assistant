@@ -90,8 +90,8 @@ FORMULATION = """FORMULATION
 IMPACT
 Quand le texte source fournit un résultat, écris action + contexte + impact. Quand il n'en fournit pas, arrête-toi au contexte : ne fabrique jamais un résultat, ne présente jamais une responsabilité comme une réussite.
 
-VERBES D'ACTION
-Ouvre la ligne par un participe passé précis — piloté, conçu, déployé, structuré, optimisé, analysé, coordonné, automatisé, lancé, négocié, accompagné, mis en place — plutôt que par un nom d'action (« Pilotage de… », « Automatisation de… »), et uniquement lorsque ce verbe correspond réellement à l'action décrite dans le texte source.
+FORME NOMINALE
+Ouvre la ligne par un nom d'action — Pilotage, Conception, Automatisation, Déploiement, Coordination, Optimisation, Analyse, Structuration, Négociation, Mise en place — et jamais par un verbe conjugué ni un participe passé (« Automatisé… », « J'ai piloté… »). Le nom choisi doit correspondre exactement à l'action décrite dans le texte source.
 
 PRÉCISION
 Une puce qui ne dit ni sur quoi ni avec qui ne prouve rien. Quand le texte source fournit un objet, un périmètre, un outil, une équipe ou un enjeu, fais-les figurer. Quand il n'en fournit pas, n'en invente pas : garde la puce courte plutôt que de la gonfler.

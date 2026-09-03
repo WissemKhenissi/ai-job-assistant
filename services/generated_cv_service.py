@@ -42,20 +42,22 @@ def record_generated_cv(
 
     try:
 
-        exclues = (
-            [
-                {"skill": nom, "motif": "declaree_sans_preuve"}
-                for nom in cv.declared_skills
-            ]
-            + [
-                {"skill": nom, "motif": "seulement_deduite"}
-                for nom in cv.inferred_skills
-            ]
-            + [
-                {"skill": nom, "motif": "absente_du_master_cv"}
-                for nom in cv.missing_skills
-            ]
-        )
+        # Une compétence retenue au CV n'est pas une compétence
+        # écartée, même si elle n'est pas prouvée : le seuil choisi
+        # l'a laissée passer, et la trace doit dire ce qui a été
+        # affiché, pas ce qui aurait pu l'être.
+        affichees = set(cv.skills)
+
+        exclues = [
+            {"skill": nom, "motif": motif}
+            for motif, noms in (
+                ("declaree_sans_preuve", cv.declared_skills),
+                ("seulement_deduite", cv.inferred_skills),
+                ("absente_du_master_cv", cv.missing_skills),
+            )
+            for nom in noms
+            if nom not in affichees
+        ]
 
         trace = GeneratedCVDB(
             id=f"generated-cv-{uuid4()}",

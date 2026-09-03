@@ -130,6 +130,74 @@ def test_une_competence_declaree_sans_preuve_est_interdite(
     assert vocabulaire.authorized == ()
 
 
+def test_un_seuil_permissif_autorise_les_termes_declares(
+    session_factory,
+):
+    """
+    Interdire à la rédaction un mot que le CV affiche par ailleurs
+    n'aurait aucun sens : le vocabulaire suit le seuil choisi.
+    """
+
+    session = session_factory()
+
+    add_candidate(session)
+
+    add_catalog_skill(
+        session,
+        canonical_name="Product Discovery",
+        aliases=["Product Discovery", "Découverte produit"],
+    )
+
+    add_candidate_skill(
+        session, candidate_id=CANDIDATE_ID, name="Product Discovery"
+    )
+
+    _offre(session)
+    session.close()
+
+    _analyser(["Product Discovery"])
+
+    vocabulaire = build_offer_vocabulary(
+        CANDIDATE_ID,
+        JOB_OFFER_ID,
+        skill_levels=("proven", "declared"),
+    )
+
+    assert "Product Discovery" in vocabulaire.authorized
+    assert "Product Discovery" not in vocabulaire.forbidden
+
+
+def test_une_competence_absente_reste_interdite_a_tout_seuil(
+    session_factory,
+):
+    """
+    « missing » n'est jamais autorisé : le mot ne figure nulle part
+    dans le Master CV.
+    """
+
+    session = session_factory()
+
+    add_candidate(session)
+
+    add_catalog_skill(
+        session, canonical_name="Kubernetes", aliases=["Kubernetes"]
+    )
+
+    _offre(session)
+    session.close()
+
+    _analyser(["Kubernetes"])
+
+    vocabulaire = build_offer_vocabulary(
+        CANDIDATE_ID,
+        JOB_OFFER_ID,
+        skill_levels=("proven", "declared", "inferred", "missing"),
+    )
+
+    assert "Kubernetes" in vocabulaire.forbidden
+    assert "Kubernetes" not in vocabulaire.authorized
+
+
 def test_une_competence_absente_du_profil_est_interdite(session_factory):
     session = session_factory()
 

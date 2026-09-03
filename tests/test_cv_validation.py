@@ -427,6 +427,57 @@ def test_une_competence_non_prouvee_affichee_est_signalee(session_factory):
     assert any(i.code == "competence_non_prouvee" for i in rapport.issues)
 
 
+def test_une_competence_declaree_est_permise_quand_elle_est_attestee(
+    session_factory,
+):
+    """
+    Le candidat a autorisé ce niveau : ce n'est plus une anomalie du
+    système mais une affirmation dont il répond. Elle reste dite,
+    pour qu'il sache quoi préparer avant l'entretien.
+    """
+
+    session = session_factory()
+    _preparer(session, avec_preuve=False)
+    session.close()
+
+    _analyser(["Product Discovery"])
+
+    cv = _cv(skills=["Product Discovery"])
+    cv.skill_levels = ("proven", "declared")
+
+    rapport = validate_targeted_cv(cv, CANDIDATE_ID, JOB_OFFER_ID)
+
+    assert rapport.is_valid
+    assert any(i.code == "competence_attestee" for i in rapport.issues)
+
+
+def test_une_competence_absente_du_master_cv_reste_bloquante(
+    session_factory,
+):
+    """
+    La seule limite qui ne se règle pas : une compétence que le
+    candidat n'a jamais déclarée serait une affirmation écrite à sa
+    place.
+    """
+
+    session = session_factory()
+    _preparer(session)
+    session.close()
+
+    _analyser(["Product Discovery", "Kubernetes"])
+
+    cv = _cv(skills=["Kubernetes"])
+    cv.skill_levels = ("proven", "declared", "inferred", "missing")
+
+    rapport = validate_targeted_cv(cv, CANDIDATE_ID, JOB_OFFER_ID)
+
+    assert not rapport.is_valid
+    assert any(
+        i.code == "competence_absente_du_master_cv"
+        for i in rapport.issues
+    )
+
+
 def test_une_competence_absente_de_l_analyse_est_signalee(session_factory):
     session = session_factory()
     _preparer(session)

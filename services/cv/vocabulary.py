@@ -168,9 +168,15 @@ def _retenir(terme: str) -> bool:
 def build_offer_vocabulary(
     candidate_id: str,
     job_offer_id: str,
+    skill_levels: tuple[str, ...] = ("proven",),
 ) -> OfferVocabulary:
     """
     Construit le vocabulaire autorisé et interdit pour cette offre.
+
+    `skill_levels` suit le seuil choisi pour la rubrique compétences :
+    interdire à la rédaction un mot que le CV affiche par ailleurs
+    n'aurait aucun sens. Une compétence « missing » reste interdite
+    quoi qu'il arrive — elle n'est nulle part dans le Master CV.
 
     Retourne un vocabulaire vide si l'offre n'a pas été analysée : la
     reformulation reste alors cadrée par ses autres garde-fous, sans
@@ -208,6 +214,10 @@ def build_offer_vocabulary(
         interdits: set[str] = set()
         canoniques_prouvees: set[str] = set()
 
+        # Une compétence absente du Master CV n'est jamais autorisée,
+        # quel que soit le seuil demandé.
+        niveaux = set(skill_levels) - {"missing"} or {"proven"}
+
         for row in skill_matches:
 
             termes = {row.skill}
@@ -222,8 +232,11 @@ def build_offer_vocabulary(
                 if terme and terme.strip() and _retenir(terme)
             }
 
-            if row.status == "proven":
-                canoniques_prouvees.add(row.canonical_skill)
+            if row.status in niveaux:
+
+                if row.status == "proven":
+                    canoniques_prouvees.add(row.canonical_skill)
+
                 autorises.update(termes)
 
             else:

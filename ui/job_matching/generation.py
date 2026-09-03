@@ -30,6 +30,11 @@ from services.ai.reformulation import reformulate_targeted_cv
 from services.application_service import record_application
 from services.ai.gemini_client import GEMINI_MODEL
 from services.cv import build_targeted_cv, export_docx, export_pdf
+from services.cv.selection import (
+    PROVEN_ONLY,
+    WITH_DECLARED,
+    WITH_INFERRED,
+)
 from services.cv.fitting import fit_to_one_page
 from services.cv.validation import validate_targeted_cv
 from services.generated_cv_service import record_generated_cv
@@ -71,6 +76,42 @@ SECTION_LABELS = {
 # ce que les expériences démontrent déjà, en prenant la place qui leur
 # revient : elle reste disponible d'un clic, mais ne s'impose plus.
 SECTIONS_HORS_DEFAUT = frozenset({"competences"})
+
+
+# Seuil des compétences affichées. Au-delà du prouvé, ce n'est plus
+# le système qui garantit la compétence : c'est le candidat qui
+# l'atteste, et le contrôle le lui rappelle plutôt que de bloquer.
+NIVEAUX_COMPETENCES = {
+    "prouve": {
+        "label": "Prouvées uniquement",
+        "levels": PROVEN_ONLY,
+        "aide": (
+            "Le plus sûr : chaque compétence affichée est déclarée "
+            "dans votre Master CV **et** soutenue par une preuve. "
+            "Rien ne peut vous être reproché en entretien."
+        ),
+    },
+    "declare": {
+        "label": "+ mes compétences déclarées",
+        "levels": WITH_DECLARED,
+        "aide": (
+            "Ajoute les compétences que **vous avez déclarées** dans "
+            "votre Master CV sans preuve documentée. Ce sont vos "
+            "propres affirmations : vous en répondez, préparez un "
+            "exemple concret pour chacune."
+        ),
+    },
+    "deduit": {
+        "label": "+ les compétences déduites",
+        "levels": WITH_INFERRED,
+        "aide": (
+            "Ajoute en plus ce que le moteur **déduit** de votre "
+            "parcours et que vous n'avez jamais formulé vous-même. "
+            "À relire une par une avant d'envoyer : c'est l'IA qui "
+            "parle en votre nom."
+        ),
+    },
+}
 
 
 def _controler_et_tracer(
@@ -168,7 +209,11 @@ def _render_facts_panel(cv, candidate) -> None:
 
             rien_a_montrer = False
 
-            st.markdown("**Compétences prouvées**")
+            st.markdown(
+                "**Compétences prouvées**"
+                if tuple(cv.skill_levels) == ("proven",)
+                else "**Compétences retenues** (prouvées et attestées)"
+            )
 
             for groupe in cv.skill_groups:
                 st.write(f"- {groupe.category} : " + ", ".join(groupe.skills))
@@ -213,12 +258,26 @@ def render_generation_tab(
 
     st.subheader("CV ciblé et lettre de motivation")
 
-    st.caption(
-        "Les documents ne reprennent que les compétences prouvées, "
-        "c'est-à-dire déclarées dans le Master CV et soutenues par "
-        "au moins une preuve. Les compétences déduites ou déclarées "
-        "sans preuve en sont volontairement absentes."
+    # --------------------------------------------------------
+    # SEUIL DES COMPETENCES AFFICHEES
+    # --------------------------------------------------------
+    #
+    # Ce choix se fait avant la génération : il change ce que le CV
+    # affiche, ce que la rédaction a le droit d'employer comme
+    # vocabulaire, et la sévérité du contrôle.
+
+    niveau = st.radio(
+        "Compétences affichées sur le CV",
+        options=list(NIVEAUX_COMPETENCES),
+        format_func=lambda cle: NIVEAUX_COMPETENCES[cle]["label"],
+        index=1,
+        horizontal=True,
+        key=f"niveau_competences_{job_offer_id}",
     )
+
+    st.caption(NIVEAUX_COMPETENCES[niveau]["aide"])
+
+    skill_levels = NIVEAUX_COMPETENCES[niveau]["levels"]
 
     etat_key = f"cv_letter_{job_offer_id}"
 
@@ -253,6 +312,7 @@ def render_generation_tab(
             cv_deterministe = build_targeted_cv(
                 candidate_id=candidate_id,
                 job_offer_id=job_offer_id,
+                skill_levels=skill_levels,
             )
         except Exception as error:
             st.error(f"Génération impossible : {error}")
@@ -288,6 +348,7 @@ def render_generation_tab(
             cv_deterministe = build_targeted_cv(
                 candidate_id=candidate_id,
                 job_offer_id=job_offer_id,
+                skill_levels=skill_levels,
             )
 
             letter_deterministe = build_cover_letter(

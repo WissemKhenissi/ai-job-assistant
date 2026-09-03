@@ -421,6 +421,7 @@ def reformulate_targeted_cv(
         vocabulaire = build_offer_vocabulary(
             cv.candidate_id,
             cv.job_offer_id,
+            cv.skill_levels,
         )
 
     except Exception as error:

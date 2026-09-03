@@ -143,6 +143,12 @@ class TargetedCV:
     skills: list[str] = field(default_factory=list)
     skill_groups: list[CVSkillGroup] = field(default_factory=list)
 
+    # Seuil choisi pour la rubrique compétences : ("proven",) laisse
+    # le système garantir chaque ligne ; au-delà, c'est le candidat
+    # qui atteste. Conservé ici pour que le contrôle et la trace
+    # sachent ce qui avait été autorisé.
+    skill_levels: tuple[str, ...] = ("proven",)
+
     experiences: list[CVExperience] = field(default_factory=list)
     achievements: list[CVAchievement] = field(default_factory=list)
 

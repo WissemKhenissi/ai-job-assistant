@@ -295,6 +295,12 @@ def validate_targeted_cv(
 
         else:
 
+            # Seuil retenu à la génération : ce que le candidat a
+            # accepté d'afficher sous sa propre responsabilité.
+            niveaux_autorises = set(
+                getattr(cv, "skill_levels", ("proven",))
+            )
+
             statuts = {
                 row.skill: row.status
                 for row in (
@@ -319,18 +325,52 @@ def validate_targeted_cv(
                         )
                     )
 
-                elif statut != "proven":
+                elif statut == "missing":
                     issues.append(
                         ValidationIssue(
-                            code="competence_non_prouvee",
+                            code="competence_absente_du_master_cv",
                             message=(
                                 f"« {competence} » est affichée alors "
-                                f"qu'elle est au statut « {statut} » : "
-                                "seule une compétence prouvée peut "
-                                "figurer au CV."
+                                "qu'elle ne figure pas au Master CV : "
+                                "ce serait une affirmation que vous "
+                                "n'avez jamais faite."
                             ),
                         )
                     )
+
+                elif statut != "proven":
+
+                    # Le candidat a explicitement autorisé ce niveau :
+                    # ce n'est plus une anomalie du système, c'est une
+                    # affirmation dont il répond. Elle reste dite, pour
+                    # qu'il sache quoi préparer avant l'entretien.
+                    if statut in niveaux_autorises:
+                        issues.append(
+                            ValidationIssue(
+                                code="competence_attestee",
+                                message=(
+                                    f"« {competence} » est affichée sur "
+                                    "votre attestation : elle est au "
+                                    f"statut « {statut} », sans preuve "
+                                    "au Master CV. Préparez un exemple "
+                                    "concret pour l'entretien."
+                                ),
+                                severity=AVERTISSEMENT,
+                            )
+                        )
+
+                    else:
+                        issues.append(
+                            ValidationIssue(
+                                code="competence_non_prouvee",
+                                message=(
+                                    f"« {competence} » est affichée "
+                                    "alors qu'elle est au statut "
+                                    f"« {statut} », non autorisé pour "
+                                    "cette génération."
+                                ),
+                            )
+                        )
 
         # ----------------------------------------------------
         # DATES
