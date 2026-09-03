@@ -24,7 +24,15 @@ from services.ai.job_analysis import (
 from services.job_offer_fetcher import fetch_job_offer_from_url
 from services.job_service import save_job_offer
 from services.matching import analyze_and_save_job_match
-from services.job_requirements_service import extract_required_skills
+from services.experience_duration import (
+    format_experience_years,
+    total_experience_years,
+)
+from services.job_requirements_service import (
+    extract_required_skills,
+    extract_required_years,
+)
+from services.profile_service import get_experiences
 
 
 # Clés session_state utilisées pour préremplir le formulaire après une
@@ -189,6 +197,11 @@ def render_analysis_tab(candidate_id: str) -> None:
 
         required_skills = extract_required_skills(description)
 
+        # Deterministe, sans IA : cette valeur sert a comparer avec
+        # l'anciennete reelle du candidat, mieux vaut ne rien
+        # annoncer qu'un chiffre suppose.
+        annees_demandees = extract_required_years(description)
+
         # --------------------------------------------------------
         # CATEGORISATION + EXTRACTION IA (GEMINI), OPTIONNELLE
         # --------------------------------------------------------
@@ -253,6 +266,7 @@ def render_analysis_tab(candidate_id: str) -> None:
                 contract_type=contract_type,
                 remote_policy=remote_policy,
                 remote_details=remote_details,
+                required_years=annees_demandees,
                 source="manual",
                 status="selected",
             )
@@ -276,6 +290,7 @@ def render_analysis_tab(candidate_id: str) -> None:
                 "contract_type": contract_type,
                 "remote_policy": remote_policy,
                 "remote_details": remote_details,
+                "required_years": annees_demandees,
             }
 
             st.success(
@@ -345,6 +360,36 @@ def render_analysis_tab(candidate_id: str) -> None:
 
         if categorisation:
             st.caption(f"📋 {categorisation}")
+
+        # ====================================================
+        # ANCIENNETE DEMANDEE vs ANCIENNETE REELLE
+        # ====================================================
+        #
+        # Comparaison purement factuelle : deux nombres de dates, sans
+        # jugement. Une ancienneté inférieure n'est pas masquée — c'est
+        # un écart réel, que le candidat doit voir avant de postuler.
+
+        annees_demandees = stored_result.get("required_years")
+
+        if annees_demandees:
+
+            annees_candidat = total_experience_years(get_experiences())
+
+            message = (
+                f"Ancienneté demandée : {annees_demandees} ans · "
+                f"la vôtre : {format_experience_years(annees_candidat)}"
+            )
+
+            if annees_candidat >= annees_demandees:
+                st.success(f"✅ {message}")
+
+            else:
+                manquant = round(annees_demandees - annees_candidat, 1)
+                st.warning(
+                    f"⚠️ {message} — il vous manque environ "
+                    f"{format_experience_years(manquant)} pour atteindre "
+                    "le seuil affiché par l'annonce."
+                )
 
         # ====================================================
         # SCORE

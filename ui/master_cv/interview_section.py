@@ -61,7 +61,35 @@ def _etat_initial() -> dict:
         "exchange_ids": [],
         "proposals": None,
         "warning": "",
+        # Dernier enregistrement déjà traité, par étape : sert à
+        # déclencher l'envoi dès qu'un nouvel enregistrement arrive,
+        # sans le rejouer à chaque réexécution du script.
+        "dernier_audio": {},
     }
+
+
+def _audio_a_traiter(etat: dict, cle: str, fichier_audio) -> bool:
+    """
+    True si un enregistrement vient d'arriver et n'a pas encore été
+    traité.
+
+    Streamlit ne reçoit l'audio qu'une fois l'enregistrement arrêté
+    dans le navigateur : Python ne peut pas l'arrêter lui-même. Plutôt
+    que d'imposer « arrêter » puis « envoyer », c'est donc l'arrêt de
+    l'enregistrement qui vaut envoi — un seul geste.
+    """
+
+    if fichier_audio is None:
+        return False
+
+    identifiant = getattr(fichier_audio, "file_id", None)
+
+    if identifiant is None or etat["dernier_audio"].get(cle) == identifiant:
+        return False
+
+    etat["dernier_audio"][cle] = identifiant
+
+    return True
 
 
 def _transcrire_si_fourni(fichier_audio) -> tuple[str, str]:
@@ -275,7 +303,14 @@ def _render_recit(candidate_id: str, etat: dict, experiences) -> None:
         "Ou votre récit, à l'oral",
     )
 
-    if texte.strip() or audio is not None:
+    st.caption(
+        "À l'oral, arrêter l'enregistrement suffit : l'envoi part "
+        "tout seul. Le bouton ne sert que pour une réponse écrite."
+    )
+
+    envoi_auto = _audio_a_traiter(etat, "recit", audio)
+
+    if texte.strip() and audio is None:
         st.info(
             "Votre récit est prêt — cliquez sur **« Envoyer mon "
             "récit »** ci-dessous."
@@ -286,7 +321,7 @@ def _render_recit(candidate_id: str, etat: dict, experiences) -> None:
         type="primary",
         key=f"{_STATE_KEY}_envoyer_recit",
         use_container_width=True,
-    ):
+    ) or envoi_auto:
 
         avertissements = []
 
@@ -380,15 +415,18 @@ def _render_relance(etat: dict) -> None:
 
     st.caption(
         "Répondez à ce qui vous parle, dans l'ordre que vous voulez et "
-        "en une seule fois — l'IA fera le tri."
+        "en une seule fois — l'IA fera le tri. À l'oral, arrêter "
+        "l'enregistrement suffit : l'envoi part tout seul."
     )
+
+    envoi_auto = _audio_a_traiter(etat, "relance", audio)
 
     if st.button(
         "🤖 Envoyer mes réponses",
         type="primary",
         key=f"{_STATE_KEY}_envoyer_relance",
         use_container_width=True,
-    ):
+    ) or envoi_auto:
 
         avertissements = []
 

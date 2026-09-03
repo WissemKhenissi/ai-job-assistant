@@ -16,10 +16,19 @@ from __future__ import annotations
 
 import streamlit as st
 
+from services.experience_duration import (
+    format_experience_years,
+    total_experience_years,
+)
 from services.profile_service import update_candidate
 
 
-def render_profile_page(candidate, experiences_count: int, skills_count: int) -> None:
+def render_profile_page(
+    candidate,
+    experiences_count: int,
+    skills_count: int,
+    experiences=None,
+) -> None:
 
     st.subheader("Profil")
 
@@ -27,15 +36,28 @@ def render_profile_page(candidate, experiences_count: int, skills_count: int) ->
     # RÉSUMÉ CHIFFRÉ
     # --------------------------------------------------------
 
-    col1, col2, col3 = st.columns(3)
+    annees = total_experience_years(experiences or [])
+
+    col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        st.metric("Expériences", experiences_count)
+        st.metric(
+            "Années d'expérience",
+            format_experience_years(annees),
+            help=(
+                "Calculée sur les dates de vos expériences, "
+                "chevauchements déduits : deux postes menés en "
+                "parallèle ne comptent pas double."
+            ),
+        )
 
     with col2:
-        st.metric("Compétences", skills_count)
+        st.metric("Expériences", experiences_count)
 
     with col3:
+        st.metric("Compétences", skills_count)
+
+    with col4:
         st.metric(
             "Disponibilité",
             candidate.availability or "—",

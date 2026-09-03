@@ -40,6 +40,7 @@ def render_master_cv_page(candidate, experiences) -> None:
             candidate,
             experiences_count=len(experiences),
             skills_count=len(get_skills(candidate.id)),
+            experiences=experiences,
         )
 
     with onglet_experiences:

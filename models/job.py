@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, Text
+from sqlalchemy import DateTime, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database.models import Base
@@ -48,6 +48,15 @@ class JobOfferDB(Base):
     remote_details: Mapped[str] = mapped_column(
         String,
         default=""
+    )
+
+    # Ancienneté minimale demandée par l'annonce, quand elle est
+    # explicitement écrite (ex. "minimum 3 ans"). None = non precisee :
+    # on n'affiche alors aucune comparaison plutot qu'un chiffre
+    # suppose.
+    required_years: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True
     )
 
     salary: Mapped[str] = mapped_column(

@@ -456,3 +456,78 @@ def extract_required_skills_detailed(
         result.append(item)
 
     return result
+
+# ============================================================
+# ANNEES D'EXPERIENCE DEMANDEES
+# ============================================================
+
+# "3 ans", "5 années", "3+ ans", "au moins 4 ans", "3 à 5 ans"...
+_MOTIF_ANNEES = re.compile(
+    r"(\d{1,2})\s*(?:\+|ans?\b|ann[ée]es?\b)",
+    flags=re.IGNORECASE,
+)
+
+# Fourchettes : "3 a 5 ans", "entre 3 et 5 ans". Le texte est
+# normalise avant, donc "a" y remplace deja "à".
+_MOTIF_FOURCHETTE = re.compile(
+    r"(\d{1,2})\s*(?:a|et)\s+(\d{1,2})\s*(?:ans?\b|ann[ée]es?\b)",
+    flags=re.IGNORECASE,
+)
+
+# L'annonce doit parler d'expérience à proximité du chiffre : sans ça,
+# "3 ans" dans "contrat de 3 ans" serait pris pour une exigence.
+_MOTS_EXPERIENCE = ("experience", "experiences", "anciennete", "seniorite")
+
+# Fenêtre de recherche autour du chiffre, en caractères.
+_FENETRE = 60
+
+
+def extract_required_years(job_description: str) -> int | None:
+    """
+    Nombre d'années d'expérience demandées par l'annonce, ou None.
+
+    Purement déterministe (aucune IA) : cette information sert à
+    comparer avec l'ancienneté réelle du candidat, il vaut donc mieux
+    ne rien annoncer que d'annoncer un chiffre inventé.
+
+    En cas de fourchette ("3 à 5 ans"), le minimum est retenu : c'est
+    le seuil d'entrée, donc le seul qui permette de dire si le profil
+    passe le filtre.
+    """
+
+    if not job_description:
+        return None
+
+    normalise = _normalize(job_description)
+
+    candidats: list[int] = []
+
+    # Les deux motifs alimentent la meme liste : sur "de 5 a 8 ans",
+    # la fourchette apporte 5 et le motif simple 8 — le min() final
+    # retient bien le seuil d'entree.
+    for correspondance in list(_MOTIF_FOURCHETTE.finditer(normalise)) + list(
+        _MOTIF_ANNEES.finditer(normalise)
+    ):
+
+        debut = max(0, correspondance.start() - _FENETRE)
+        fin = min(len(normalise), correspondance.end() + _FENETRE)
+
+        contexte = normalise[debut:fin]
+
+        if not any(mot in contexte for mot in _MOTS_EXPERIENCE):
+            continue
+
+        try:
+            annees = int(correspondance.group(1))
+        except (TypeError, ValueError):
+            continue
+
+        # Au-delà, il ne s'agit plus d'une exigence d'ancienneté
+        # (année civile, effectif, montant...).
+        if 1 <= annees <= 30:
+            candidats.append(annees)
+
+    if not candidats:
+        return None
+
+    return min(candidats)

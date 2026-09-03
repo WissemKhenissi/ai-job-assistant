@@ -36,6 +36,7 @@ def save_job_offer(
     contract_type: str = "",
     remote_policy: str = "",
     remote_details: str = "",
+    required_years: int | None = None,
     salary: str = "",
     url: str = "",
     source: str = "manual",
@@ -61,6 +62,7 @@ def save_job_offer(
         job_offer.contract_type = contract_type
         job_offer.remote_policy = remote_policy
         job_offer.remote_details = remote_details
+        job_offer.required_years = required_years
         job_offer.salary = salary
         job_offer.url = url
         job_offer.source = source
@@ -99,6 +101,7 @@ def get_job_offer_summary(job_offer_id: str) -> dict | None:
             "contract_type": job_offer.contract_type or "",
             "remote_policy": job_offer.remote_policy or "",
             "remote_details": job_offer.remote_details or "",
+            "required_years": job_offer.required_years,
         }
 
     finally:
