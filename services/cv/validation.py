@@ -29,10 +29,16 @@ from dataclasses import dataclass
 from datetime import date
 
 from database.db import SessionLocal
-from database.models import CandidateDB, EvidenceDB, ExperienceDB
+from database.models import (
+    AchievementDB,
+    CandidateDB,
+    EvidenceDB,
+    ExperienceDB,
+)
 from models.matching import JobMatchDB
 from models.skill_match import JobSkillMatchDB
 
+from services.cv.achievements import achievement_source_text
 from services.text_numbers import numbers_in
 
 
@@ -108,6 +114,76 @@ def validate_targeted_cv(
         textes_vus: set[str] = set()
 
         for experience in cv.experiences:
+
+            # ------------------------------------------------
+            # REALISATIONS
+            # ------------------------------------------------
+            #
+            # Elles portent les chiffres du parcours : c'est là que
+            # l'exactitude compte le plus.
+
+            for realisation in experience.achievement_lines:
+
+                source = db.get(
+                    AchievementDB, realisation.achievement_id
+                )
+
+                if source is None:
+                    issues.append(
+                        ValidationIssue(
+                            code="realisation_introuvable",
+                            message=(
+                                "Réalisation sans source dans le "
+                                f"Master CV : « {realisation.title} »"
+                            ),
+                        )
+                    )
+                    continue
+
+                experience_source = db.get(
+                    ExperienceDB, source.experience_id
+                )
+
+                if (
+                    experience_source is None
+                    or experience_source.candidate_id != candidate_id
+                ):
+                    issues.append(
+                        ValidationIssue(
+                            code="realisation_autre_candidat",
+                            message=(
+                                "Réalisation rattachée au parcours "
+                                "d'un autre candidat : "
+                                f"« {realisation.title} »"
+                            ),
+                        )
+                    )
+                    continue
+
+                chiffres_inventes = numbers_in(
+                    realisation.text
+                ) - numbers_in(
+                    achievement_source_text(
+                        source.title,
+                        source.situation or "",
+                        source.action or "",
+                        source.result or "",
+                        source.metrics or "",
+                    )
+                )
+
+                if chiffres_inventes:
+                    issues.append(
+                        ValidationIssue(
+                            code="chiffre_invente_realisation",
+                            message=(
+                                "Chiffre absent de la réalisation "
+                                "d'origine "
+                                f"({', '.join(sorted(chiffres_inventes))}) "
+                                f"dans : « {realisation.text[:60]} »"
+                            ),
+                        )
+                    )
 
             for ligne in experience.lines:
 

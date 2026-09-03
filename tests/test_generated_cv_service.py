@@ -83,6 +83,39 @@ def test_la_trace_conserve_les_identifiants_retenus(session_factory):
     assert trace["match_score_at_generation"] == 68.0
 
 
+def test_la_trace_conserve_les_realisations_retenues(session_factory):
+    """
+    Les réalisations sont le contenu le plus fort du CV : une trace
+    qui les tait ne dit pas ce qu'il y avait dans le document.
+    """
+
+    from services.cv.results import CVAchievementLine
+
+    session = session_factory()
+    add_candidate(session)
+    session.close()
+
+    cv = _cv()
+
+    cv.experiences[0].achievement_lines = [
+        CVAchievementLine(
+            title="Structuration de l'offre publicitaire",
+            detail="marge passée de 1,4 M€ à 2,5 M€",
+            achievement_id="achievement-1",
+        )
+    ]
+
+    record_generated_cv(
+        candidate_id=CANDIDATE_ID,
+        job_offer_id=JOB_OFFER_ID,
+        cv=cv,
+    )
+
+    trace = get_generated_cvs(CANDIDATE_ID)[0]
+
+    assert trace["selected_achievement_ids"] == ["achievement-1"]
+
+
 def test_les_competences_ecartees_gardent_leur_motif(session_factory):
     """
     Savoir qu'une compétence a été écartée ne suffit pas : il faut

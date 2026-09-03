@@ -318,6 +318,23 @@ def export_docx(
                 run_contexte.font.color.rgb = GRIS
                 p_contexte.paragraph_format.space_after = Pt(2)
 
+            # Les réalisations d'abord : c'est ce qui distingue le
+            # candidat, et le seul endroit du Master CV qui porte des
+            # chiffres.
+            for realisation in experience.achievement_lines:
+
+                puce = colonne_contenu.add_paragraph(
+                    style="List Bullet"
+                )
+
+                run_titre_realisation = puce.add_run(
+                    realisation.title
+                )
+                run_titre_realisation.bold = True
+
+                if realisation.detail:
+                    puce.add_run(f" — {realisation.detail}")
+
             for ligne in experience.lines:
                 colonne_contenu.add_paragraph(
                     ligne.text,
@@ -593,15 +610,29 @@ def export_pdf(
                     )
                 )
 
-            if experience.lines:
+            # Les réalisations d'abord : c'est ce qui distingue le
+            # candidat, et le seul endroit du Master CV qui porte des
+            # chiffres.
+            puces = [
+                Paragraph(
+                    f"<b>{realisation.title}</b>"
+                    + (
+                        f" — {realisation.detail}"
+                        if realisation.detail
+                        else ""
+                    ),
+                    style_normal,
+                )
+                for realisation in experience.achievement_lines
+            ] + [
+                Paragraph(ligne.text, style_normal)
+                for ligne in experience.lines
+            ]
+
+            if puces:
                 colonne_contenu.append(
                     ListFlowable(
-                        [
-                            ListItem(
-                                Paragraph(ligne.text, style_normal)
-                            )
-                            for ligne in experience.lines
-                        ],
+                        [ListItem(puce) for puce in puces],
                         bulletType="bullet",
                         leftIndent=10,
                     )

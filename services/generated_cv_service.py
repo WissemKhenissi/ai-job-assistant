@@ -71,6 +71,11 @@ def record_generated_cv(
                 for experience in cv.experiences
                 for ligne in experience.lines
             ],
+            selected_achievement_ids=[
+                realisation.achievement_id
+                for experience in cv.experiences
+                for realisation in experience.achievement_lines
+            ],
             selected_skills=list(cv.skills),
             excluded_skills=exclues,
             match_score_at_generation=match_score,
@@ -124,6 +129,9 @@ def get_generated_cvs(
                 ),
                 "selected_evidence_ids": list(
                     trace.selected_evidence_ids or []
+                ),
+                "selected_achievement_ids": list(
+                    trace.selected_achievement_ids or []
                 ),
                 "selected_skills": list(trace.selected_skills or []),
                 "excluded_skills": list(trace.excluded_skills or []),

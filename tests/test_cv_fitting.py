@@ -198,6 +198,50 @@ def test_les_retraits_sont_annonces():
     assert retraits[0] == "centres d'intérêt"
 
 
+def test_les_realisations_sont_sacrifiees_en_dernier():
+    """
+    Ce sont elles qui portent les chiffres du parcours : entre une
+    preuve et une réalisation, c'est la preuve qui part.
+    """
+
+    from services.cv.results import CVAchievementLine
+
+    cv = _cv(nb_experiences=6, nb_lignes=6)
+
+    for indice, experience in enumerate(cv.experiences):
+        experience.achievement_lines = [
+            CVAchievementLine(
+                title=f"Réussite majeure {indice}",
+                detail="avec un résultat mesuré et décrit longuement.",
+                achievement_id=f"achievement-{indice}",
+            )
+        ]
+
+    ajuste, _sections, retraits, tient = fit_to_one_page(cv)
+
+    assert tient
+
+    index_ligne = next(
+        (i for i, item in enumerate(retraits) if "une ligne" in item),
+        None,
+    )
+    index_realisation = next(
+        (i for i, item in enumerate(retraits) if "réalisation" in item),
+        None,
+    )
+
+    assert index_ligne is not None
+
+    if index_realisation is not None:
+        assert index_ligne < index_realisation
+
+    # Chaque expérience garde au moins une puce.
+    assert all(
+        len(item.lines) + len(item.achievement_lines) >= 1
+        for item in ajuste.experiences
+    )
+
+
 def test_le_contexte_est_sacrifie_avant_les_lignes_de_preuve():
     """
     Le contexte situe la mission, mais une preuve la démontre : entre

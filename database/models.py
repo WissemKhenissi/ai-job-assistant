@@ -582,6 +582,14 @@ class GeneratedCVDB(Base):
         nullable=False
     )
 
+    # Les réalisations sont le contenu le plus fort du CV : savoir
+    # lesquelles ont été retenues fait partie de la trace.
+    selected_achievement_ids: Mapped[list] = mapped_column(
+        JSON,
+        default=list,
+        nullable=False
+    )
+
     selected_skills: Mapped[list] = mapped_column(
         JSON,
         default=list,

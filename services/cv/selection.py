@@ -27,8 +27,13 @@ from models.job import JobOfferDB
 from models.matching import JobMatchDB
 from models.skill_match import JobSkillMatchDB
 
+from services.cv.achievements import (
+    build_achievement_line,
+    is_redundant,
+)
 from services.cv.results import (
     CVAchievement,
+    CVAchievementLine,
     CVCertification,
     CVEducation,
     CVEvidenceLine,
@@ -42,6 +47,7 @@ from services.matching.normalization import (
     _contains_term,
 )
 from services.skill_catalog_service import find_skill_by_name
+from services.text_numbers import numbers_in
 
 
 # Un CV ne peut pas porter les 67 preuves du Master CV : on retient
@@ -56,6 +62,11 @@ DEFAULT_MAX_TOTAL_LINES = 16
 # cv.fitting) redescend ensuite si le document déborde.
 DEFAULT_MAX_LINES_PER_EXPERIENCE = 5
 
+# Les réalisations sont le contenu le plus fort du CV, mais une
+# expérience qui n'affiche que des réussites ne dit plus ce qu'elle
+# consistait à faire au quotidien.
+DEFAULT_MAX_ACHIEVEMENTS_PER_EXPERIENCE = 2
+
 
 class MissingAnalysisError(RuntimeError):
     """L'offre n'a pas encore été analysée pour ce candidat."""
@@ -67,6 +78,9 @@ def build_targeted_cv(
     max_lines_per_skill: int = DEFAULT_MAX_LINES_PER_SKILL,
     max_total_lines: int = DEFAULT_MAX_TOTAL_LINES,
     max_lines_per_experience: int = DEFAULT_MAX_LINES_PER_EXPERIENCE,
+    max_achievements_per_experience: int = (
+        DEFAULT_MAX_ACHIEVEMENTS_PER_EXPERIENCE
+    ),
 ) -> TargetedCV:
     """
     Construit le CV ciblé d'un candidat pour une offre analysée.
@@ -179,6 +193,112 @@ def build_targeted_cv(
             skills_par_canon.setdefault(canon, []).append(skill)
 
         # ====================================================
+        # EXPERIENCES DU MASTER CV
+        # ====================================================
+
+        experience_rows = (
+            db.query(ExperienceDB)
+            .filter(ExperienceDB.candidate_id == candidate_id)
+            .all()
+        )
+
+        experience_rows.sort(
+            key=lambda item: item.start_date,
+            reverse=True,
+        )
+
+        # ====================================================
+        # REALISATIONS
+        # ====================================================
+        #
+        # Servies avant les preuves : une réussite prime sur une
+        # description de tâche (§8, §17). C'est aussi le seul endroit
+        # du Master CV où vivent des chiffres — aucune preuve n'en
+        # porte.
+
+        achievements: list[CVAchievement] = []
+
+        achievement_lines_par_experience: dict[
+            str, list[CVAchievementLine]
+        ] = {}
+
+        achievement_rows = (
+            db.query(AchievementDB)
+            .filter(
+                AchievementDB.experience_id.in_(
+                    [item.id for item in experience_rows]
+                )
+            )
+            .order_by(AchievementDB.id)
+            .all()
+        )
+
+        for achievement in achievement_rows:
+
+            achievements.append(
+                CVAchievement(
+                    achievement_id=achievement.id,
+                    experience_id=achievement.experience_id,
+                    title=achievement.title,
+                    situation=achievement.situation or "",
+                    action=achievement.action or "",
+                    result=achievement.result or "",
+                    metrics=achievement.metrics or "",
+                )
+            )
+
+        # Une réalisation chiffrée passe devant une réalisation
+        # qualitative : c'est elle qui fait la différence à la
+        # lecture.
+        def _porte_un_chiffre(row) -> bool:
+
+            titre, detail = build_achievement_line(
+                row.title,
+                row.result or "",
+                row.metrics or "",
+            )
+
+            return bool(numbers_in(f"{titre} {detail}"))
+
+        for experience in experience_rows:
+
+            candidates = [
+                row
+                for row in achievement_rows
+                if row.experience_id == experience.id
+            ]
+
+            candidates.sort(
+                key=lambda row: (not _porte_un_chiffre(row), row.id)
+            )
+
+            retenues: list[CVAchievementLine] = []
+
+            for row in candidates[:max_achievements_per_experience]:
+
+                titre, detail = build_achievement_line(
+                    row.title,
+                    row.result or "",
+                    row.metrics or "",
+                )
+
+                if not titre:
+                    continue
+
+                retenues.append(
+                    CVAchievementLine(
+                        title=titre,
+                        detail=detail,
+                        achievement_id=row.id,
+                    )
+                )
+
+            if retenues:
+                achievement_lines_par_experience[experience.id] = (
+                    retenues
+                )
+
+        # ====================================================
         # SELECTION DES LIGNES DE PREUVE
         # ====================================================
         #
@@ -226,7 +346,16 @@ def build_targeted_cv(
                 [],
             )
 
-            if len(lignes) >= max_lines_per_experience:
+            # Les réalisations occupent déjà des puces : elles
+            # comptent dans le budget de l'expérience.
+            deja_placees = len(lignes) + len(
+                achievement_lines_par_experience.get(
+                    evidence.experience_id,
+                    [],
+                )
+            )
+
+            if deja_placees >= max_lines_per_experience:
                 return False
 
             textes_deja_pris.add(cle_texte)
@@ -285,21 +414,6 @@ def build_targeted_cv(
 
                 if _retenir(evidence, row.skill):
                     retenues += 1
-
-        # ====================================================
-        # EXPERIENCES DU MASTER CV
-        # ====================================================
-
-        experience_rows = (
-            db.query(ExperienceDB)
-            .filter(ExperienceDB.candidate_id == candidate_id)
-            .all()
-        )
-
-        experience_rows.sort(
-            key=lambda item: item.start_date,
-            reverse=True,
-        )
 
         # ----------------------------------------------------
         # PASSE 2 : ETOFFEMENT
@@ -371,9 +485,15 @@ def build_targeted_cv(
                 if total_lines >= max_total_lines:
                     break
 
-                if len(
+                deja_placees = len(
                     lines_par_experience.get(experience.id, [])
-                ) >= cible:
+                ) + len(
+                    achievement_lines_par_experience.get(
+                        experience.id, []
+                    )
+                )
+
+                if deja_placees >= cible:
                     continue
 
                 for evidence in preuves_par_experience.get(
@@ -389,6 +509,40 @@ def build_targeted_cv(
                         noms_par_skill_id.get(evidence.skill_id, ""),
                     ):
                         break
+
+        # ----------------------------------------------------
+        # DOUBLONS ENTRE REALISATION ET PREUVE
+        # ----------------------------------------------------
+        #
+        # Une réalisation qualitative répète parfois une puce déjà
+        # retenue, en moins précis. Le contrôle vient après les deux
+        # sélections, faute de quoi il ignorerait la moitié du CV.
+
+        for identifiant, realisations in list(
+            achievement_lines_par_experience.items()
+        ):
+
+            textes = [
+                ligne.text
+                for ligne in lines_par_experience.get(identifiant, [])
+            ]
+
+            conservees = [
+                realisation
+                for realisation in realisations
+                if not is_redundant(
+                    realisation.title,
+                    realisation.detail,
+                    textes,
+                )
+            ]
+
+            if conservees:
+                achievement_lines_par_experience[identifiant] = (
+                    conservees
+                )
+            else:
+                del achievement_lines_par_experience[identifiant]
 
         # ====================================================
         # EXPERIENCES RETENUES
@@ -408,43 +562,15 @@ def build_targeted_cv(
                 business_context=(
                     experience.business_context or ""
                 ),
+                achievement_lines=(
+                    achievement_lines_par_experience.get(
+                        experience.id, []
+                    )
+                ),
                 lines=lines_par_experience.get(experience.id, []),
             )
             for experience in experience_rows
         ]
-
-        # ====================================================
-        # REALISATIONS DES EXPERIENCES RETENUES
-        # ====================================================
-
-        achievements: list[CVAchievement] = []
-
-        if experiences:
-
-            achievement_rows = (
-                db.query(AchievementDB)
-                .filter(
-                    AchievementDB.experience_id.in_(
-                        [item.experience_id for item in experiences]
-                    )
-                )
-                .order_by(AchievementDB.id)
-                .all()
-            )
-
-            for achievement in achievement_rows:
-
-                achievements.append(
-                    CVAchievement(
-                        achievement_id=achievement.id,
-                        experience_id=achievement.experience_id,
-                        title=achievement.title,
-                        situation=achievement.situation or "",
-                        action=achievement.action or "",
-                        result=achievement.result or "",
-                        metrics=achievement.metrics or "",
-                    )
-                )
 
         # ====================================================
         # COMPETENCES REGROUPEES PAR CATEGORIE

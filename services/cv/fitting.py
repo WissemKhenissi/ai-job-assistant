@@ -17,9 +17,12 @@ Ordre de sacrifice, du moins au plus coûteux :
 2. langues ;
 3. résumé réduit à sa première phrase ;
 4. contexte d'entreprise des expériences les plus anciennes ;
-5. lignes de preuve des expériences les plus anciennes, jusqu'à en
-   laisser une par expérience ;
-6. formation et certifications.
+5. lignes de preuve des expériences les plus anciennes ;
+6. réalisations des expériences les plus anciennes — en dernier,
+   car ce sont elles qui portent les chiffres du parcours ;
+7. formation et certifications.
+
+Une expérience conserve toujours au moins une puce.
 
 Une expérience n'est jamais supprimée entièrement : un trou dans la
 chronologie attire l'œil et appelle une question gênante en entretien.
@@ -63,6 +66,12 @@ def _tient_sur_une_page(cv, sections: set[str]) -> bool:
             return True
 
         return count_pdf_pages(chemin) <= 1
+
+
+def _nb_puces(experience) -> int:
+    """Puces affichées pour cette expérience, réalisations comprises."""
+
+    return len(experience.lines) + len(experience.achievement_lines)
 
 
 def _premiere_phrase(texte: str) -> str:
@@ -122,7 +131,7 @@ def _prochaine_reduction(cv, sections: set[str]) -> tuple | None:
     #    ancien) et par sa dernière ligne.
     for experience in reversed(cv.experiences):
 
-        if len(experience.lines) > 1:
+        if experience.lines and _nb_puces(experience) > 1:
 
             retiree = experience.lines.pop()
 
@@ -135,7 +144,27 @@ def _prochaine_reduction(cv, sections: set[str]) -> tuple | None:
                 ),
             )
 
-    # 6. Formation et certifications.
+    # 6. Réalisations : sacrifiées en dernier parmi le contenu des
+    #    expériences, car ce sont elles qui portent les chiffres.
+    for experience in reversed(cv.experiences):
+
+        if (
+            experience.achievement_lines
+            and _nb_puces(experience) > 1
+        ):
+
+            retiree = experience.achievement_lines.pop()
+
+            return (
+                cv,
+                sections,
+                (
+                    f"une réalisation de « {experience.job_title} — "
+                    f"{experience.company} » ({retiree.title[:40]}…)"
+                ),
+            )
+
+    # 7. Formation et certifications.
     if "formation_certifications" in sections and (
         cv.educations or cv.certifications
     ):

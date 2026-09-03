@@ -298,6 +298,112 @@ def test_une_ligne_repetee_est_signalee_sans_bloquer(session_factory):
 
 
 # ============================================================
+# REALISATIONS
+# ============================================================
+
+def _ajouter_realisation(
+    session,
+    result: str = "Marge passée d'environ 1,4 M€ à environ 2,5 M€.",
+    metrics: str = "≈ +79 % sur 7 ans",
+):
+    from database.models import AchievementDB
+
+    session.add(
+        AchievementDB(
+            id="achievement-test",
+            experience_id=EXPERIENCE_ID,
+            title="Structuration de l'offre publicitaire",
+            situation="",
+            action="",
+            result=result,
+            metrics=metrics,
+        )
+    )
+    session.commit()
+
+
+def _cv_avec_realisation(titre="Structuration de l'offre publicitaire", detail=""):
+    from services.cv.results import CVAchievementLine
+
+    cv = _cv()
+
+    cv.experiences[0].achievement_lines = [
+        CVAchievementLine(
+            title=titre,
+            detail=detail,
+            achievement_id="achievement-test",
+        )
+    ]
+
+    return cv
+
+
+def test_une_realisation_fidele_ne_declenche_rien(session_factory):
+    session = session_factory()
+    _preparer(session)
+    _ajouter_realisation(session)
+    session.close()
+
+    _analyser(["Product Discovery"])
+
+    rapport = validate_targeted_cv(
+        _cv_avec_realisation(
+            detail="marge passée de 1,4 M€ à 2,5 M€ (≈ +79 % sur 7 ans)"
+        ),
+        CANDIDATE_ID,
+        JOB_OFFER_ID,
+    )
+
+    assert rapport.is_valid
+
+
+def test_un_chiffre_invente_dans_une_realisation_est_signale(
+    session_factory,
+):
+    """
+    C'est là que l'exactitude compte le plus : les réalisations
+    portent tous les chiffres du parcours.
+    """
+
+    session = session_factory()
+    _preparer(session)
+    _ajouter_realisation(session)
+    session.close()
+
+    _analyser(["Product Discovery"])
+
+    rapport = validate_targeted_cv(
+        _cv_avec_realisation(detail="marge triplée en 3 ans"),
+        CANDIDATE_ID,
+        JOB_OFFER_ID,
+    )
+
+    assert not rapport.is_valid
+    assert any(
+        i.code == "chiffre_invente_realisation" for i in rapport.issues
+    )
+
+
+def test_une_realisation_sans_source_est_signalee(session_factory):
+    session = session_factory()
+    _preparer(session)
+    session.close()
+
+    _analyser(["Product Discovery"])
+
+    rapport = validate_targeted_cv(
+        _cv_avec_realisation(),
+        CANDIDATE_ID,
+        JOB_OFFER_ID,
+    )
+
+    assert not rapport.is_valid
+    assert any(
+        i.code == "realisation_introuvable" for i in rapport.issues
+    )
+
+
+# ============================================================
 # COMPETENCES
 # ============================================================
 

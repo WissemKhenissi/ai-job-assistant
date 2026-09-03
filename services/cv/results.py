@@ -27,6 +27,25 @@ class CVEvidenceLine:
     evidence_id: str
 
 
+@dataclass(frozen=True)
+class CVAchievementLine:
+    """
+    Une réalisation, mise en forme pour le CV.
+
+    C'est ici que vivent les chiffres du parcours : aucune preuve du
+    Master CV n'en porte. `title` est affiché en gras, `detail` à sa
+    suite, et `achievement_id` permet de remonter à la source.
+    """
+
+    title: str
+    detail: str
+    achievement_id: str
+
+    @property
+    def text(self) -> str:
+        return f"{self.title} — {self.detail}" if self.detail else self.title
+
+
 @dataclass
 class CVExperience:
     experience_id: str
@@ -36,6 +55,13 @@ class CVExperience:
     start_date: date
     end_date: date | None
     business_context: str
+
+    # Les réalisations passent avant les preuves : une réussite prime
+    # sur une description de tâche (§8, §17).
+    achievement_lines: list[CVAchievementLine] = field(
+        default_factory=list
+    )
+
     lines: list[CVEvidenceLine] = field(default_factory=list)
 
 
@@ -132,7 +158,9 @@ class TargetedCV:
 
     @property
     def total_lines(self) -> int:
+        """Puces affichées, réalisations comprises."""
+
         return sum(
-            len(experience.lines)
+            len(experience.lines) + len(experience.achievement_lines)
             for experience in self.experiences
         )

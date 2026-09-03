@@ -509,6 +509,135 @@ def test_l_etoffement_ne_prend_que_des_preuves_du_master_cv(
             assert ligne.evidence_id in connus
 
 
+# ============================================================
+# REALISATIONS
+# ============================================================
+
+def _add_achievement(
+    session,
+    title: str,
+    result: str = "",
+    metrics: str = "",
+    achievement_id: str = "achievement-test",
+    experience_id: str = EXPERIENCE_ID,
+):
+    from database.models import AchievementDB
+
+    session.add(
+        AchievementDB(
+            id=achievement_id,
+            experience_id=experience_id,
+            title=title,
+            situation="",
+            action="",
+            result=result,
+            metrics=metrics,
+        )
+    )
+    session.commit()
+
+
+def test_une_realisation_figure_au_cv(session_factory):
+    """
+    Le manque d'origine : le Master CV disait « marge passée de 1,4 M€
+    à 2,5 M€ » et le CV affichait « Suivi de KPI ». Les réalisations
+    étaient construites puis ignorées par l'export.
+    """
+
+    from services.cv import build_targeted_cv
+
+    session = session_factory()
+    _prepare_profile(session)
+    _add_achievement(
+        session,
+        "Structuration de l'offre publicitaire",
+        "Marge passée d'environ 1,4 M€ à environ 2,5 M€.",
+        "≈ +79 % sur 7 ans",
+    )
+    _add_job_offer(session, "Gestion de projet.")
+    _lier_preuves_a_l_experience(session)
+    session.close()
+
+    _analyser(["Gestion de projet"])
+
+    cv = build_targeted_cv(CANDIDATE_ID, JOB_OFFER_ID)
+
+    realisations = cv.experiences[0].achievement_lines
+
+    assert len(realisations) == 1
+    assert realisations[0].achievement_id == "achievement-test"
+    assert "1,4 M€" in realisations[0].text
+    assert "+79 %" in realisations[0].text
+
+
+def test_les_realisations_comptent_dans_le_budget_de_l_experience(
+    session_factory,
+):
+    """
+    Sans cela, une expérience afficherait ses réalisations *puis*
+    autant de puces qu'avant, et déborderait la page.
+    """
+
+    from services.cv import build_targeted_cv
+
+    session = session_factory()
+    _prepare_profile(
+        session,
+        preuves=[f"Réalisation numéro {index}." for index in range(8)],
+    )
+    _add_achievement(session, "Une réussite mesurable", "Un résultat.")
+    _add_job_offer(session, "Gestion de projet.")
+    _lier_preuves_a_l_experience(session)
+    session.close()
+
+    _analyser(["Gestion de projet"])
+
+    cv = build_targeted_cv(
+        CANDIDATE_ID, JOB_OFFER_ID, max_lines_per_experience=4
+    )
+
+    experience = cv.experiences[0]
+
+    assert len(experience.achievement_lines) == 1
+    assert len(experience.lines) == 3
+    assert cv.total_lines == 4
+
+
+def test_une_realisation_chiffree_passe_devant_une_qualitative(
+    session_factory,
+):
+    from services.cv import build_targeted_cv
+
+    session = session_factory()
+    _prepare_profile(session)
+
+    _add_achievement(
+        session,
+        "Suivi opérationnel",
+        "Bon déroulement des campagnes.",
+        achievement_id="achievement-a-qualitatif",
+    )
+    _add_achievement(
+        session,
+        "Automatisation des ordres d'insertion",
+        "Réduction du temps de traitement.",
+        "≈ 90 % de réduction",
+        achievement_id="achievement-b-chiffre",
+    )
+
+    _add_job_offer(session, "Gestion de projet.")
+    _lier_preuves_a_l_experience(session)
+    session.close()
+
+    _analyser(["Gestion de projet"])
+
+    cv = build_targeted_cv(CANDIDATE_ID, JOB_OFFER_ID)
+
+    realisations = cv.experiences[0].achievement_lines
+
+    assert realisations[0].achievement_id == "achievement-b-chiffre"
+
+
 def test_le_titre_du_cv_est_l_intitule_du_poste_vise(session_factory):
     """
     Sans titre, le recruteur doit deviner à quelle candidature le CV

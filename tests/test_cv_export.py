@@ -248,6 +248,37 @@ def test_le_titre_du_poste_vise_remplace_l_accroche(tmp_path):
     assert "Product / Chef de projet digital" not in texte
 
 
+def test_le_docx_affiche_les_realisations(tmp_path):
+    """
+    Le manque d'origine : les réalisations étaient construites par la
+    sélection puis purement ignorées par l'export, alors qu'elles sont
+    le seul endroit du Master CV qui porte des chiffres.
+    """
+
+    from services.cv import export_docx
+    from services.cv.results import CVAchievementLine
+
+    cv = _cv_de_test()
+
+    cv.experiences[0].achievement_lines = [
+        CVAchievementLine(
+            title="Structuration de l'offre publicitaire",
+            detail="marge passée de 1,4 M€ à 2,5 M€ (≈ +79 % sur 7 ans)",
+            achievement_id="achievement-1",
+        )
+    ]
+
+    destination = tmp_path / "cv.docx"
+
+    export_docx(cv, destination)
+
+    texte = _texte_du_docx(destination)
+
+    assert "Structuration de l'offre publicitaire" in texte
+    assert "1,4 M€" in texte
+    assert "+79 %" in texte
+
+
 def test_le_docx_affiche_le_contexte_de_l_experience(tmp_path):
     """
     Sans lui, une puce comme « pilotage de projets de bout en bout »
