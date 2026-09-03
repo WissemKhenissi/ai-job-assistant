@@ -198,6 +198,35 @@ def test_les_retraits_sont_annonces():
     assert retraits[0] == "centres d'intérêt"
 
 
+def test_le_contexte_est_sacrifie_avant_les_lignes_de_preuve():
+    """
+    Le contexte situe la mission, mais une preuve la démontre : entre
+    les deux, c'est le contexte qui part en premier.
+    """
+
+    cv = _cv(nb_experiences=6, nb_lignes=6)
+
+    ajuste, _sections, retraits, _tient = fit_to_one_page(cv)
+
+    index_contexte = next(
+        (i for i, item in enumerate(retraits) if "contexte" in item),
+        None,
+    )
+    index_ligne = next(
+        (i for i, item in enumerate(retraits) if "une ligne" in item),
+        None,
+    )
+
+    assert index_contexte is not None
+
+    if index_ligne is not None:
+        assert index_contexte < index_ligne
+
+    # Le contexte de l'expérience la plus récente est retiré en
+    # dernier : c'est celle que le recruteur lit en premier.
+    assert not ajuste.experiences[-1].business_context
+
+
 def test_l_ordre_de_sacrifice_epargne_les_experiences_recentes():
     """
     Les lignes retirées viennent des expériences les plus anciennes :

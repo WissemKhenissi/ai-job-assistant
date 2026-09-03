@@ -227,6 +227,42 @@ def test_le_docx_affiche_l_accroche_et_la_disponibilite(tmp_path):
     assert "Disponible immédiatement" in texte
 
 
+def test_le_titre_du_poste_vise_remplace_l_accroche(tmp_path):
+    """
+    Sous le nom, le recruteur doit lire à quel poste ce CV répond —
+    pas le positionnement général du candidat.
+    """
+
+    from services.cv import export_docx
+
+    cv = _cv_de_test()
+    cv.cv_title = "Product Owner"
+
+    destination = tmp_path / "cv.docx"
+
+    export_docx(cv, destination)
+
+    texte = _texte_du_docx(destination)
+
+    assert "Product Owner" in texte
+    assert "Product / Chef de projet digital" not in texte
+
+
+def test_le_docx_affiche_le_contexte_de_l_experience(tmp_path):
+    """
+    Sans lui, une puce comme « pilotage de projets de bout en bout »
+    ne dit ni sur quoi, ni dans quel environnement.
+    """
+
+    from services.cv import export_docx
+
+    destination = tmp_path / "cv.docx"
+
+    export_docx(_cv_de_test(), destination)
+
+    assert "Contexte e-commerce." in _texte_du_docx(destination)
+
+
 def test_le_docx_regroupe_les_competences_par_categorie(tmp_path):
     from services.cv import export_docx
 

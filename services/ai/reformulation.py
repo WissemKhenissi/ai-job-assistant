@@ -43,6 +43,7 @@ from services.cv.prompt_rules import (
     ANTI_INVENTION,
     FORMULATION,
     RESUME,
+    build_summary_focus,
     build_vocabulary_rules,
 )
 from services.cv.results import CVEvidenceLine, TargetedCV
@@ -80,6 +81,61 @@ class ReformulationResult:
     text: str
     was_reformulated: bool
     warning: str = ""
+
+
+def _motif_de_rejet(
+    reformule: str,
+    source_text: str,
+    forbidden_terms: tuple[str, ...] | list[str],
+) -> str:
+    """
+    Raison pour laquelle une reformulation ne peut pas être retenue.
+
+    Chaîne vide si elle est acceptable. Le motif est rédigé pour
+    servir deux fois : expliqué à l'utilisateur, et renvoyé au modèle
+    pour qu'il retente sans l'erreur.
+    """
+
+    # Un chiffre absent du texte source (marge, pourcentage, durée)
+    # serait la forme la plus grave d'invention : un fait chiffré
+    # fabriqué. On ne tente pas de tout vérifier — seuls les nombres
+    # sont assez concrets pour être contrôlés de façon fiable.
+    nombres_inventes = _digits(reformule) - _digits(source_text)
+
+    if nombres_inventes:
+        return (
+            "elle introduisait des chiffres absents du texte source "
+            f"({', '.join(sorted(nombres_inventes))})."
+        )
+
+    # Pendant du précédent : les chiffres protègent des faits
+    # inventés, les termes protègent des compétences inventées. La
+    # liste vient du référentiel, pas du jugement du modèle.
+    termes_interdits = forbidden_terms_used(
+        reformule,
+        forbidden_terms,
+        source_text,
+    )
+
+    if termes_interdits:
+        return (
+            "elle affirmait des compétences que le Master CV ne "
+            f"prouve pas ({', '.join(sorted(termes_interdits))})."
+        )
+
+    # Ni un chiffre, ni un nom de compétence : « expert » traversait
+    # les deux contrôles précédents alors qu'il transforme une
+    # expérience en expertise, ce que le cahier des charges interdit.
+    seniorite = seniority_terms_added(reformule, source_text)
+
+    if seniorite:
+        return (
+            "elle rehaussait le niveau annoncé "
+            f"({', '.join(seniorite)}) sans que le texte source le "
+            "dise."
+        )
+
+    return ""
 
 
 def _safe_reformulate(
@@ -125,6 +181,38 @@ def _safe_reformulate(
             temperature=REFORMULATION_TEMPERATURE,
         )
 
+        motif = _motif_de_rejet(
+            reformule,
+            source_text,
+            forbidden_terms,
+        )
+
+        # --------------------------------------------------------
+        # SECONDE CHANCE
+        # --------------------------------------------------------
+        #
+        # Un garde-fou qui explique son refus vaut mieux qu'un
+        # garde-fou qui abandonne : sans cette reprise, un seul mot
+        # de trop faisait retomber la phrase entière sur sa version
+        # déterministe, et la section n'était plus adaptée du tout.
+
+        if motif:
+
+            reformule = generate_text(
+                f"{prompt}\n\n"
+                "TA PRÉCÉDENTE RÉPONSE A ÉTÉ REFUSÉE\n"
+                f"{motif}\n"
+                "Recommence sans cela. Si tu ne peux pas, renvoie le "
+                "texte source tel quel.",
+                temperature=REFORMULATION_TEMPERATURE,
+            )
+
+            motif = _motif_de_rejet(
+                reformule,
+                source_text,
+                forbidden_terms,
+            )
+
     except (GeminiNotConfiguredError, GeminiRequestError) as error:
         return ReformulationResult(
             text=source_text,
@@ -135,74 +223,12 @@ def _safe_reformulate(
             ),
         )
 
-    # ------------------------------------------------------------
-    # GARDE-FOU 1 : aucun nombre nouveau ne doit apparaître.
-    # ------------------------------------------------------------
-    #
-    # Un chiffre absent du texte source (marge, pourcentage, durée...)
-    # serait la forme la plus grave d'invention : un fait chiffré
-    # fabriqué. On ne tente pas de tout vérifier — seuls les nombres
-    # sont assez concrets pour être contrôlés de façon fiable.
-
-    nombres_inventes = _digits(reformule) - _digits(source_text)
-
-    if nombres_inventes:
+    if motif:
         return ReformulationResult(
             text=source_text,
             was_reformulated=False,
-            warning=(
-                "Reformulation rejetée : elle introduisait des "
-                f"chiffres absents du texte source "
-                f"({', '.join(sorted(nombres_inventes))}). Texte "
-                "déterministe utilisé."
-            ),
-        )
-
-    # ------------------------------------------------------------
-    # GARDE-FOU 2 : aucune compétence non prouvée ne doit apparaître.
-    # ------------------------------------------------------------
-    #
-    # C'est le pendant du précédent : les chiffres protègent des faits
-    # inventés, les termes protègent des compétences inventées. La
-    # liste vient du référentiel, pas du jugement du modèle.
-
-    termes_interdits = forbidden_terms_used(
-        reformule,
-        forbidden_terms,
-        source_text,
-    )
-
-    if termes_interdits:
-        return ReformulationResult(
-            text=source_text,
-            was_reformulated=False,
-            warning=(
-                "Reformulation rejetée : elle affirmait des "
-                "compétences que le Master CV ne prouve pas "
-                f"({', '.join(sorted(termes_interdits))}). Texte "
-                "déterministe utilisé."
-            ),
-        )
-
-    # ------------------------------------------------------------
-    # GARDE-FOU 3 : aucun niveau rehaussé.
-    # ------------------------------------------------------------
-    #
-    # Ni un chiffre, ni un nom de compétence : « expert » passait
-    # entre les deux contrôles précédents alors qu'il transforme une
-    # expérience en expertise, ce que le cahier des charges interdit.
-
-    seniorite = seniority_terms_added(reformule, source_text)
-
-    if seniorite:
-        return ReformulationResult(
-            text=source_text,
-            was_reformulated=False,
-            warning=(
-                "Reformulation rejetée : elle rehaussait le niveau "
-                f"annoncé ({', '.join(seniorite)}) sans que le texte "
-                "source le dise. Texte déterministe utilisé."
-            ),
+            warning=f"Reformulation rejetée : {motif} Texte "
+            "déterministe utilisé.",
         )
 
     return ReformulationResult(text=reformule, was_reformulated=True)
@@ -344,6 +370,8 @@ def reformulate_cv_summary(
     headline: str,
     job_text: str,
     vocabulary: OfferVocabulary | None = None,
+    poste: str = "",
+    priorites: tuple[str, ...] | list[str] = (),
 ) -> ReformulationResult:
     """
     Reformule le résumé de profil (section "Profil" du CV) pour le
@@ -358,7 +386,8 @@ def reformulate_cv_summary(
         + (f' (accroche : "{headline}")' if headline.strip() else "")
         + ". Reformule-le pour qu'il mette en avant, avec le "
         "vocabulaire de l'offre, ce qui est déjà écrit.\n\n"
-        f"{RESUME}"
+        f"{RESUME}\n\n"
+        + build_summary_focus(poste, priorites)
         + _bloc_vocabulaire(vocabulary)
         + f"\n\nExtrait de l'offre :\n{job_text[:MAX_JOB_EXCERPT]}"
     )
@@ -411,6 +440,8 @@ def reformulate_targeted_cv(
         cv.headline,
         job_text,
         vocabulaire,
+        poste=cv.cv_title or cv.job_offer_title,
+        priorites=tuple(cv.skills),
     )
 
     if resultat_resume.warning:

@@ -13,6 +13,14 @@ RÈGLES APPLIQUÉES PAR LE CODE, PAS PAR LE MODÈLE
     de façon déterministe à partir de l'analyse de l'offre, ce qui
     garantit qu'une compétence non prouvée ne peut pas entrer dans le
     document, même si le modèle le souhaitait.
+    §13 (titre du CV) : l'intitulé du poste visé est affiché sous le
+    nom, nettoyé par services.job_title — une annonce enregistrée
+    depuis un lien porte souvent le titre de la page, pas celui du
+    poste.
+    §16 et 18 (2 à 5 puces, expériences anciennes condensées) sont
+    des plafonds de services.cv.selection, qui fait aussi figurer
+    toutes les expériences du Master CV : un trou dans la chronologie
+    appelle une question gênante en entretien.
     §28 et 38 (une page) sont appliquées par services.cv.fitting, qui
     mesure un vrai PDF au lieu de demander une estimation.
     §31, 32, 36 (traçabilité, contrôle final) sont appliquées par
@@ -83,7 +91,13 @@ IMPACT
 Quand le texte source fournit un résultat, écris action + contexte + impact. Quand il n'en fournit pas, arrête-toi au contexte : ne fabrique jamais un résultat, ne présente jamais une responsabilité comme une réussite.
 
 VERBES D'ACTION
-Ouvre la ligne par un verbe d'action précis — piloté, conçu, déployé, structuré, optimisé, analysé, coordonné, automatisé, lancé, négocié, accompagné, mis en place — uniquement lorsque ce verbe correspond réellement à l'action décrite dans le texte source.
+Ouvre la ligne par un participe passé précis — piloté, conçu, déployé, structuré, optimisé, analysé, coordonné, automatisé, lancé, négocié, accompagné, mis en place — plutôt que par un nom d'action (« Pilotage de… », « Automatisation de… »), et uniquement lorsque ce verbe correspond réellement à l'action décrite dans le texte source.
+
+PRÉCISION
+Une puce qui ne dit ni sur quoi ni avec qui ne prouve rien. Quand le texte source fournit un objet, un périmètre, un outil, une équipe ou un enjeu, fais-les figurer. Quand il n'en fournit pas, n'en invente pas : garde la puce courte plutôt que de la gonfler.
+
+FORME
+Pas de « je », pas de phrase complète à la première personne : une puce de CV, d'une à deux lignes maximum. Pas de formule d'introduction, pas de conclusion.
 
 NE PAS COPIER L'ANNONCE
 Ne reprends pas les phrases de l'annonce. Le CV doit démontrer la correspondance par le parcours réel du candidat, pas recopier l'offre."""
@@ -94,7 +108,44 @@ Ne reprends pas les phrases de l'annonce. Le CV doit démontrer la correspondanc
 # ============================================================
 
 RESUME = """RÉSUMÉ DE PROFIL
-Le résumé doit rester court — 40 à 70 mots — factuel et ciblé : identité professionnelle, niveau d'expérience, domaine principal, deux ou trois forces réellement pertinentes pour cette offre. Pas de succession de qualités génériques du type « professionnel dynamique, motivé et rigoureux »."""
+Le résumé doit rester court — 40 à 70 mots — factuel et ciblé : identité professionnelle, niveau d'expérience, domaine principal, deux ou trois forces réellement pertinentes pour cette offre. Pas de succession de qualités génériques du type « professionnel dynamique, motivé et rigoureux ». Le titre du poste visé figure déjà sous le nom du candidat : ne le répète pas, sers-t'en pour choisir quoi mettre en avant."""
+
+
+def build_summary_focus(
+    poste: str,
+    priorites: tuple[str, ...] | list[str],
+) -> str:
+    """
+    Ce que l'annonce attend, pour orienter le résumé (§14).
+
+    Le résumé doit « se rapprocher de l'annonce » sans devenir le
+    résumé d'un autre candidat : on donne donc au modèle l'angle,
+    jamais la matière. Ce qu'il met en avant doit déjà se trouver
+    dans le texte source, sinon il ne le met pas en avant du tout.
+    """
+
+    lignes: list[str] = ["CE QUE L'ANNONCE ATTEND"]
+
+    if poste.strip():
+        lignes.append(f"Poste visé : {poste.strip()}.")
+
+    if priorites:
+        lignes.append(
+            "Attentes que le candidat couvre réellement, par ordre "
+            "d'importance dans l'annonce : "
+            + ", ".join(priorites)
+            + "."
+        )
+
+    lignes.append(
+        "Réordonne et accentue le résumé en conséquence : ce qui "
+        "répond à ces attentes passe devant, le reste recule ou "
+        "disparaît. Si le texte source ne parle pas d'une de ces "
+        "attentes, n'en parle pas non plus — un angle n'est pas une "
+        "autorisation d'ajouter."
+    )
+
+    return "\n".join(lignes)
 
 
 # ============================================================
@@ -150,7 +201,13 @@ def build_vocabulary_rules(
     blocs.append(
         "N'emploie aucun autre mot-clé de l'annonce pour qualifier "
         "une compétence, et ne force jamais un mot-clé dans le seul "
-        "but d'améliorer un score ATS."
+        "but d'améliorer un score ATS. À qualité égale, garde le mot "
+        "du texte source : un terme de la liste ne s'impose que s'il "
+        "désigne mieux la même chose ET s'insère naturellement dans "
+        "la phrase, dans la langue de celle-ci. Ne remplace pas un "
+        "mot français par son équivalent anglais si la phrase devient "
+        "bancale (« Process Automation des tâches répétitives » est "
+        "une faute, pas une adaptation)."
     )
 
     return "\n\n".join(blocs)

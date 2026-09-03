@@ -67,6 +67,11 @@ SECTION_LABELS = {
     "interets": "Centres d'intérêt",
 }
 
+# Sections décochées au départ. La liste de compétences clés répétait
+# ce que les expériences démontrent déjà, en prenant la place qui leur
+# revient : elle reste disponible d'un clic, mais ne s'impose plus.
+SECTIONS_HORS_DEFAUT = frozenset({"competences"})
+
 
 def _controler_et_tracer(
     candidate_id: str,
@@ -385,7 +390,7 @@ def render_generation_tab(
 
             coche = st.checkbox(
                 SECTION_LABELS[section],
-                value=True,
+                value=section not in SECTIONS_HORS_DEFAUT,
                 key=f"section_{section}_{job_offer_id}",
             )
 

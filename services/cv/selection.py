@@ -36,15 +36,25 @@ from services.cv.results import (
     CVSkillGroup,
     TargetedCV,
 )
-from services.matching.normalization import _canonical_skill_name
+from services.job_title import clean_job_title
+from services.matching.normalization import (
+    _canonical_skill_name,
+    _contains_term,
+)
 from services.skill_catalog_service import find_skill_by_name
 
 
-# Un CV ne peut pas porter les 58 preuves du Master CV : on retient
+# Un CV ne peut pas porter les 67 preuves du Master CV : on retient
 # les plus pertinentes, compétence par compétence.
 DEFAULT_MAX_LINES_PER_SKILL = 4
 
-DEFAULT_MAX_TOTAL_LINES = 12
+DEFAULT_MAX_TOTAL_LINES = 16
+
+# Une expérience réduite à une puce ne se défend pas en entretien, et
+# une expérience qui en porte dix noie le lecteur. Le cahier des
+# charges fixe 2 à 5 puces (§16) ; l'élagage d'une page (services.
+# cv.fitting) redescend ensuite si le document déborde.
+DEFAULT_MAX_LINES_PER_EXPERIENCE = 5
 
 
 class MissingAnalysisError(RuntimeError):
@@ -56,6 +66,7 @@ def build_targeted_cv(
     job_offer_id: str,
     max_lines_per_skill: int = DEFAULT_MAX_LINES_PER_SKILL,
     max_total_lines: int = DEFAULT_MAX_TOTAL_LINES,
+    max_lines_per_experience: int = DEFAULT_MAX_LINES_PER_EXPERIENCE,
 ) -> TargetedCV:
     """
     Construit le CV ciblé d'un candidat pour une offre analysée.
@@ -63,6 +74,12 @@ def build_targeted_cv(
     S'appuie sur le détail persisté par le moteur de matching
     (job_skill_matches) plutôt que de relancer une analyse : le CV
     reflète exactement l'analyse que l'utilisateur a sous les yeux.
+
+    Toutes les expériences du Master CV figurent au CV, y compris
+    celles que l'offre ne fait pas ressortir : un trou dans la
+    chronologie se remarque et appelle une question gênante en
+    entretien (§18). Une expérience sans ligne retenue apparaît alors
+    réduite à son poste, son entreprise et ses dates.
     """
 
     db = SessionLocal()
@@ -164,6 +181,16 @@ def build_targeted_cv(
         # ====================================================
         # SELECTION DES LIGNES DE PREUVE
         # ====================================================
+        #
+        # Deux passes. La première ne retient que les preuves des
+        # compétences que l'annonce demande et que le Master CV
+        # prouve : c'est le contenu le plus pertinent, il passe en
+        # premier et rien ne peut le déloger.
+        #
+        # La seconde étoffe chaque expérience avec ses autres preuves.
+        # Elles viennent du même Master CV et sont donc aussi vraies,
+        # simplement moins directement liées à cette annonce — et un
+        # CV de trois puces ne se défend pas, même exact.
 
         lines_par_experience: dict[str, list[CVEvidenceLine]] = {}
 
@@ -173,7 +200,53 @@ def build_targeted_cv(
         # l'identifiant — un CV ne doit jamais répéter une puce.
         textes_deja_pris: set[str] = set()
 
+        preuves_deja_prises: set[str] = set()
+
         total_lines = 0
+
+        def _retenir(evidence, libelle_competence: str) -> bool:
+            """Ajoute une preuve au CV si elle y apporte une ligne neuve."""
+
+            nonlocal total_lines
+
+            texte = (evidence.description or "").strip()
+
+            if not texte or evidence.experience_id is None:
+                # Une preuve non rattachée à une expérience ne peut
+                # pas être placée dans le CV.
+                return False
+
+            cle_texte = " ".join(texte.casefold().split())
+
+            if cle_texte in textes_deja_pris:
+                return False
+
+            lignes = lines_par_experience.setdefault(
+                evidence.experience_id,
+                [],
+            )
+
+            if len(lignes) >= max_lines_per_experience:
+                return False
+
+            textes_deja_pris.add(cle_texte)
+            preuves_deja_prises.add(evidence.id)
+
+            lignes.append(
+                CVEvidenceLine(
+                    text=texte,
+                    skill=libelle_competence,
+                    evidence_id=evidence.id,
+                )
+            )
+
+            total_lines += 1
+
+            return True
+
+        # ----------------------------------------------------
+        # PASSE 1 : CE QUE L'ANNONCE DEMANDE ET QUE L'ON PROUVE
+        # ----------------------------------------------------
 
         for row in proven:
 
@@ -210,79 +283,135 @@ def build_targeted_cv(
                 if total_lines >= max_total_lines:
                     break
 
-                texte = (evidence.description or "").strip()
+                if _retenir(evidence, row.skill):
+                    retenues += 1
 
-                if not texte:
-                    continue
+        # ====================================================
+        # EXPERIENCES DU MASTER CV
+        # ====================================================
 
-                cle_texte = " ".join(texte.casefold().split())
+        experience_rows = (
+            db.query(ExperienceDB)
+            .filter(ExperienceDB.candidate_id == candidate_id)
+            .all()
+        )
 
-                if cle_texte in textes_deja_pris:
-                    continue
+        experience_rows.sort(
+            key=lambda item: item.start_date,
+            reverse=True,
+        )
 
-                if evidence.experience_id is None:
-                    # Une preuve non rattachée à une expérience ne
-                    # peut pas être placée dans le CV.
-                    continue
+        # ----------------------------------------------------
+        # PASSE 2 : ETOFFEMENT
+        # ----------------------------------------------------
 
-                textes_deja_pris.add(cle_texte)
+        texte_offre = " ".join(
+            partie
+            for partie in (job_offer.title, job_offer.description)
+            if partie
+        )
 
-                lines_par_experience.setdefault(
-                    evidence.experience_id,
-                    [],
-                ).append(
-                    CVEvidenceLine(
-                        text=texte,
-                        skill=row.skill,
-                        evidence_id=evidence.id,
-                    )
+        noms_par_skill_id = {
+            skill.id: skill.name for skill in candidate_skills
+        }
+
+        # Une preuve que l'analyse n'a pas retenue n'a qu'un signal de
+        # pertinence disponible : sa compétence est-elle nommée dans
+        # l'annonce ? C'est peu, mais c'est vérifiable.
+        nommee_par_l_annonce = {
+            skill.id: _contains_term(texte_offre, skill.name)
+            for skill in candidate_skills
+        }
+
+        preuves_par_experience: dict[str, list] = {}
+
+        for evidence in (
+            db.query(EvidenceDB)
+            .filter(EvidenceDB.candidate_id == candidate_id)
+            .order_by(EvidenceDB.id)
+            .all()
+        ):
+
+            if evidence.experience_id is None:
+                continue
+
+            preuves_par_experience.setdefault(
+                evidence.experience_id,
+                [],
+            ).append(evidence)
+
+        for liste in preuves_par_experience.values():
+
+            liste.sort(
+                key=lambda item: not nommee_par_l_annonce.get(
+                    item.skill_id,
+                    False,
                 )
+            )
 
-                retenues += 1
-                total_lines += 1
+        # Les expériences que l'annonce a fait ressortir sont servies
+        # les premières ; à égalité, la plus récente passe devant. On
+        # remplit par tours, une ligne à la fois, pour ne pas épuiser
+        # le budget sur la première expérience venue.
+        ordre_etoffement = sorted(
+            experience_rows,
+            key=lambda item: (
+                -len(lines_par_experience.get(item.id, [])),
+                -item.start_date.toordinal(),
+            ),
+        )
+
+        for cible in range(1, max_lines_per_experience + 1):
+
+            if total_lines >= max_total_lines:
+                break
+
+            for experience in ordre_etoffement:
+
+                if total_lines >= max_total_lines:
+                    break
+
+                if len(
+                    lines_par_experience.get(experience.id, [])
+                ) >= cible:
+                    continue
+
+                for evidence in preuves_par_experience.get(
+                    experience.id,
+                    [],
+                ):
+
+                    if evidence.id in preuves_deja_prises:
+                        continue
+
+                    if _retenir(
+                        evidence,
+                        noms_par_skill_id.get(evidence.skill_id, ""),
+                    ):
+                        break
 
         # ====================================================
         # EXPERIENCES RETENUES
         # ====================================================
         #
-        # Seules les expériences qui portent au moins une ligne
-        # sélectionnée figurent au CV.
+        # Toutes, y compris celles restées sans ligne : un trou dans
+        # la chronologie appelle une question gênante en entretien.
 
-        experiences: list[CVExperience] = []
-
-        if lines_par_experience:
-
-            experience_rows = (
-                db.query(ExperienceDB)
-                .filter(
-                    ExperienceDB.id.in_(
-                        list(lines_par_experience.keys())
-                    )
-                )
-                .all()
+        experiences: list[CVExperience] = [
+            CVExperience(
+                experience_id=experience.id,
+                job_title=experience.job_title,
+                company=experience.company,
+                location=experience.location or "",
+                start_date=experience.start_date,
+                end_date=experience.end_date,
+                business_context=(
+                    experience.business_context or ""
+                ),
+                lines=lines_par_experience.get(experience.id, []),
             )
-
-            experience_rows.sort(
-                key=lambda item: item.start_date,
-                reverse=True,
-            )
-
-            for experience in experience_rows:
-
-                experiences.append(
-                    CVExperience(
-                        experience_id=experience.id,
-                        job_title=experience.job_title,
-                        company=experience.company,
-                        location=experience.location or "",
-                        start_date=experience.start_date,
-                        end_date=experience.end_date,
-                        business_context=(
-                            experience.business_context or ""
-                        ),
-                        lines=lines_par_experience[experience.id],
-                    )
-                )
+            for experience in experience_rows
+        ]
 
         # ====================================================
         # REALISATIONS DES EXPERIENCES RETENUES
@@ -412,6 +541,7 @@ def build_targeted_cv(
             job_offer_id=job_offer.id,
             job_offer_title=job_offer.title or "",
             job_offer_company=(job_offer.company or "").strip(),
+            cv_title=clean_job_title(job_offer.title or ""),
             skills=[row.skill for row in proven],
             skill_groups=skill_groups,
             experiences=experiences,

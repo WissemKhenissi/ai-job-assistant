@@ -56,6 +56,8 @@ SENIORITY_TERMS = (
     "expert",
     "experte",
     "expertise",
+    "maîtrise",
+    "maîtrisant",
     "senior",
     "sénior",
     "lead",

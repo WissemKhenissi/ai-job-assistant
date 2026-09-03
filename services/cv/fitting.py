@@ -16,9 +16,10 @@ Ordre de sacrifice, du moins au plus coûteux :
 1. centres d'intérêt ;
 2. langues ;
 3. résumé réduit à sa première phrase ;
-4. lignes de preuve des expériences les plus anciennes, jusqu'à en
+4. contexte d'entreprise des expériences les plus anciennes ;
+5. lignes de preuve des expériences les plus anciennes, jusqu'à en
    laisser une par expérience ;
-5. formation et certifications.
+6. formation et certifications.
 
 Une expérience n'est jamais supprimée entièrement : un trou dans la
 chronologie attire l'œil et appelle une question gênante en entretien.
@@ -98,7 +99,25 @@ def _prochaine_reduction(cv, sections: set[str]) -> tuple | None:
             cv.summary = raccourci
             return cv, sections, "résumé raccourci"
 
-    # 4. Lignes de preuve, en commençant par l'expérience la plus
+    # 4. Contexte d'entreprise, en commençant par l'expérience la
+    #    plus ancienne : il éclaire surtout la mission récente, celle
+    #    que le recruteur lit en premier.
+    for experience in reversed(cv.experiences):
+
+        if experience.business_context:
+
+            experience.business_context = ""
+
+            return (
+                cv,
+                sections,
+                (
+                    "le contexte de « "
+                    f"{experience.job_title} — {experience.company} »"
+                ),
+            )
+
+    # 5. Lignes de preuve, en commençant par l'expérience la plus
     #    ancienne (cv.experiences est trié du plus récent au plus
     #    ancien) et par sa dernière ligne.
     for experience in reversed(cv.experiences):
@@ -116,7 +135,7 @@ def _prochaine_reduction(cv, sections: set[str]) -> tuple | None:
                 ),
             )
 
-    # 5. Formation et certifications.
+    # 6. Formation et certifications.
     if "formation_certifications" in sections and (
         cv.educations or cv.certifications
     ):

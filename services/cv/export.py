@@ -208,11 +208,13 @@ def export_docx(
     run_nom.font.size = Pt(20)
     nom.paragraph_format.space_after = Pt(2)
 
-    if cv.headline:
+    titre = cv.cv_title or cv.headline
+
+    if titre:
         accroche = document.add_paragraph()
-        run_accroche = accroche.add_run(cv.headline)
+        run_accroche = accroche.add_run(titre)
         run_accroche.bold = True
-        run_accroche.font.size = Pt(11)
+        run_accroche.font.size = Pt(12)
         accroche.paragraph_format.space_after = Pt(4)
 
     coordonnees = " | ".join(
@@ -301,6 +303,20 @@ def export_docx(
                 f"{experience.job_title} — {experience.company}"
             )
             run_titre.bold = True
+
+            # Le contexte d'entreprise situe la mission : sans lui,
+            # une puce comme « pilotage de projets de bout en bout »
+            # ne dit ni sur quoi, ni dans quel environnement.
+            if experience.business_context:
+
+                p_contexte = colonne_contenu.add_paragraph()
+                run_contexte = p_contexte.add_run(
+                    experience.business_context
+                )
+                run_contexte.italic = True
+                run_contexte.font.size = Pt(9)
+                run_contexte.font.color.rgb = GRIS
+                p_contexte.paragraph_format.space_after = Pt(2)
 
             for ligne in experience.lines:
                 colonne_contenu.add_paragraph(
@@ -475,8 +491,10 @@ def export_pdf(
 
     elements = [Paragraph(cv.full_name.upper(), style_nom)]
 
-    if cv.headline:
-        elements.append(Paragraph(cv.headline, style_accroche))
+    titre = cv.cv_title or cv.headline
+
+    if titre:
+        elements.append(Paragraph(titre, style_accroche))
 
     coordonnees = " | ".join(
         partie
@@ -563,6 +581,17 @@ def export_pdf(
                     style_titre_poste,
                 )
             ]
+
+            # Le contexte d'entreprise situe la mission : sans lui,
+            # une puce comme « pilotage de projets de bout en bout »
+            # ne dit ni sur quoi, ni dans quel environnement.
+            if experience.business_context:
+                colonne_contenu.append(
+                    Paragraph(
+                        f"<i>{experience.business_context}</i>",
+                        style_petit,
+                    )
+                )
 
             if experience.lines:
                 colonne_contenu.append(

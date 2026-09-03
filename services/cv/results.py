@@ -108,6 +108,12 @@ class TargetedCV:
     job_offer_title: str = ""
     job_offer_company: str = ""
 
+    # Titre affiché sous le nom : l'intitulé du poste visé. Un CV sans
+    # titre oblige le recruteur à deviner la candidature à laquelle il
+    # correspond. Ce titre annonce une cible, pas un poste occupé — le
+    # parcours, lui, reste dans les expériences.
+    cv_title: str = ""
+
     skills: list[str] = field(default_factory=list)
     skill_groups: list[CVSkillGroup] = field(default_factory=list)
 

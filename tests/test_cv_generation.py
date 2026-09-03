@@ -317,7 +317,9 @@ def test_deux_generations_donnent_le_meme_cv(session_factory):
     assert premier == second
 
 
-def test_le_nombre_de_lignes_est_plafonne(session_factory):
+def test_le_nombre_de_lignes_par_experience_est_plafonne(
+    session_factory,
+):
     from services.cv import build_targeted_cv
 
     session = session_factory()
@@ -336,10 +338,196 @@ def test_le_nombre_de_lignes_est_plafonne(session_factory):
     cv = build_targeted_cv(
         CANDIDATE_ID,
         JOB_OFFER_ID,
-        max_lines_per_skill=2,
+        max_lines_per_experience=3,
+    )
+
+    assert cv.total_lines == 3
+
+
+def test_le_budget_total_de_lignes_est_respecte(session_factory):
+    from services.cv import build_targeted_cv
+
+    session = session_factory()
+    _prepare_profile(
+        session,
+        preuves=[
+            f"Réalisation numéro {index}." for index in range(10)
+        ],
+    )
+    _add_job_offer(session, "Gestion de projet.")
+    _lier_preuves_a_l_experience(session)
+    session.close()
+
+    _analyser(["Gestion de projet"])
+
+    cv = build_targeted_cv(
+        CANDIDATE_ID,
+        JOB_OFFER_ID,
+        max_total_lines=2,
     )
 
     assert cv.total_lines == 2
+
+
+# ============================================================
+# TOUTES LES EXPERIENCES, ETOFFEES
+# ============================================================
+
+def _add_seconde_experience(
+    session,
+    experience_id: str = "experience-ancienne",
+):
+    from datetime import date
+
+    from database.models import ExperienceDB
+
+    session.add(
+        ExperienceDB(
+            id=experience_id,
+            candidate_id=CANDIDATE_ID,
+            company="Cobalt Studio",
+            job_title="Traffic Manager",
+            start_date=date(2015, 1, 1),
+            end_date=date(2016, 1, 1),
+            description="",
+            business_context="",
+            team_context="",
+        )
+    )
+    session.commit()
+
+
+def test_une_experience_sans_ligne_figure_quand_meme_au_cv(
+    session_factory,
+):
+    """
+    Un trou dans la chronologie se remarque et appelle une question
+    gênante en entretien : l'expérience apparaît réduite à son poste,
+    son entreprise et ses dates (§18).
+    """
+
+    from services.cv import build_targeted_cv
+
+    session = session_factory()
+    _prepare_profile(session)
+    _add_seconde_experience(session)
+    _add_job_offer(session, "Gestion de projet.")
+    _lier_preuves_a_l_experience(session)
+    session.close()
+
+    _analyser(["Gestion de projet"])
+
+    cv = build_targeted_cv(CANDIDATE_ID, JOB_OFFER_ID)
+
+    # Du plus récent au plus ancien.
+    assert [item.experience_id for item in cv.experiences] == [
+        EXPERIENCE_ID,
+        "experience-ancienne",
+    ]
+
+    ancienne = cv.experiences[1]
+
+    assert ancienne.job_title == "Traffic Manager"
+    assert ancienne.lines == []
+
+
+def test_une_experience_est_etoffee_avec_ses_autres_preuves(
+    session_factory,
+):
+    """
+    L'annonce ne demande qu'une compétence, mais le Master CV en
+    prouve d'autres sur la même expérience. Un CV d'une seule puce ne
+    se défend pas, et ces preuves-là sont tout aussi vraies.
+    """
+
+    from services.cv import build_targeted_cv
+
+    session = session_factory()
+    _prepare_profile(session)
+
+    add_catalog_skill(
+        session, canonical_name="Reporting", aliases=["Reporting"]
+    )
+
+    autre = add_candidate_skill(
+        session, candidate_id=CANDIDATE_ID, name="Reporting"
+    )
+
+    add_evidence(
+        session,
+        candidate_id=CANDIDATE_ID,
+        skill_id=autre.id,
+        description="Construction du reporting hebdomadaire.",
+        evidence_id="evidence-reporting",
+    )
+
+    _add_job_offer(session, "Gestion de projet.")
+    _lier_preuves_a_l_experience(session)
+    session.close()
+
+    _analyser(["Gestion de projet"])
+
+    cv = build_targeted_cv(CANDIDATE_ID, JOB_OFFER_ID)
+
+    textes = [ligne.text for ligne in cv.experiences[0].lines]
+
+    # La ligne demandée par l'annonce reste en tête.
+    assert textes[0] == "Pilotage de projets de bout en bout."
+    assert "Construction du reporting hebdomadaire." in textes
+
+
+def test_l_etoffement_ne_prend_que_des_preuves_du_master_cv(
+    session_factory,
+):
+    """
+    Chaque ligne ajoutée garde l'identifiant de la preuve dont elle
+    vient : l'étoffement élargit la sélection, il n'invente rien.
+    """
+
+    from database.models import EvidenceDB
+    from services.cv import build_targeted_cv
+
+    session = session_factory()
+    _prepare_profile(
+        session,
+        preuves=[f"Réalisation numéro {index}." for index in range(6)],
+    )
+    _add_job_offer(session, "Gestion de projet.")
+    _lier_preuves_a_l_experience(session)
+    session.close()
+
+    _analyser(["Gestion de projet"])
+
+    cv = build_targeted_cv(CANDIDATE_ID, JOB_OFFER_ID)
+
+    session = session_factory()
+    connus = {row.id for row in session.query(EvidenceDB).all()}
+    session.close()
+
+    for experience in cv.experiences:
+        for ligne in experience.lines:
+            assert ligne.evidence_id in connus
+
+
+def test_le_titre_du_cv_est_l_intitule_du_poste_vise(session_factory):
+    """
+    Sans titre, le recruteur doit deviner à quelle candidature le CV
+    correspond.
+    """
+
+    from services.cv import build_targeted_cv
+
+    session = session_factory()
+    _prepare_profile(session)
+    _add_job_offer(session, "Gestion de projet.")
+    _lier_preuves_a_l_experience(session)
+    session.close()
+
+    _analyser(["Gestion de projet"])
+
+    cv = build_targeted_cv(CANDIDATE_ID, JOB_OFFER_ID)
+
+    assert cv.cv_title == "Product Owner"
 
 
 def test_generer_un_cv_sans_analyse_prealable_echoue(

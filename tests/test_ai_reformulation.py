@@ -638,6 +638,83 @@ def test_sans_vocabulaire_la_reformulation_reste_possible(monkeypatch):
 
 
 # ============================================================
+# SECONDE CHANCE APRES REJET
+# ============================================================
+
+def test_une_seconde_tentative_est_donnee_apres_un_rejet(monkeypatch):
+    """
+    Sans reprise, un seul mot de trop faisait retomber la phrase sur
+    sa version déterministe : la section n'était alors plus adaptée
+    du tout à l'annonce.
+    """
+
+    monkeypatch.setattr(reformulation, "is_configured", lambda: True)
+
+    reponses = [
+        "Expert en pilotage de projets digitaux.",
+        "Pilotage de projets digitaux de bout en bout.",
+    ]
+
+    monkeypatch.setattr(
+        reformulation,
+        "generate_text",
+        lambda *a, **k: reponses.pop(0),
+    )
+
+    resultat = reformulation._safe_reformulate(
+        "Pilotage de projets digitaux.",
+        "instructions",
+    )
+
+    assert resultat.was_reformulated is True
+    assert resultat.text == "Pilotage de projets digitaux de bout en bout."
+    assert resultat.warning == ""
+
+
+def test_la_seconde_tentative_recoit_le_motif_du_refus(monkeypatch):
+    monkeypatch.setattr(reformulation, "is_configured", lambda: True)
+
+    prompts: list[str] = []
+
+    def _generate_text(prompt, *args, **kwargs):
+        prompts.append(prompt)
+        return "Expert en pilotage de projets digitaux."
+
+    monkeypatch.setattr(reformulation, "generate_text", _generate_text)
+
+    reformulation._safe_reformulate(
+        "Pilotage de projets digitaux.",
+        "instructions",
+    )
+
+    assert len(prompts) == 2
+    assert "REFUSÉE" in prompts[1]
+    assert "expert" in prompts[1]
+
+
+def test_deux_echecs_de_suite_font_garder_le_texte_source(monkeypatch):
+    monkeypatch.setattr(reformulation, "is_configured", lambda: True)
+
+    appels: list[int] = []
+
+    def _generate_text(*args, **kwargs):
+        appels.append(1)
+        return "Marge en hausse de 79 %."
+
+    monkeypatch.setattr(reformulation, "generate_text", _generate_text)
+
+    resultat = reformulation._safe_reformulate(
+        "Marge publicitaire en progression.",
+        "instructions",
+    )
+
+    assert len(appels) == 2
+    assert resultat.was_reformulated is False
+    assert resultat.text == "Marge publicitaire en progression."
+    assert "79" in resultat.warning
+
+
+# ============================================================
 # GARDE-FOU DE SENIORITE
 # ============================================================
 
