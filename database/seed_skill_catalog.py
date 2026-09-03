@@ -172,6 +172,9 @@ SKILLS = [
             "Roadmap",
             "Roadmap produit",
             "Product roadmap management",
+            "Définition de roadmap",
+            "Définition de la roadmap",
+            "Roadmapping",
         ],
         "parent": "catalog-product-strategy",
         "related_skills": [
@@ -225,6 +228,8 @@ SKILLS = [
             "Gestion des priorités",
             "Priorisation produit",
             "Priorisation des fonctionnalités",
+            "Priorisation du backlog",
+            "Backlog prioritization",
         ],
         "parent": "catalog-product-delivery",
         "related_skills": [
@@ -313,6 +318,12 @@ SKILLS = [
             "Agile methodology",
             "Sprints",
             "Sprint",
+            "Planification de sprint",
+            "Sprint planning",
+            "Animation des cérémonies",
+            "Animation des cérémonies agiles",
+            "Cérémonies agiles",
+            "Rituels agiles",
         ],
         "parent": "catalog-project-management",
         "related_skills": [
@@ -846,6 +857,306 @@ SKILLS = [
             "Data / KPI",
         ],
     },
+    # ========================================================
+    # PRODUCT — PRATIQUES DE PRODUCT OWNER
+    # ========================================================
+    #
+    # Ces compétences manquaient au référentiel : une annonce qui les
+    # demandait ne pouvait donc rien reconnaître du profil, même
+    # lorsque le candidat les avait déclarées mot pour mot.
+
+    {
+        "id": "catalog-user-stories",
+        "canonical_name": "User Stories",
+        "category": "Product",
+        "subcategory": "Product Delivery",
+        "description": (
+            "Expression d'un besoin utilisateur sous forme de récit "
+            "court et testable, avec ses critères d'acceptation, "
+            "pour alimenter le backlog d'une équipe produit."
+        ),
+        "aliases": [
+            "User Stories",
+            "User Story",
+            "Users stories",
+            "Rédaction de user stories",
+            "Rédaction de User Stories",
+            "Récits utilisateur",
+        ],
+        "parent": "catalog-product-delivery",
+        "related_skills": [
+            "Backlog Management",
+            "Spécifications fonctionnelles",
+            "Agile / Scrum",
+        ],
+    },
+
+    {
+        "id": "catalog-specifications",
+        "canonical_name": "Spécifications fonctionnelles",
+        "category": "Product",
+        "subcategory": "Product Delivery",
+        "description": (
+            "Formalisation du comportement attendu d'un produit ou "
+            "d'une fonctionnalité à destination des équipes de "
+            "conception et de développement."
+        ),
+        "aliases": [
+            "Spécifications fonctionnelles",
+            "Specifications fonctionnelles",
+            "Rédaction de spécifications",
+            "Rédaction de specifications",
+            "Spécifications produit",
+            "Functional specifications",
+        ],
+        "parent": "catalog-product-delivery",
+        "related_skills": [
+            "User Stories",
+            "Product Delivery",
+        ],
+    },
+
+    # ========================================================
+    # BUSINESS — ANALYSE DE MARCHE
+    # ========================================================
+
+    {
+        "id": "catalog-analyse-marche",
+        "canonical_name": "Analyse de marché",
+        "category": "Business",
+        "subcategory": "Market Intelligence",
+        "description": (
+            "Étude d'un marché, de sa taille, de ses acteurs et de "
+            "ses tendances, afin d'éclairer une décision produit ou "
+            "commerciale."
+        ),
+        "aliases": [
+            "Analyse de marché",
+            "Analyse du marché",
+            "Étude de marché",
+            "Etude de marché",
+            "Market Analysis",
+            "Market Research",
+        ],
+        "parent": None,
+        "related_skills": [
+            "Veille concurrentielle",
+            "Product Strategy",
+        ],
+    },
+
+    {
+        "id": "catalog-veille-concurrentielle",
+        "canonical_name": "Veille concurrentielle",
+        "category": "Business",
+        "subcategory": "Market Intelligence",
+        "description": (
+            "Suivi de l'offre, du positionnement et des évolutions "
+            "des concurrents, afin d'anticiper et de situer sa "
+            "propre proposition de valeur."
+        ),
+        "aliases": [
+            "Veille concurrentielle",
+            "Analyse concurrentielle",
+            "Benchmark concurrentiel",
+            "Competitive Analysis",
+            "Competitive Intelligence",
+        ],
+        "parent": None,
+        "related_skills": [
+            "Analyse de marché",
+            "Product Strategy",
+        ],
+    },
+
+    {
+        "id": "catalog-business-development",
+        "canonical_name": "Business Development",
+        "category": "Business",
+        "subcategory": "Commercial",
+        "description": (
+            "Développement du chiffre d'affaires par la prospection, "
+            "la négociation et la construction de partenariats "
+            "commerciaux."
+        ),
+        "aliases": [
+            "Business Development",
+            "Développement Commercial",
+            "Développement commercial",
+            "Business Developer",
+            "BizDev",
+        ],
+        "parent": None,
+        "related_skills": [
+            "E-commerce",
+            "Stakeholder Management",
+        ],
+    },
+
+    {
+        "id": "catalog-gestion-campagnes",
+        "canonical_name": "Gestion de campagnes",
+        "category": "Business",
+        "subcategory": "Digital Advertising",
+        "description": (
+            "Mise en place, suivi et optimisation de campagnes "
+            "publicitaires ou marketing, de leur paramétrage à la "
+            "mesure de leur performance."
+        ),
+        "aliases": [
+            "Gestion de campagnes",
+            "Gestion des campagnes",
+            "Pilotage de campagnes",
+            "Campaign Management",
+            "Gestion de campagnes publicitaires",
+        ],
+        "parent": None,
+        "related_skills": [
+            "AdTech",
+            "Data / KPI",
+        ],
+    },
+
+    # ========================================================
+    # PILOTAGE — PRATIQUES TRANSVERSES
+    # ========================================================
+
+    {
+        "id": "catalog-gestion-budget",
+        "canonical_name": "Gestion du budget",
+        "category": "Management",
+        "subcategory": "Pilotage",
+        "description": (
+            "Construction, suivi et arbitrage d'un budget : "
+            "engagement des dépenses, contrôle des écarts et "
+            "priorisation des investissements."
+        ),
+        "aliases": [
+            "Gestion du budget",
+            "Gestion budgétaire",
+            "Suivi budgétaire",
+            "Pilotage budgétaire",
+            "Budget Management",
+        ],
+        "parent": None,
+        "related_skills": [
+            "Gestion de projet",
+            "Priorisation",
+        ],
+    },
+
+    {
+        "id": "catalog-amelioration-continue",
+        "canonical_name": "Amélioration continue",
+        "category": "Project Management",
+        "subcategory": "Méthode",
+        "description": (
+            "Démarche d'optimisation régulière des processus et des "
+            "pratiques d'une équipe, à partir des retours et des "
+            "mesures observées."
+        ),
+        "aliases": [
+            "Amélioration continue",
+            "Démarche d'amélioration continue",
+            "Continuous Improvement",
+        ],
+        "parent": None,
+        "related_skills": [
+            "Agile / Scrum",
+            "Automatisation",
+        ],
+    },
+
+    {
+        "id": "catalog-resolution-problemes",
+        "canonical_name": "Résolution de problèmes",
+        "category": "Project Management",
+        "subcategory": "Méthode",
+        "description": (
+            "Analyse d'un problème, identification de ses causes et "
+            "mise en oeuvre d'une solution durable."
+        ),
+        "aliases": [
+            "Résolution de problèmes",
+            "Résolution de problème",
+            "Problem Solving",
+            "Troubleshooting",
+        ],
+        "parent": None,
+        "related_skills": [
+            "Gestion d'incidents",
+            "Amélioration continue",
+        ],
+    },
+
+    {
+        "id": "catalog-gestion-incidents",
+        "canonical_name": "Gestion d'incidents",
+        "category": "Project Management",
+        "subcategory": "Exploitation",
+        "description": (
+            "Prise en charge d'un incident de production : "
+            "qualification, coordination de la résolution et "
+            "communication auprès des parties prenantes."
+        ),
+        "aliases": [
+            "Gestion d'incidents",
+            "Gestion des incidents",
+            "Traitement des incidents",
+            "Incident Management",
+        ],
+        "parent": None,
+        "related_skills": [
+            "Résolution de problèmes",
+            "Stakeholder Management",
+        ],
+    },
+
+    {
+        "id": "catalog-coordination-transverse",
+        "canonical_name": "Coordination transverse",
+        "category": "Management",
+        "subcategory": "Collaboration",
+        "description": (
+            "Animation du travail entre plusieurs équipes ou "
+            "métiers qui ne dépendent pas les uns des autres, afin "
+            "de faire avancer un sujet commun."
+        ),
+        "aliases": [
+            "Coordination transverse",
+            "Coordination transversale",
+            "Collaboration transverse",
+            "Cross-functional collaboration",
+            "Travail en transverse",
+        ],
+        "parent": None,
+        "related_skills": [
+            "Stakeholder Management",
+            "Gestion de projet",
+        ],
+    },
+
+    {
+        "id": "catalog-conception-produit",
+        "canonical_name": "Conception produit",
+        "category": "Product",
+        "subcategory": "Product Delivery",
+        "description": (
+            "Définition concrète d'une fonctionnalité ou d'un "
+            "produit, de l'idée retenue jusqu'à sa forme "
+            "exploitable par les équipes techniques."
+        ),
+        "aliases": [
+            "Conception produit",
+            "Conception de produit",
+            "Conception de produits digitaux",
+        ],
+        "parent": "catalog-product-management",
+        "related_skills": [
+            "Product Discovery",
+            "Spécifications fonctionnelles",
+        ],
+    },
 ]
 
 # ============================================================
@@ -878,6 +1189,46 @@ def seed_skill_catalog() -> None:
                 )
 
             canonical_names.add(canonical_name)
+
+        # ----------------------------------------------------
+        # UN ALIAS N'APPARTIENT QU'A UNE COMPETENCE
+        # ----------------------------------------------------
+        #
+        # Deux entrées qui revendiquent le même alias créent une
+        # ambiguïté silencieuse : l'index de résolution en retient
+        # une au hasard, et une compétence du Master CV se retrouve
+        # rattachée à la mauvaise. Mieux vaut refuser le référentiel.
+
+        from services.skill_catalog_service import (
+            normalize_skill_text,
+        )
+
+        proprietaire: dict[str, str] = {}
+
+        for skill_data in SKILLS:
+
+            canonical_name = skill_data["canonical_name"]
+
+            for alias in (
+                canonical_name,
+                *skill_data.get("aliases", []),
+            ):
+
+                cle = normalize_skill_text(alias)
+
+                if not cle:
+                    continue
+
+                deja = proprietaire.get(cle)
+
+                if deja is not None and deja != canonical_name:
+                    raise ValueError(
+                        f"L'alias « {alias} » est revendiqué à la "
+                        f"fois par « {deja} » et par "
+                        f"« {canonical_name} »."
+                    )
+
+                proprietaire[cle] = canonical_name
 
         # ====================================================
         # 2. IMPORT / MISE A JOUR
