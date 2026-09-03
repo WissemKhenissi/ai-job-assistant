@@ -30,6 +30,7 @@ from services.ai.reformulation import reformulate_targeted_cv
 from services.application_service import record_application
 from services.ai.gemini_client import GEMINI_MODEL
 from services.cv import build_targeted_cv, export_docx, export_pdf
+from services.cv.fitting import fit_to_one_page
 from services.cv.validation import validate_targeted_cv
 from services.generated_cv_service import record_generated_cv
 from services.job_service import get_job_offer_text
@@ -392,6 +393,49 @@ def render_generation_tab(
                 included_sections.add(section)
 
     # --------------------------------------------------------
+    # CONTRAINTE D'UNE PAGE
+    # --------------------------------------------------------
+    #
+    # Mesure réelle du PDF, puis élagage par priorité : on ne demande
+    # pas au modèle d'estimer une longueur qu'il ne peut pas connaître.
+
+    cv_exporte = cv
+
+    if st.checkbox(
+        "Limiter le CV à une page",
+        value=True,
+        key=f"une_page_{job_offer_id}",
+        help=(
+            "Le PDF est réellement rendu et ses pages comptées, puis "
+            "le contenu le moins prioritaire est retiré jusqu'à tenir "
+            "sur une page. L'élagage ne fait que retirer : rien n'est "
+            "réécrit ni résumé."
+        ),
+    ):
+
+        cv_exporte, included_sections, retraits, tient = fit_to_one_page(
+            cv, included_sections
+        )
+
+        if retraits:
+
+            with st.expander(
+                f"✂️ {len(retraits)} élément(s) retiré(s) pour tenir "
+                "sur une page",
+                expanded=not tient,
+            ):
+                for retrait in retraits:
+                    st.caption(f"· {retrait}")
+
+        if not tient:
+            st.warning(
+                "Le CV dépasse encore une page après élagage. Décochez "
+                "des sections ci-dessus, ou documentez moins de lignes "
+                "pour cette offre — je préfère vous le dire plutôt que "
+                "de compresser jusqu'à l'illisible."
+            )
+
+    # --------------------------------------------------------
     # LETTRE — RELECTURE OBLIGATOIRE
     # --------------------------------------------------------
 
@@ -414,8 +458,10 @@ def render_generation_tab(
     # TÉLÉCHARGEMENTS
     # --------------------------------------------------------
 
-    cv_docx = export_docx(cv, included_sections=included_sections)
-    cv_pdf = export_pdf(cv, included_sections=included_sections)
+    # cv_exporte : version eventuellement elaguee pour tenir sur une
+    # page. Identique a cv si l'option est decochee.
+    cv_docx = export_docx(cv_exporte, included_sections=included_sections)
+    cv_pdf = export_pdf(cv_exporte, included_sections=included_sections)
 
     letter_docx = export_letter_docx(letter)
     letter_pdf = export_letter_pdf(letter)
