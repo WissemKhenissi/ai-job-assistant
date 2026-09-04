@@ -33,6 +33,7 @@ SERVICE_MODULES = (
     "services.cv.selection",
     "services.cv.validation",
     "services.cv.vocabulary",
+    "services.esco_import",
     "services.generated_cv_service",
     "services.job_requirements_service",
     "services.job_service",
