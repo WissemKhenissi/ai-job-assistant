@@ -18,12 +18,14 @@ from conftest import add_catalog_skill
 from services.skill_candidate_service import (
     IGNORE,
     INTEGRE,
+    NOUVEAU,
     RATTACHE,
     attach_as_alias,
     get_candidates,
     ignore_candidate,
     promote_to_catalog,
     record_unknown_terms,
+    undo_decision,
 )
 from services.skill_catalog_service import find_skill_by_name
 
@@ -200,6 +202,139 @@ def test_la_decision_de_l_utilisateur_tient_si_le_terme_revient(
 
     assert get_candidates() == []
     assert get_candidates(only_pending=False)[0]["occurrences"] == 2
+
+
+# ============================================================
+# MARCHE ARRIERE
+# ============================================================
+#
+# Une décision de vocabulaire se prend sur un terme sorti de son
+# contexte : se tromper est facile, et sans retour l'erreur resterait
+# dans le référentiel indéfiniment.
+
+def test_annuler_un_rattachement_retire_l_alias(catalogue):
+    record_unknown_terms(["Discovery phase"])
+
+    identifiant = get_candidates()[0]["id"]
+    attach_as_alias(identifiant, "catalog-discovery")
+
+    assert find_skill_by_name("Discovery phase") is not None
+
+    undo_decision(identifiant)
+
+    assert find_skill_by_name("Discovery phase") is None
+    assert find_skill_by_name("Product Discovery") is not None
+
+
+def test_annuler_une_creation_retire_la_competence(catalogue):
+    record_unknown_terms(["Kubernetes"])
+
+    identifiant = get_candidates()[0]["id"]
+    promote_to_catalog(identifiant)
+
+    assert find_skill_by_name("Kubernetes") is not None
+
+    undo_decision(identifiant)
+
+    assert find_skill_by_name("Kubernetes") is None
+
+
+def test_annuler_un_rejet_remet_le_terme_a_trier(catalogue):
+    record_unknown_terms(["mobile"])
+
+    identifiant = get_candidates()[0]["id"]
+    ignore_candidate(identifiant)
+
+    assert get_candidates() == []
+
+    undo_decision(identifiant)
+
+    assert [item["term"] for item in get_candidates()] == ["mobile"]
+
+
+@pytest.mark.parametrize("action", ["promote", "attach", "ignore"])
+def test_apres_annulation_le_terme_est_de_nouveau_a_trier(
+    catalogue, action
+):
+    record_unknown_terms(["Discovery phase"])
+
+    identifiant = get_candidates()[0]["id"]
+
+    if action == "promote":
+        promote_to_catalog(identifiant, canonical_name="Autre chose")
+    elif action == "attach":
+        attach_as_alias(identifiant, "catalog-discovery")
+    else:
+        ignore_candidate(identifiant)
+
+    undo_decision(identifiant)
+
+    candidat = get_candidates()[0]
+
+    assert candidat["status"] == NOUVEAU
+    assert candidat["resolved_skill_id"] == ""
+
+
+def test_annuler_puis_redecider_fonctionne(catalogue):
+    """
+    Se tromper deux fois doit rester possible : l'annulation ne doit
+    pas laisser le terme dans un état bloqué.
+    """
+
+    record_unknown_terms(["Discovery phase"])
+
+    identifiant = get_candidates()[0]["id"]
+
+    attach_as_alias(identifiant, "catalog-discovery")
+    undo_decision(identifiant)
+    promote_to_catalog(identifiant, canonical_name="Phase de discovery")
+
+    competence = find_skill_by_name("Discovery phase")
+
+    assert competence is not None
+    assert competence.canonical_name == "Phase de discovery"
+
+
+def test_annuler_sans_decision_est_refuse(catalogue):
+    record_unknown_terms(["Kubernetes"])
+
+    with pytest.raises(ValueError, match="aucune décision"):
+        undo_decision(get_candidates()[0]["id"])
+
+
+def test_annuler_ne_supprime_jamais_le_nom_canonique(
+    catalogue, session_factory
+):
+    """
+    Retirer l'alias qui porte le nom de la compétence la rendrait
+    méconnaissable. Le parcours normal ne peut pas produire ce cas —
+    un terme déjà connu du référentiel n'est jamais enregistré — mais
+    le garde-fou doit tenir si l'état l'atteint autrement.
+    """
+
+    from database.models import SkillCandidateDB
+
+    session = session_factory()
+
+    session.add(
+        SkillCandidateDB(
+            id="candidat-limite",
+            term="Product Discovery",
+            canonical_key="product discovery",
+            occurrences=1,
+            was_counted=True,
+            status=RATTACHE,
+            resolved_skill_id="catalog-discovery",
+            job_offer_ids=[],
+        )
+    )
+
+    session.commit()
+    session.close()
+
+    undo_decision("candidat-limite")
+
+    assert find_skill_by_name("Product Discovery") is not None
 
 
 # ============================================================

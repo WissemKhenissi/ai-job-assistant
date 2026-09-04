@@ -167,6 +167,18 @@ def get_candidates(
                 SkillCandidateDB.status == NOUVEAU
             )
 
+        lignes = requete.order_by(
+            SkillCandidateDB.occurrences.desc(),
+            SkillCandidateDB.term,
+        ).all()
+
+        # Nom de la compétence visée, pour que l'utilisateur voie ce
+        # qu'il a décidé sans avoir à s'en souvenir.
+        noms = {
+            competence.id: competence.canonical_name
+            for competence in db.query(SkillCatalogDB).all()
+        }
+
         return [
             {
                 "id": ligne.id,
@@ -175,16 +187,128 @@ def get_candidates(
                 "was_counted": ligne.was_counted,
                 "status": ligne.status,
                 "resolved_skill_id": ligne.resolved_skill_id or "",
+                "resolved_skill_name": noms.get(
+                    ligne.resolved_skill_id or "", ""
+                ),
                 "job_offer_ids": list(ligne.job_offer_ids or []),
             }
-            for ligne in requete.order_by(
-                SkillCandidateDB.occurrences.desc(),
-                SkillCandidateDB.term,
-            ).all()
+            for ligne in lignes
         ]
 
     finally:
         db.close()
+
+
+def undo_decision(candidate_id: str) -> str:
+    """
+    Défait une décision et remet le terme dans la liste à trier.
+
+    Une décision de vocabulaire se prend sur un terme sorti de son
+    contexte : se tromper est facile, et sans marche arrière l'erreur
+    devient définitive — un alias posé sur la mauvaise compétence
+    rattacherait durablement une compétence du Master CV à la mauvaise
+    entrée du référentiel.
+
+    Retourne une phrase décrivant ce qui a été défait.
+    """
+
+    db = SessionLocal()
+
+    message = ""
+
+    try:
+
+        ligne = db.get(SkillCandidateDB, candidate_id)
+
+        if ligne is None:
+            raise ValueError(f"Terme introuvable : {candidate_id}")
+
+        if ligne.status == NOUVEAU:
+            raise ValueError(
+                f"« {ligne.term} » n'a encore fait l'objet d'aucune "
+                "décision."
+            )
+
+        terme = ligne.term
+
+        # ----------------------------------------------------
+        # RATTACHEMENT : retirer l'alias posé
+        # ----------------------------------------------------
+
+        if ligne.status == RATTACHE and ligne.resolved_skill_id:
+
+            competence = db.get(
+                SkillCatalogDB, ligne.resolved_skill_id
+            )
+
+            if competence is not None:
+
+                cle_terme = normalize_skill_text(ligne.term)
+
+                # Le nom canonique n'est jamais retiré : il ne vient
+                # pas de ce rattachement et l'entrée en dépend.
+                cle_canonique = normalize_skill_text(
+                    competence.canonical_name
+                )
+
+                conserves = [
+                    alias
+                    for alias in _charger_alias(competence)
+                    if normalize_skill_text(alias) != cle_terme
+                    or normalize_skill_text(alias) == cle_canonique
+                ]
+
+                competence.aliases = json.dumps(
+                    conserves, ensure_ascii=False
+                )
+
+                message = (
+                    f"« {ligne.term} » n'est plus un alias de "
+                    f"« {competence.canonical_name} »."
+                )
+
+        # ----------------------------------------------------
+        # CREATION : supprimer la compétence créée
+        # ----------------------------------------------------
+        #
+        # Rien ne pointe vers skill_catalog par clé étrangère : les
+        # analyses conservent des libellés, pas des identifiants. La
+        # suppression ne casse donc aucune donnée existante, elle
+        # change seulement la résolution à venir.
+
+        elif ligne.status == INTEGRE and ligne.resolved_skill_id:
+
+            competence = db.get(
+                SkillCatalogDB, ligne.resolved_skill_id
+            )
+
+            if competence is not None:
+
+                message = (
+                    f"La compétence « {competence.canonical_name} » "
+                    "a été retirée du référentiel."
+                )
+
+                db.delete(competence)
+
+        elif ligne.status == IGNORE:
+            message = f"« {ligne.term} » revient dans la liste à trier."
+
+        ligne.status = NOUVEAU
+        ligne.resolved_skill_id = None
+
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
+
+    _invalider_cache_alias()
+
+    return message or f"« {terme} » remis à trier."
 
 
 def ignore_candidate(candidate_id: str) -> None:

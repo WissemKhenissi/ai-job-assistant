@@ -25,10 +25,14 @@ from __future__ import annotations
 import streamlit as st
 
 from services.skill_candidate_service import (
+    IGNORE,
+    INTEGRE,
+    RATTACHE,
     attach_as_alias,
     get_candidates,
     ignore_candidate,
     promote_to_catalog,
+    undo_decision,
 )
 from services.skill_catalog_service import get_active_skills
 
@@ -169,6 +173,68 @@ def _libelle(competences, identifiant: str) -> str:
     return identifiant
 
 
+def _decrire_decision(candidat: dict) -> str:
+
+    if candidat["status"] == RATTACHE:
+        return (
+            f"rattaché à **{candidat['resolved_skill_name']}**"
+            if candidat["resolved_skill_name"]
+            else "rattaché"
+        )
+
+    if candidat["status"] == INTEGRE:
+        return (
+            f"créé comme **{candidat['resolved_skill_name']}**"
+            if candidat["resolved_skill_name"]
+            else "créé"
+        )
+
+    return "ignoré"
+
+
+def _rendre_les_traites() -> None:
+    """
+    Les décisions déjà prises, avec leur marche arrière.
+
+    Une décision de vocabulaire se prend sur un terme sorti de son
+    contexte : se tromper est facile, et une erreur sans retour
+    resterait dans le référentiel indéfiniment.
+    """
+
+    traites = [
+        item
+        for item in get_candidates(only_pending=False)
+        if item["status"] != "nouveau"
+    ]
+
+    if not traites:
+        return
+
+    with st.expander(f"Décisions prises ({len(traites)})"):
+
+        for candidat in traites:
+
+            col_terme, col_annuler = st.columns([5, 1])
+
+            with col_terme:
+                st.markdown(
+                    f"**{candidat['term']}** — "
+                    f"{_decrire_decision(candidat)}"
+                )
+
+            with col_annuler:
+
+                if st.button(
+                    "↩️",
+                    key=f"annuler_{candidat['id']}",
+                    help="Annuler cette décision",
+                    use_container_width=True,
+                ):
+                    message = undo_decision(candidat["id"])
+                    st.session_state["referentiel_message"] = message
+                    st.rerun()
+
+
 def render_referentiel_tab() -> None:
 
     st.write(
@@ -183,6 +249,11 @@ def render_referentiel_tab() -> None:
         "et la rédaction s'interdit ce mot."
     )
 
+    message = st.session_state.pop("referentiel_message", "")
+
+    if message:
+        st.success(message)
+
     candidats = get_candidates()
 
     if not candidats:
@@ -192,12 +263,7 @@ def render_referentiel_tab() -> None:
             "reconnues par le référentiel."
         )
 
-        traites = get_candidates(only_pending=False)
-
-        if traites:
-            st.caption(
-                f"{len(traites)} terme(s) déjà traité(s)."
-            )
+        _rendre_les_traites()
 
         return
 
@@ -215,3 +281,5 @@ def render_referentiel_tab() -> None:
 
             if _rendre_un_terme(candidat, competences):
                 st.rerun()
+
+    _rendre_les_traites()
