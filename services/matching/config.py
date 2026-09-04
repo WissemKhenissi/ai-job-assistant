@@ -248,3 +248,26 @@ SEMANTIC_INFERENCE_EXCLUDED = {
 # qu'une longue liste d'outils ne domine pas, pas assez pour qu'elle
 # disparaisse.
 SKILL_WEIGHT_DECAY = 5.0
+
+
+# ============================================================
+# POIDS DES NIVEAUX D'EXIGENCE
+# ============================================================
+#
+# Le rang d'apparition n'est qu'un indice : il suppose que l'annonce
+# range l'essentiel en premier. Ce que l'annonce **dit** du terme en
+# est un autre, plus direct — « indispensable » contre
+# « environnement : ... ». Voir services.requirement_importance.
+#
+# Les deux se multiplient : une exigence essentielle citée en tête
+# porte le score, une simple mention en fin d'annonce ne le fait
+# presque plus bouger, sans pour autant disparaître — une mention
+# reste un écart réel, elle est toujours affichée comme telle.
+#
+# Une compétence essentielle non couverte coûte cinq fois ce que
+# coûte un outil cité en exemple.
+POIDS_IMPORTANCE = {
+    "essentielle": 1.00,
+    "souhaitee": 0.55,
+    "mention": 0.20,
+}

@@ -218,6 +218,10 @@ def render_analysis_tab(candidate_id: str) -> None:
 
         avertissement_ia = ""
 
+        # Ce que l'IA aura compris du statut de chaque exigence.
+        # Vide sans IA : le moteur reclasse alors depuis le texte.
+        niveaux_proposes: dict[str, str] = {}
+
         if ai_is_configured():
 
             analyse_ia = analyze_job_offer_with_ai(
@@ -225,6 +229,7 @@ def render_analysis_tab(candidate_id: str) -> None:
             )
 
             avertissement_ia = analyse_ia.warning
+            niveaux_proposes = dict(analyse_ia.skill_importance)
 
             contract_type = contract_type or analyse_ia.contract_type
             remote_policy = remote_policy or analyse_ia.remote_policy
@@ -291,6 +296,7 @@ def render_analysis_tab(candidate_id: str) -> None:
                 candidate_id=candidate_id,
                 job_offer_id=job_offer_id,
                 required_skills=required_skills,
+                importance_hints=niveaux_proposes,
             )
 
             # --------------------------------------------------
@@ -493,7 +499,39 @@ def render_analysis_tab(candidate_id: str) -> None:
         missing_col.metric(
             "Manquantes",
             len(result.missing_skills),
+            help=(
+                "Tous niveaux confondus — un outil cité en "
+                "exemple compte ici comme une condition d'entrée."
+            ),
         )
+
+        # ====================================================
+        # CE QUI DÉCIDE VRAIMENT
+        # ====================================================
+        #
+        # Un pourcentage ne dit pas si une candidature vaut la
+        # peine. La liste des conditions d'entrée non couvertes,
+        # si. Elle est donc affichée avant le détail, et séparément
+        # des écarts sur des compétences que l'annonce ne fait que
+        # citer.
+
+        essentielles_manquantes = result.missing_essential_skills
+
+        if essentielles_manquantes:
+
+            st.error(
+                "Exigences posées comme conditions et non "
+                "couvertes : "
+                + ", ".join(essentielles_manquantes)
+            )
+
+        elif result.missing_skills:
+
+            st.info(
+                "Aucune condition d'entrée non couverte. Les "
+                "écarts restants portent sur des compétences que "
+                "l'annonce souhaite ou cite, sans les exiger."
+            )
 
         # ====================================================
         # DÉTAIL DU MATCHING
@@ -506,6 +544,15 @@ def render_analysis_tab(candidate_id: str) -> None:
             "missing": "🔴 Manquante",
         }
 
+        # Le statut décrit le candidat, le niveau décrit ce que
+        # l'annonce demande. Les lire côte à côte évite de
+        # confondre un manque réel avec un outil cité en passant.
+        importance_labels = {
+            "essentielle": "❗ Condition",
+            "souhaitee": "➕ Souhaitée",
+            "mention": "• Citée",
+        }
+
         details = []
 
         for item in result.matches:
@@ -516,6 +563,12 @@ def render_analysis_tab(candidate_id: str) -> None:
                     "Statut": status_labels.get(
                         item.status,
                         item.status,
+                    ),
+                    "Attendue par l'annonce": (
+                        importance_labels.get(
+                            item.importance,
+                            item.importance,
+                        )
                     ),
                     "Score": f"{item.score * 100:.0f} %",
                     "Justification": item.explanation,

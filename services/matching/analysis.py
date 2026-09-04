@@ -20,6 +20,13 @@ from models.job import JobOfferDB
 from models.matching import JobMatchDB
 from models.skill_match import JobSkillMatchDB
 
+from services.requirement_importance import (
+    IMPORTANCE_PAR_DEFAUT,
+    LIBELLES as LIBELLES_IMPORTANCE,
+    classify_requirements,
+    normalise_terme,
+)
+
 from services.matching.config import (
     DECLARED_SCORE,
     EXPERIENCE_INFERRED_WEIGHT,
@@ -29,6 +36,7 @@ from services.matching.config import (
     INFERRED_PRUDENT_SCORE,
     INFERRED_STRONG_SCORE,
     INFERRED_VERY_STRONG_SCORE,
+    POIDS_IMPORTANCE,
     PROVEN_SCORE,
     SKILL_WEIGHT_DECAY,
     SEMANTIC_INFERENCE_EXCLUDED,
@@ -61,7 +69,17 @@ def analyze_candidate_against_skills(
     candidate_id: str,
     required_skills: list[str],
     job_text: str = "",
+    importance_hints: dict[str, str] | None = None,
 ) -> MatchingResult:
+    """
+    Confronte le profil du candidat aux exigences d'une annonce.
+
+    ``importance_hints`` porte ce que l'IA a compris du statut de
+    chaque exigence en lisant l'annonce (condition, souhait, simple
+    mention). C'est facultatif : sans lui, le niveau est déduit du
+    texte de l'annonce par marqueurs, et sans texte d'annonce toutes
+    les exigences comptent pareil — le comportement d'origine.
+    """
 
     if not required_skills:
 
@@ -447,6 +465,28 @@ def analyze_candidate_against_skills(
         )
 
     # ========================================================
+    # NIVEAU D'EXIGENCE
+    # ========================================================
+    #
+    # Le statut dit ce que le candidat sait faire ; le niveau dit ce
+    # que l'annonce en demande. Les deux sont indépendants, et il
+    # faut les deux pour qu'un écart veuille dire quelque chose :
+    # « Jira absent » ne pèse pas comme « gestion de projet absente ».
+
+    niveaux = classify_requirements(
+        [match.skill for match in matches],
+        job_text,
+        hints=importance_hints,
+    )
+
+    for match in matches:
+
+        match.importance = niveaux.get(
+            normalise_terme(match.skill),
+            IMPORTANCE_PAR_DEFAUT,
+        )
+
+    # ========================================================
     # INFERENCE COMPOSITE — PRODUCT MANAGEMENT
     # ========================================================
     #
@@ -674,10 +714,20 @@ def analyze_candidate_against_skills(
         # c'est une heuristique, mais elle correspond à la façon dont
         # une offre est rédigée — l'essentiel d'abord, l'outillage
         # ensuite.
+        #
+        # Le rang ne suffisait pas : à l'intérieur d'une énumération
+        # d'outils, l'ordre ne veut plus rien dire. Le niveau
+        # d'exigence lu dans l'annonce (essentielle / souhaitée /
+        # mention) s'y multiplie — un signal sur ce que l'annonce
+        # exige, l'autre sur la place qu'elle lui donne.
 
         poids = [
-            1.0 / (1.0 + rang / SKILL_WEIGHT_DECAY)
-            for rang in range(len(matches))
+            POIDS_IMPORTANCE.get(
+                match.importance,
+                POIDS_IMPORTANCE[IMPORTANCE_PAR_DEFAUT],
+            )
+            * (1.0 / (1.0 + rang / SKILL_WEIGHT_DECAY))
+            for rang, match in enumerate(matches)
         ]
 
         total_skill_score = sum(
@@ -850,9 +900,14 @@ def analyze_candidate_against_skills(
 
         if match.status == "missing":
 
+            # Le niveau change tout pour qui lit la liste : un outil
+            # cité en exemple et une condition d'entrée non couverte
+            # n'appellent pas la même décision.
             weaknesses.append(
                 f"{match.skill} : "
-                "compétence manquante"
+                "compétence manquante "
+                f"({LIBELLES_IMPORTANCE[match.importance]}"
+                " par l'annonce)"
             )
 
         elif (
@@ -888,6 +943,7 @@ def analyze_and_save_job_match(
     candidate_id: str,
     job_offer_id: str,
     required_skills: list[str],
+    importance_hints: dict[str, str] | None = None,
 ) -> MatchingResult:
 
     db = SessionLocal()
@@ -925,6 +981,7 @@ def analyze_and_save_job_match(
         candidate_id=candidate_id,
         required_skills=required_skills,
         job_text=job_text,
+        importance_hints=importance_hints,
     )
 
     # ========================================================
@@ -1036,6 +1093,7 @@ def analyze_and_save_job_match(
                         skill_match.skill
                     ),
                     status=skill_match.status,
+                    importance=skill_match.importance,
                     score=skill_match.score,
                     explanation=skill_match.explanation,
                     evidence=list(skill_match.evidence),

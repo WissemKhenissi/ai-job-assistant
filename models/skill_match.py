@@ -67,6 +67,21 @@ class JobSkillMatchDB(Base):
         index=True,
     )
 
+    # Ce que l'annonce demande de cette compétence :
+    # essentielle / souhaitee / mention.
+    #
+    # Distinct du statut, qui décrit le candidat. Un écart n'a de
+    # sens que croisé avec ce niveau : « Jira manquant, cité en
+    # exemple » et « gestion de projet manquante, exigée » ne
+    # racontent pas la même candidature.
+    importance: Mapped[str] = mapped_column(
+        String,
+        default="souhaitee",
+        server_default="souhaitee",
+        nullable=False,
+        index=True,
+    )
+
     score: Mapped[float] = mapped_column(
         Float,
         default=0.0,

@@ -186,3 +186,84 @@ def test_le_statut_declared_est_historise(session_factory):
     assert detail.score < 1.0
 
     session.close()
+
+
+# ============================================================
+# NIVEAU D'EXIGENCE
+# ============================================================
+
+
+def test_le_niveau_d_exigence_est_historise(session_factory):
+    """
+    Le statut décrit le candidat, le niveau décrit ce que l'annonce
+    demande. Sans le second, un écart relu plus tard ne veut rien
+    dire : « Jira manquant » et « gestion de projet manquante » ne
+    racontent pas la même candidature.
+    """
+
+    from models.job import JobOfferDB
+    from models.skill_match import JobSkillMatchDB
+    from services.matching import analyze_and_save_job_match
+
+    session = session_factory()
+    _prepare(session)
+
+    annonce = session.get(JobOfferDB, JOB_OFFER_ID)
+
+    annonce.description = (
+        "La maîtrise de la gestion de projet est indispensable.\n"
+        "Environnement technique : Jira, Confluence, Miro, Notion."
+    )
+
+    session.commit()
+    session.close()
+
+    analyze_and_save_job_match(
+        candidate_id=CANDIDATE_ID,
+        job_offer_id=JOB_OFFER_ID,
+        required_skills=["Gestion de projet", "Jira"],
+    )
+
+    session = session_factory()
+
+    par_competence = {
+        row.skill: row
+        for row in session.query(JobSkillMatchDB).all()
+    }
+
+    assert par_competence["Gestion de projet"].importance == (
+        "essentielle"
+    )
+
+    assert par_competence["Jira"].importance == "mention"
+
+    session.close()
+
+
+def test_le_niveau_propose_par_l_ia_est_transmis(session_factory):
+    """
+    L'IA lit l'annonce, le moteur enregistre : le chemin complet doit
+    tenir, sinon la proposition se perd entre les deux.
+    """
+
+    from models.skill_match import JobSkillMatchDB
+    from services.matching import analyze_and_save_job_match
+
+    session = session_factory()
+    _prepare(session)
+    session.close()
+
+    analyze_and_save_job_match(
+        candidate_id=CANDIDATE_ID,
+        job_offer_id=JOB_OFFER_ID,
+        required_skills=["Gestion de projet"],
+        importance_hints={"Gestion de projet": "mention"},
+    )
+
+    session = session_factory()
+
+    detail = session.query(JobSkillMatchDB).one()
+
+    assert detail.importance == "mention"
+
+    session.close()

@@ -197,3 +197,155 @@ def test_la_decroissance_reste_douce():
 
     # La vingtième exigence garde une voix, même faible.
     assert 0.1 < poids_dernier < 0.5
+
+
+# ============================================================
+# NIVEAU D'EXIGENCE
+# ============================================================
+#
+# Le rang seul ne suffisait pas. À l'intérieur d'une énumération
+# d'outils, l'ordre ne veut plus rien dire : le score continuait de
+# s'effondrer sur des détails d'outillage que l'annonce ne pose pas
+# comme conditions. Ce que l'annonce DIT du terme s'y ajoute.
+
+
+def test_une_enumeration_d_outils_pese_moins_qu_une_condition(
+    session_factory,
+):
+    """
+    Cas observé sur une annonce réelle : une compétence cœur exigée,
+    puis dix outils cités en environnement. Le score doit refléter la
+    condition, pas la longueur de l'énumération.
+    """
+
+    session = session_factory()
+    _profil(session)
+
+    for indice in range(10):
+        add_catalog_skill(
+            session,
+            canonical_name=f"Outil {indice}",
+            aliases=[f"Outil {indice}"],
+        )
+
+    session.close()
+
+    exigences = [
+        "Gestion de projet",
+        *[f"Outil {indice}" for indice in range(10)],
+    ]
+
+    annonce = (
+        "Compétences requises : la maîtrise de la gestion de projet "
+        "est indispensable.\n"
+        "Environnement technique : "
+        + ", ".join(f"Outil {indice}" for indice in range(10))
+        + "."
+    )
+
+    resultat = analyze_candidate_against_skills(
+        candidate_id=CANDIDATE_ID,
+        required_skills=exigences,
+        job_text=annonce,
+    )
+
+    # La condition pèse 1,00 ; chacun des dix outils pèse 0,20 fois
+    # son poids de rang, soit 1,04 pour les dix réunis. Le score
+    # devient 1,00 / 2,04 = 49 points, contre 16 sans niveau
+    # d'exigence.
+    #
+    # Le candidat ne couvre toujours qu'une exigence sur onze — mais
+    # l'annonce n'en pose qu'une comme condition, et il la couvre.
+    assert resultat.score_skills > 45.0
+
+
+def test_une_mention_absente_reste_un_ecart(session_factory):
+    """
+    Pondérer n'est pas dissimuler : un outil cité et non maîtrisé
+    reste une compétence manquante, visible comme telle. Seule la
+    liste des conditions non couvertes l'exclut.
+    """
+
+    session = session_factory()
+    _profil(session)
+
+    add_catalog_skill(session, canonical_name="Jira", aliases=["Jira"])
+
+    session.close()
+
+    annonce = (
+        "Compétences requises : la gestion de projet est "
+        "indispensable.\n"
+        "Environnement : Jira, Confluence, Miro, Notion."
+    )
+
+    resultat = analyze_candidate_against_skills(
+        candidate_id=CANDIDATE_ID,
+        required_skills=["Gestion de projet", "Jira"],
+        job_text=annonce,
+    )
+
+    assert "Jira" in resultat.missing_skills
+    assert "Jira" not in resultat.missing_essential_skills
+
+
+def test_une_condition_non_couverte_est_isolee(session_factory):
+    """
+    C'est la liste qui décide d'une candidature : ce que l'annonce
+    pose comme condition et que le profil ne couvre pas.
+    """
+
+    session = session_factory()
+
+    # _profil() inscrit déjà Kubernetes au référentiel, sans le
+    # rattacher au candidat : l'exigence existe, la preuve non.
+    _profil(session)
+
+    session.close()
+
+    annonce = (
+        "Compétences requises : gestion de projet.\n"
+        "La maîtrise de Kubernetes est indispensable."
+    )
+
+    resultat = analyze_candidate_against_skills(
+        candidate_id=CANDIDATE_ID,
+        required_skills=["Gestion de projet", "Kubernetes"],
+        job_text=annonce,
+    )
+
+    assert resultat.missing_essential_skills == ["Kubernetes"]
+
+
+def test_sans_texte_d_annonce_le_score_ne_bouge_pas(session_factory):
+    """
+    Le classement ne s'invente pas un niveau sans annonce à lire :
+    les appels qui ne fournissent pas de texte gardent exactement le
+    comportement d'avant.
+    """
+
+    session = session_factory()
+    _profil(session)
+
+    for indice in range(3):
+        add_catalog_skill(
+            session,
+            canonical_name=f"Outil {indice}",
+            aliases=[f"Outil {indice}"],
+        )
+
+    session.close()
+
+    exigences = [
+        "Gestion de projet",
+        *[f"Outil {indice}" for indice in range(3)],
+    ]
+
+    resultat = analyze_candidate_against_skills(
+        candidate_id=CANDIDATE_ID,
+        required_skills=exigences,
+    )
+
+    # 1,00 / (1,00 + 0,833 + 0,714 + 0,625) = 31,3 points, la valeur
+    # obtenue par la seule pondération de rang.
+    assert 31.0 < resultat.score_skills < 31.6
