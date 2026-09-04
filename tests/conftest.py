@@ -81,17 +81,14 @@ def session_factory(tmp_path, monkeypatch):
                 TestSessionLocal,
             )
 
-    # Le référentiel d'alias est mis en cache au niveau module :
-    # sans reset, un test hériterait du catalogue d'un test précédent.
-    normalization = importlib.import_module(
-        "services.matching.normalization"
+    # Les index dérivés du référentiel sont mis en cache au niveau
+    # module : sans remise à zéro, un test hériterait du catalogue
+    # d'un test précédent.
+    catalogue = importlib.import_module(
+        "services.skill_catalog_service"
     )
 
-    monkeypatch.setattr(
-        normalization,
-        "_canonical_alias_index_cache",
-        None,
-    )
+    catalogue.invalidate_caches()
 
     yield TestSessionLocal
 

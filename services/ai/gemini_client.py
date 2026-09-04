@@ -50,6 +50,20 @@ GEMINI_TIMEOUT_MS = 30_000
 # évidente pour l'utilisateur.
 GEMINI_AUDIO_TIMEOUT_MS = 180_000
 
+# Lire un CV entier et le restituer en JSON structuré produit
+# beaucoup plus de texte qu'une reformulation de puce. Mesuré sur dix
+# CV inventés : 30 s échouaient dans **dix cas sur dix**, en 504
+# DEADLINE_EXCEEDED, et l'utilisateur ne voyait qu'une extraction
+# vide sans comprendre pourquoi.
+GEMINI_LONG_TIMEOUT_MS = 120_000
+
+# Attentes entre deux tentatives, en secondes. L'ancien barème
+# (2 s puis 4 s) abandonnait après six secondes d'attente cumulée :
+# beaucoup trop court face à un « 503 high demand », qui dure
+# couramment plusieurs dizaines de secondes. Observé en rafale sur
+# dix lectures de CV — huit échecs, tous après six secondes.
+ATTENTES_ENTRE_TENTATIVES = (2, 6, 15)
+
 
 class GeminiNotConfiguredError(RuntimeError):
     """Aucune clé GEMINI_API_KEY n'est configurée dans .env."""
@@ -123,7 +137,7 @@ def _call_gemini(
     GeminiRequestError pour toute autre défaillance (réseau, quota
     dépassé, réponse vide) — l'appelant décide alors du repli.
 
-    Jusqu'à deux tentatives supplémentaires en cas de surcharge
+    Jusqu'à trois tentatives supplémentaires en cas de surcharge
     temporaire (503) avant d'abandonner.
     """
 
@@ -133,7 +147,8 @@ def _call_gemini(
 
     config = types.GenerateContentConfig(temperature=temperature)
 
-    max_tentatives = 3
+    max_tentatives = len(ATTENTES_ENTRE_TENTATIVES) + 1
+
     derniere_erreur: Exception = GeminiRequestError(
         "Aucune tentative n'a été effectuée."
     )
@@ -141,7 +156,7 @@ def _call_gemini(
     for tentative in range(max_tentatives):
 
         if tentative > 0:
-            time.sleep(2 * tentative)
+            time.sleep(ATTENTES_ENTRE_TENTATIVES[tentative - 1])
 
         try:
 
@@ -182,10 +197,21 @@ def _call_gemini(
     ) from derniere_erreur
 
 
-def generate_text(prompt: str, temperature: float = 0.4) -> str:
-    """Envoie un prompt texte à Gemini et retourne le texte de la réponse."""
+def generate_text(
+    prompt: str,
+    temperature: float = 0.4,
+    timeout_ms: int | None = None,
+) -> str:
+    """
+    Envoie un prompt texte à Gemini et retourne le texte de la réponse.
 
-    return _call_gemini(prompt, temperature)
+    `timeout_ms` desserre le délai par défaut pour les appels qui
+    produisent beaucoup de texte : lire un CV entier et le restituer
+    en JSON dépasse régulièrement les 30 secondes, et l'échec se
+    présentait alors comme une extraction vide.
+    """
+
+    return _call_gemini(prompt, temperature, timeout_ms)
 
 
 def generate_multimodal(

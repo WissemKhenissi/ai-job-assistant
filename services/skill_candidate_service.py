@@ -54,9 +54,9 @@ def _invalider_cache_alias() -> None:
     croirait que son ajout n'a rien changé.
     """
 
-    import services.matching.normalization as normalization
+    from services.skill_catalog_service import invalidate_caches
 
-    normalization._canonical_alias_index_cache = None
+    invalidate_caches()
 
 
 def record_unknown_terms(

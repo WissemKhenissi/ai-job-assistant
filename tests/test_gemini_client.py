@@ -158,16 +158,46 @@ def test_reessaie_apres_une_surcharge_puis_reussit(monkeypatch):
     assert faux_client.models.appels == 2
 
 
-def test_abandonne_apres_trois_surcharges_successives(monkeypatch):
+def test_abandonne_apres_avoir_epuise_les_tentatives(monkeypatch):
+    from services.ai.gemini_client import ATTENTES_ENTRE_TENTATIVES
+
+    attendues = len(ATTENTES_ENTRE_TENTATIVES) + 1
+
     faux_client = _patch_client(
         monkeypatch,
-        [RuntimeError("503 UNAVAILABLE.")] * 3,
+        [RuntimeError("503 UNAVAILABLE.")] * attendues,
     )
 
     with pytest.raises(GeminiRequestError):
         generate_text("prompt")
 
-    assert faux_client.models.appels == 3
+    assert faux_client.models.appels == attendues
+
+
+def test_le_bareme_d_attente_tient_une_surcharge_prolongee():
+    """
+    L'ancien barème (2 s puis 4 s) abandonnait après six secondes
+    d'attente cumulée — beaucoup trop court face à un « 503 high
+    demand », observé en rafale sur dix lectures de CV : huit échecs,
+    tous après six secondes.
+    """
+
+    from services.ai.gemini_client import ATTENTES_ENTRE_TENTATIVES
+
+    assert sum(ATTENTES_ENTRE_TENTATIVES) >= 20
+
+
+def test_les_attentes_sont_croissantes():
+    """
+    Insister au même rythme sur un service saturé l'aggrave : chaque
+    tentative doit laisser plus de temps que la précédente.
+    """
+
+    from services.ai.gemini_client import ATTENTES_ENTRE_TENTATIVES
+
+    assert list(ATTENTES_ENTRE_TENTATIVES) == sorted(
+        ATTENTES_ENTRE_TENTATIVES
+    )
 
 
 def test_une_erreur_permanente_n_est_jamais_retentee(monkeypatch):

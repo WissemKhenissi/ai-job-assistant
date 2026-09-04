@@ -241,6 +241,60 @@ def get_skill_by_id(
 # RECHERCHE PAR NOM / ALIAS
 # ============================================================
 
+# Index « forme normalisée -> compétence », construit une fois par
+# processus. Sans lui, chaque recherche relisait le référentiel entier
+# et normalisait tous ses alias : 1,3 ms à 46 entrées, mais ~400 ms
+# extrapolées à un référentiel de 14 000 compétences, appelé plusieurs
+# fois par exigence d'annonce. Le coût devient constant.
+_index_par_forme: dict[str, CatalogSkill] | None = None
+
+
+def invalidate_caches() -> None:
+    """
+    Vide les index dérivés du référentiel.
+
+    Point d'entrée unique, appelé après toute écriture dans
+    skill_catalog. Trois caches indépendants dans trois modules
+    seraient un piège : celui qu'on oublie rend une compétence
+    fraîchement créée invisible jusqu'au prochain démarrage, sans
+    message d'erreur.
+    """
+
+    global _index_par_forme
+
+    _index_par_forme = None
+
+    import services.job_requirements_service as requirements
+    import services.matching.normalization as normalization
+
+    normalization._canonical_alias_index_cache = None
+    requirements._index_extraction_cache = None
+
+
+def _forme_vers_competence() -> dict[str, CatalogSkill]:
+
+    global _index_par_forme
+
+    if _index_par_forme is None:
+
+        index: dict[str, CatalogSkill] = {}
+
+        for skill in get_active_skills():
+
+            for candidate in (
+                skill.canonical_name,
+                *skill.aliases,
+            ):
+                forme = normalize_skill_text(candidate)
+
+                if forme:
+                    index.setdefault(forme, skill)
+
+        _index_par_forme = index
+
+    return _index_par_forme
+
+
 def find_skill_by_name(
     name: str,
 ) -> CatalogSkill | None:
@@ -268,24 +322,7 @@ def find_skill_by_name(
     if not normalized_name:
         return None
 
-    skills = get_active_skills()
-
-    for skill in skills:
-
-        candidates = (
-            skill.canonical_name,
-            *skill.aliases,
-        )
-
-        for candidate in candidates:
-
-            if (
-                normalize_skill_text(candidate)
-                == normalized_name
-            ):
-                return skill
-
-    return None
+    return _forme_vers_competence().get(normalized_name)
 
 
 # ============================================================

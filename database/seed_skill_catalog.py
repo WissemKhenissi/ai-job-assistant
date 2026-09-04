@@ -1494,6 +1494,13 @@ def seed_skill_catalog() -> None:
             f"{updated_count} compétences mises à jour."
         )
 
+        # Les index dérivés du référentiel sont construits une fois
+        # par processus : sans cette remise à zéro, un import réalisé
+        # depuis l'application resterait invisible du moteur.
+        from services.skill_catalog_service import invalidate_caches
+
+        invalidate_caches()
+
         print()
 
         print(

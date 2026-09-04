@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 from services.ai.gemini_client import (
+    GEMINI_LONG_TIMEOUT_MS,
     GeminiNotConfiguredError,
     GeminiRequestError,
     generate_text,
@@ -298,6 +299,7 @@ def extract_profile_from_cv(
         reponse = generate_text(
             f"{PROMPT_RULES}\n\nTEXTE DU CV\n{source}",
             temperature=0.1,
+            timeout_ms=GEMINI_LONG_TIMEOUT_MS,
         )
 
     except (GeminiNotConfiguredError, GeminiRequestError) as error:
