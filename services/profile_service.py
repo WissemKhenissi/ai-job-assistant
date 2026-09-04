@@ -28,24 +28,114 @@ from database.models import (
 # LECTURE
 # ============================================================
 
-def get_candidate():
+def list_candidates() -> list[dict]:
+    """
+    Les profils existants, en primitives, du plus ancien au plus
+    récent — l'ordre de création est le plus lisible dans un
+    sélecteur.
+    """
+
     db = SessionLocal()
 
     try:
-        return db.query(CandidateDB).first()
+        return [
+            {
+                "id": candidat.id,
+                "full_name": (
+                    f"{candidat.first_name} {candidat.last_name}"
+                ).strip()
+                or "Profil sans nom",
+                "headline": candidat.headline or "",
+            }
+            for candidat in db.query(CandidateDB)
+            .order_by(CandidateDB.id)
+            .all()
+        ]
+
     finally:
         db.close()
 
 
-def get_experiences():
+def get_candidate(candidate_id: str | None = None):
+    """
+    Le profil demandé, ou le premier de la base si aucun n'est
+    précisé.
+
+    Le repli existe pour le démarrage de l'application, quand aucun
+    profil n'a encore été choisi. Partout ailleurs, passer
+    l'identifiant : sans lui, deux profils en base se mélangeraient.
+    """
+
     db = SessionLocal()
 
     try:
-        return (
-            db.query(ExperienceDB)
-            .order_by(ExperienceDB.start_date.desc())
-            .all()
+
+        if candidate_id:
+            return db.get(CandidateDB, candidate_id)
+
+        return db.query(CandidateDB).order_by(CandidateDB.id).first()
+
+    finally:
+        db.close()
+
+
+def get_experiences(candidate_id: str | None = None):
+    """
+    Les expériences d'un candidat, de la plus récente à la plus
+    ancienne.
+
+    `candidate_id` est facultatif pour ne pas casser les appels
+    existants, mais l'omettre retourne le parcours de **tous** les
+    candidats : ne l'omettre que s'il est certain qu'il n'y en a
+    qu'un.
+    """
+
+    db = SessionLocal()
+
+    try:
+        requete = db.query(ExperienceDB)
+
+        if candidate_id:
+            requete = requete.filter(
+                ExperienceDB.candidate_id == candidate_id
+            )
+
+        return requete.order_by(
+            ExperienceDB.start_date.desc()
+        ).all()
+
+    finally:
+        db.close()
+
+
+def create_candidate(
+    first_name: str = "",
+    last_name: str = "",
+    candidate_id: str | None = None,
+) -> str:
+    """Crée un profil vide et retourne son identifiant."""
+
+    db = SessionLocal()
+
+    try:
+        identifiant = candidate_id or f"candidate-{uuid4()}"
+
+        db.add(
+            CandidateDB(
+                id=identifiant,
+                first_name=first_name.strip(),
+                last_name=last_name.strip(),
+            )
         )
+
+        db.commit()
+
+        return identifiant
+
+    except Exception:
+        db.rollback()
+        raise
+
     finally:
         db.close()
 
@@ -707,6 +797,143 @@ def delete_certification(certification_id: str) -> None:
         if certification is not None:
             db.delete(certification)
             db.commit()
+
+    except Exception:
+        db.rollback()
+        raise
+
+    finally:
+        db.close()
+
+
+def count_candidate_data(candidate_id: str) -> dict[str, int]:
+    """
+    Ce qu'un profil contient, table par table.
+
+    Sert d'abord à l'écran de suppression : on ne détruit pas un
+    parcours sans dire ce qu'il contenait.
+    """
+
+    from database.models import GeneratedCVDB, InterviewExchangeDB
+    from models.application import ApplicationDB
+    from models.matching import JobMatchDB
+
+    db = SessionLocal()
+
+    try:
+        experiences = (
+            db.query(ExperienceDB)
+            .filter(ExperienceDB.candidate_id == candidate_id)
+            .all()
+        )
+
+        identifiants = [item.id for item in experiences]
+
+        realisations = (
+            db.query(AchievementDB)
+            .filter(AchievementDB.experience_id.in_(identifiants))
+            .count()
+            if identifiants
+            else 0
+        )
+
+        def _compter(modele) -> int:
+            return (
+                db.query(modele)
+                .filter(modele.candidate_id == candidate_id)
+                .count()
+            )
+
+        return {
+            "experiences": len(experiences),
+            "realisations": realisations,
+            "competences": _compter(SkillDB),
+            "preuves": _compter(EvidenceDB),
+            "formations": _compter(EducationDB),
+            "certifications": _compter(CertificationDB),
+            "analyses": _compter(JobMatchDB),
+            "candidatures": _compter(ApplicationDB),
+            "cv_generes": _compter(GeneratedCVDB),
+            "echanges_entretien": _compter(InterviewExchangeDB),
+        }
+
+    finally:
+        db.close()
+
+
+def delete_candidate(candidate_id: str) -> dict[str, int]:
+    """
+    Supprime un profil et tout ce qui lui est rattaché.
+
+    Irréversible, et sans filet : aucune corbeille, aucune
+    restauration. L'appelant doit avoir fait confirmer explicitement.
+    Retourne le décompte de ce qui a été supprimé, pour que
+    l'utilisateur voie l'ampleur de ce qu'il vient de faire.
+
+    Les annonces ne sont pas touchées : elles ne sont pas la propriété
+    d'un candidat, seules les analyses qui les relient à lui le sont.
+    """
+
+    from database.models import GeneratedCVDB, InterviewExchangeDB
+    from models.application import ApplicationDB
+    from models.matching import JobMatchDB
+    from models.skill_match import JobSkillMatchDB
+
+    decompte = count_candidate_data(candidate_id)
+
+    db = SessionLocal()
+
+    try:
+        candidat = db.get(CandidateDB, candidate_id)
+
+        if candidat is None:
+            raise ValueError(f"Profil introuvable : {candidate_id}")
+
+        # Le détail par compétence pend aux analyses : sans cette
+        # première passe, il resterait des lignes orphelines.
+        analyses = (
+            db.query(JobMatchDB)
+            .filter(JobMatchDB.candidate_id == candidate_id)
+            .all()
+        )
+
+        for analyse in analyses:
+            db.query(JobSkillMatchDB).filter(
+                JobSkillMatchDB.job_match_id == analyse.id
+            ).delete(synchronize_session=False)
+
+        experiences = (
+            db.query(ExperienceDB)
+            .filter(ExperienceDB.candidate_id == candidate_id)
+            .all()
+        )
+
+        identifiants = [item.id for item in experiences]
+
+        if identifiants:
+            db.query(AchievementDB).filter(
+                AchievementDB.experience_id.in_(identifiants)
+            ).delete(synchronize_session=False)
+
+        for modele in (
+            EvidenceDB,
+            SkillDB,
+            ExperienceDB,
+            EducationDB,
+            CertificationDB,
+            JobMatchDB,
+            ApplicationDB,
+            GeneratedCVDB,
+            InterviewExchangeDB,
+        ):
+            db.query(modele).filter(
+                modele.candidate_id == candidate_id
+            ).delete(synchronize_session=False)
+
+        db.delete(candidat)
+        db.commit()
+
+        return decompte
 
     except Exception:
         db.rollback()
