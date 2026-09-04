@@ -11,7 +11,6 @@ interaction, les deux onglets restent donc synchronisés.
 
 from __future__ import annotations
 
-import unicodedata
 from uuid import uuid4
 
 import streamlit as st
@@ -30,6 +29,9 @@ from services.experience_duration import (
 )
 from services.requirement_cleaning import clean_required_skills
 from services.skill_candidate_service import record_unknown_terms
+from services.text_normalization import (
+    minuscules_sans_accents as _normalize_loose,
+)
 from services.job_requirements_service import (
     extract_required_skills,
     extract_required_years,
@@ -42,18 +44,6 @@ from services.profile_service import get_experiences
 # lit comme valeurs initiales.
 _PREFILL_TITLE_KEY = "job_matching_prefill_title"
 _PREFILL_TEXT_KEY = "job_matching_prefill_text"
-
-
-def _normalize_loose(text: str) -> str:
-    """Minuscules, sans accents — suffisant pour une déduplication d'affichage."""
-
-    normalized = unicodedata.normalize("NFKD", text)
-
-    return "".join(
-        character
-        for character in normalized
-        if not unicodedata.combining(character)
-    ).casefold()
 
 
 def _new_draft() -> None:

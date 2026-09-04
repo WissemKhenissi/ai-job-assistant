@@ -167,8 +167,6 @@ INFERRED_GOOD_SCORE = 0.75
 INFERRED_MODERATE_SCORE = 0.70
 INFERRED_PRUDENT_SCORE = 0.60
 
-MISSING_SCORE = 0.00
-
 
 # ============================================================
 # PONDERATION DU SCORE D'EXPERIENCE
@@ -225,7 +223,6 @@ SEMANTIC_INFERENCE_EXCLUDED = {
     "artificial intelligence",
     "jira",
 }
-
 
 
 # ============================================================

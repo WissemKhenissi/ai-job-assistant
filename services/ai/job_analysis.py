@@ -27,15 +27,16 @@ from __future__ import annotations
 
 import json
 import re
-import unicodedata
 from dataclasses import dataclass, field
 
 from database.db import SessionLocal
-from models.job import JobOfferDB
 from models.matching import JobMatchDB
 from models.skill_match import JobSkillMatchDB
 
 from services.requirement_importance import IMPORTANCES
+from services.text_normalization import (
+    minuscules_sans_accents as _normalize_loose,
+)
 from services.text_numbers import numbers_in
 
 from services.ai.gemini_client import (
@@ -57,20 +58,6 @@ ALLOWED_REMOTE_POLICIES = {"Sur site", "Hybride", "Télétravail complet"}
 # déterministe qui prend le relais quand l'IA ne répond pas, ou
 # répond autre chose.
 ALLOWED_IMPORTANCES = IMPORTANCES
-
-
-def _normalize_loose(text: str) -> str:
-    """Minuscules, sans accents — suffisant pour un contrôle de présence."""
-
-    normalized = unicodedata.normalize("NFKD", text)
-
-    normalized = "".join(
-        character
-        for character in normalized
-        if not unicodedata.combining(character)
-    )
-
-    return normalized.casefold()
 
 
 def _strip_json_fences(text: str) -> str:

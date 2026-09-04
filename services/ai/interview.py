@@ -39,10 +39,6 @@ from uuid import uuid4
 from database.db import SessionLocal
 from database.models import (
     AchievementDB,
-    CandidateDB,
-    CertificationDB,
-    EducationDB,
-    EvidenceDB,
     ExperienceDB,
     SkillDB,
 )
@@ -404,7 +400,6 @@ def generate_followup_questions(
 # Types MIME audio produits par st.audio_input (enregistrement
 # navigateur) — la valeur exacte varie selon le navigateur, on garde
 # une liste large plutôt que d'imposer un seul format.
-AUDIO_MIME_TYPES = {"audio/wav", "audio/webm", "audio/ogg", "audio/mp4"}
 
 
 def transcribe_audio(audio_bytes: bytes, mime_type: str = "audio/wav") -> tuple[str, str]:

@@ -37,8 +37,6 @@ INTEGRE = "integre"      # promu en compétence du référentiel
 RATTACHE = "rattache"    # ajouté comme alias d'une compétence
 IGNORE = "ignore"        # jugé sans valeur par l'utilisateur
 
-# Un terme traité ne doit plus revenir dans la liste à trier.
-STATUTS_TRAITES = frozenset({INTEGRE, RATTACHE, IGNORE})
 
 # Au-delà, la liste des annonces d'exemple n'apprend plus rien.
 MAX_EXEMPLES = 10

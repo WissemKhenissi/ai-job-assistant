@@ -29,7 +29,6 @@ from services.ai.skill_proposal import propose_catalog_entry
 from services.job_service import get_job_offer_text
 
 from services.skill_candidate_service import (
-    IGNORE,
     INTEGRE,
     RATTACHE,
     attach_as_alias,

@@ -204,40 +204,6 @@ def get_active_skills() -> list[CatalogSkill]:
 
 
 # ============================================================
-# RECHERCHE PAR ID
-# ============================================================
-
-def get_skill_by_id(
-    skill_id: str,
-) -> CatalogSkill | None:
-
-    if not skill_id:
-        return None
-
-    db = SessionLocal()
-
-    try:
-
-        row = (
-            db.query(SkillCatalogDB)
-            .filter(
-                SkillCatalogDB.id == skill_id,
-                SkillCatalogDB.is_active.is_(True),
-            )
-            .first()
-        )
-
-        if row is None:
-            return None
-
-        return _to_catalog_skill(row)
-
-    finally:
-
-        db.close()
-
-
-# ============================================================
 # RECHERCHE PAR NOM / ALIAS
 # ============================================================
 
@@ -544,65 +510,6 @@ def build_skill_semantic_text(
     return "\n".join(
         sections
     )
-
-
-# ============================================================
-# CATALOGUE POUR RECHERCHE
-# ============================================================
-
-def get_skill_catalog_for_search() -> list[dict]:
-    """
-    Retourne le catalogue dans une structure directement
-    exploitable par les moteurs de recherche et de matching.
-    """
-
-    skills = get_active_skills()
-
-    results: list[dict] = []
-
-    for skill in skills:
-
-        semantic_texts = (
-            build_skill_semantic_texts(
-                skill
-            )
-        )
-
-        results.append(
-            {
-                "id": skill.id,
-                "canonical_name": (
-                    skill.canonical_name
-                ),
-                "category": skill.category,
-                "subcategory": skill.subcategory,
-                "aliases": list(
-                    skill.aliases
-                ),
-                "description": (
-                    skill.description
-                ),
-                "parent_skill_id": (
-                    skill.parent_skill_id
-                ),
-                "related_skills": list(
-                    skill.related_skills
-                ),
-                "search_text": (
-                    semantic_texts["full"]
-                ),
-                "semantic_text": (
-                    build_skill_semantic_text(
-                        skill
-                    )
-                ),
-                "semantic_texts": (
-                    semantic_texts
-                ),
-            }
-        )
-
-    return results
 
 
 # ============================================================

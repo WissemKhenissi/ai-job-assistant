@@ -350,16 +350,6 @@ def update_experience(experience_id: str, **fields) -> None:
 # ECRITURE — REALISATION
 # ============================================================
 
-_ACHIEVEMENT_FIELDS = {
-    "title",
-    "situation",
-    "action",
-    "result",
-    "metrics",
-    "description",
-}
-
-
 def add_achievement(
     experience_id: str,
     title: str,
@@ -389,36 +379,6 @@ def add_achievement(
         db.commit()
 
         return achievement.id
-
-    except Exception:
-        db.rollback()
-        raise
-
-    finally:
-        db.close()
-
-
-def update_achievement(achievement_id: str, **fields) -> None:
-
-    inconnus = set(fields) - _ACHIEVEMENT_FIELDS
-
-    if inconnus:
-        raise ValueError(f"Champs inconnus : {inconnus}")
-
-    db = SessionLocal()
-
-    try:
-        achievement = db.get(AchievementDB, achievement_id)
-
-        if achievement is None:
-            raise ValueError(
-                f"Réalisation introuvable : {achievement_id}"
-            )
-
-        for champ, valeur in fields.items():
-            setattr(achievement, champ, valeur)
-
-        db.commit()
 
     except Exception:
         db.rollback()
@@ -712,15 +672,6 @@ def delete_education(education_id: str) -> None:
 # ECRITURE — CERTIFICATION
 # ============================================================
 
-_CERTIFICATION_FIELDS = {
-    "name",
-    "organization",
-    "obtained_year",
-    "credential_url",
-    "description",
-}
-
-
 def add_certification(
     candidate_id: str,
     name: str,
@@ -748,36 +699,6 @@ def add_certification(
         db.commit()
 
         return certification.id
-
-    except Exception:
-        db.rollback()
-        raise
-
-    finally:
-        db.close()
-
-
-def update_certification(certification_id: str, **fields) -> None:
-
-    inconnus = set(fields) - _CERTIFICATION_FIELDS
-
-    if inconnus:
-        raise ValueError(f"Champs inconnus : {inconnus}")
-
-    db = SessionLocal()
-
-    try:
-        certification = db.get(CertificationDB, certification_id)
-
-        if certification is None:
-            raise ValueError(
-                f"Certification introuvable : {certification_id}"
-            )
-
-        for champ, valeur in fields.items():
-            setattr(certification, champ, valeur)
-
-        db.commit()
 
     except Exception:
         db.rollback()

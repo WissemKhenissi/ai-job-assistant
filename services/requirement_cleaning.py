@@ -28,25 +28,13 @@ fausserait l'analyse dans l'autre sens.
 
 from __future__ import annotations
 
-import re
-import unicodedata
-
 from services.skill_catalog_service import find_skill_by_name
 
-
-def _normalize(value: str) -> str:
-
-    normalise = unicodedata.normalize("NFKD", value or "")
-
-    normalise = "".join(
-        caractere
-        for caractere in normalise
-        if not unicodedata.combining(caractere)
-    )
-
-    normalise = re.sub(r"[^a-z0-9+#]+", " ", normalise.casefold())
-
-    return re.sub(r"\s+", " ", normalise).strip()
+# La même forme que celle sous laquelle le niveau d'exigence est
+# indexé (services.requirement_importance). Deux définitions
+# séparées auraient suffi à ce qu'une exigence retenue ici cesse
+# silencieusement de retrouver son niveau.
+from services.text_normalization import forme_comparable as _normalize
 
 
 # Mots qui décrivent un domaine, un objectif ou un support — jamais

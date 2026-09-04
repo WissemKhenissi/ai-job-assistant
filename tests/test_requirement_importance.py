@@ -320,3 +320,21 @@ def test_une_liste_de_conditions_reste_une_liste_de_conditions():
     annonce = "Compétences requises : Python, Docker, SQL, Git."
 
     assert classify_requirement("Docker", annonce) == ESSENTIELLE
+
+
+def test_des_points_de_suspension_ne_coupent_pas_la_liste():
+    """
+    Régression : normaliser en NFKD réécrivait « … » en trois points,
+    et la fenêtre de phrase se coupait au premier. La liste perdait
+    son dernier élément, cessait d'être reconnue comme énumération,
+    et Jira redevenait une condition d'entrée.
+
+    Cas relevé tel quel sur l'annonce « CHEF DE PROJETS PLATEFORME
+    E-COMMERCE ».
+    """
+
+    annonce = (
+        "Maîtrise des outils produits (Jira, Confluence, Figma, …)."
+    )
+
+    assert classify_requirement("Jira", annonce) == MENTION

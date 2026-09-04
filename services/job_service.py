@@ -76,34 +76,3 @@ def save_job_offer(
         raise
     finally:
         db.close()
-
-
-def get_job_offer_summary(job_offer_id: str) -> dict | None:
-    """
-    Champs d'affichage d'une offre (catégorisation incluse), en dict
-    de primitives — jamais l'objet ORM lui-même, pour ne pas exposer
-    une instance détachée de sa session en dehors de ce module.
-    """
-
-    db = SessionLocal()
-
-    try:
-
-        job_offer = db.get(JobOfferDB, job_offer_id)
-
-        if job_offer is None:
-            return None
-
-        return {
-            "title": job_offer.title or "",
-            "company": job_offer.company or "",
-            "location": job_offer.location or "",
-            "contract_type": job_offer.contract_type or "",
-            "remote_policy": job_offer.remote_policy or "",
-            "remote_details": job_offer.remote_details or "",
-            "required_years": job_offer.required_years,
-        }
-
-    finally:
-
-        db.close()

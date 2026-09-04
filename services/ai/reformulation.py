@@ -52,7 +52,6 @@ from services.cv.vocabulary import (
     forbidden_terms_used,
     seniority_terms_added,
 )
-from services.letter.results import CoverLetter, LetterParagraph
 from services.text_numbers import numbers_in
 
 
@@ -226,71 +225,6 @@ def _safe_reformulate(
         )
 
     return ReformulationResult(text=reformule, was_reformulated=True)
-
-
-# ============================================================
-# LETTRE DE MOTIVATION
-# ============================================================
-
-def reformulate_letter_paragraph(
-    text: str,
-    job_text: str,
-    poste: str,
-) -> ReformulationResult:
-
-    instructions = (
-        f"Ce paragraphe fait partie d'une lettre de motivation pour "
-        f"le poste de {poste}. Reformule-le pour qu'il soit plus "
-        "naturel et mieux adapté au vocabulaire de l'offre "
-        "ci-dessous, sans changer le fond.\n\n"
-        f"Extrait de l'offre :\n{job_text[:MAX_JOB_EXCERPT]}"
-    )
-
-    return _safe_reformulate(text, instructions)
-
-
-def reformulate_cover_letter(
-    letter: CoverLetter,
-    job_text: str,
-) -> tuple[CoverLetter, list[str]]:
-    """
-    Reformule les paragraphes de contenu de la lettre (pas les
-    formules fixes : objet, salutation, formule de politesse,
-    signature — aucune valeur à en attendre, seulement un risque de
-    dérive).
-
-    Retourne une nouvelle lettre (jamais validée d'office, comme
-    toute lettre générée) et la liste des avertissements rencontrés.
-    """
-
-    avertissements: list[str] = []
-    nouveaux_paragraphes: list[LetterParagraph] = []
-
-    for paragraphe in letter.paragraphs:
-
-        resultat = reformulate_letter_paragraph(
-            paragraphe.text,
-            job_text,
-            letter.job_offer_title,
-        )
-
-        if resultat.warning:
-            avertissements.append(resultat.warning)
-
-        nouveaux_paragraphes.append(
-            LetterParagraph(
-                text=resultat.text,
-                sources=paragraphe.sources,
-            )
-        )
-
-    lettre_reformulee = replace(
-        letter,
-        paragraphs=nouveaux_paragraphes,
-        validated_by_user=False,
-    )
-
-    return lettre_reformulee, avertissements
 
 
 # ============================================================

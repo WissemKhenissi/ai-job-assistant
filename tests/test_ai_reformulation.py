@@ -23,7 +23,6 @@ import services.ai.reformulation as reformulation
 from services.ai.gemini_client import GeminiNotConfiguredError, GeminiRequestError
 from services.cv.results import CVEvidenceLine, CVExperience, TargetedCV
 from services.cv.vocabulary import OfferVocabulary
-from services.letter.results import CoverLetter, LetterParagraph
 
 
 JOB_TEXT = "Nous cherchons un profil produit avec de l'expérience e-commerce."
@@ -185,123 +184,6 @@ def test_un_chiffre_deja_present_ne_declenche_pas_le_garde_fou(
     )
 
     assert resultat.was_reformulated is True
-
-
-# ============================================================
-# LETTRE DE MOTIVATION
-# ============================================================
-
-def _lettre_de_test() -> CoverLetter:
-    return CoverLetter(
-        candidate_id="candidate-test",
-        full_name="Wissem Khenissi",
-        email="test@example.com",
-        phone="",
-        location="",
-        job_offer_id="job-test",
-        job_offer_title="Product Owner",
-        company="",
-        redaction_date=date(2026, 9, 2),
-        objet="Objet : candidature au poste de Product Owner",
-        salutation="Madame, Monsieur,",
-        paragraphs=[
-            LetterParagraph(
-                text="Votre annonce a retenu mon attention.",
-                sources=(),
-            ),
-            LetterParagraph(
-                text="Je documente concrètement Product Discovery.",
-                sources=("evidence-1",),
-            ),
-        ],
-        closing="Je vous remercie de votre attention.",
-        signature="Wissem Khenissi",
-    )
-
-
-def test_reformulate_cover_letter_ne_touche_pas_aux_formules_fixes(
-    monkeypatch,
-):
-    monkeypatch.setattr(reformulation, "is_configured", lambda: False)
-
-    lettre = _lettre_de_test()
-
-    lettre_reformulee, _avertissements = (
-        reformulation.reformulate_cover_letter(lettre, JOB_TEXT)
-    )
-
-    assert lettre_reformulee.objet == lettre.objet
-    assert lettre_reformulee.salutation == lettre.salutation
-    assert lettre_reformulee.closing == lettre.closing
-    assert lettre_reformulee.signature == lettre.signature
-
-
-def test_reformulate_cover_letter_preserve_les_sources(monkeypatch):
-    """
-    Le texte peut changer, les identifiants de preuve qui justifient
-    chaque paragraphe ne doivent jamais bouger : c'est la traçabilité
-    du document.
-    """
-
-    monkeypatch.setattr(reformulation, "is_configured", lambda: True)
-
-    monkeypatch.setattr(
-        reformulation,
-        "generate_text",
-        lambda *a, **k: "Un texte reformulé, sans nouveau chiffre.",
-    )
-
-    lettre = _lettre_de_test()
-
-    lettre_reformulee, _avertissements = (
-        reformulation.reformulate_cover_letter(lettre, JOB_TEXT)
-    )
-
-    sources_avant = [p.sources for p in lettre.paragraphs]
-    sources_apres = [p.sources for p in lettre_reformulee.paragraphs]
-
-    assert sources_avant == sources_apres
-
-
-def test_reformulate_cover_letter_sans_cle_remonte_les_avertissements(
-    monkeypatch,
-):
-    monkeypatch.setattr(reformulation, "is_configured", lambda: False)
-
-    lettre = _lettre_de_test()
-
-    _lettre_reformulee, avertissements = (
-        reformulation.reformulate_cover_letter(lettre, JOB_TEXT)
-    )
-
-    # Un avertissement par paragraphe non vide.
-    assert len(avertissements) == len(lettre.paragraphs)
-
-
-def test_reformulate_cover_letter_redemande_toujours_validation(
-    monkeypatch,
-):
-    """
-    Une lettre reformulée n'est jamais validée d'office : c'est le
-    même principe que pour la lettre déterministe.
-    """
-
-    monkeypatch.setattr(reformulation, "is_configured", lambda: True)
-
-    monkeypatch.setattr(
-        reformulation,
-        "generate_text",
-        lambda *a, **k: "Texte reformulé sans chiffre.",
-    )
-
-    lettre = _lettre_de_test()
-    lettre.validated_by_user = True  # même si déjà validée avant...
-
-    lettre_reformulee, _ = reformulation.reformulate_cover_letter(
-        lettre, JOB_TEXT
-    )
-
-    assert lettre_reformulee.validated_by_user is False
 
 
 # ============================================================

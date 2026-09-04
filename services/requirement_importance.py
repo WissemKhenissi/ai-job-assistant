@@ -33,7 +33,11 @@ transformer un décor en exigence.
 from __future__ import annotations
 
 import re
-import unicodedata
+
+from services.text_normalization import (
+    forme_comparable,
+    minuscules_sans_accents,
+)
 
 
 # ============================================================
@@ -175,35 +179,11 @@ MARQUEURS_MENTION = (
 # NORMALISATION
 # ============================================================
 
-def _sans_accents(texte: str) -> str:
-    """
-    Retire les accents sans toucher à la structure du texte.
-
-    Le découpage en lignes et en phrases se fait ensuite sur ce
-    résultat : sauts de ligne, points et virgules doivent survivre.
-    """
-
-    decompose = unicodedata.normalize("NFD", texte or "")
-
-    return "".join(
-        caractere
-        for caractere in decompose
-        if not unicodedata.combining(caractere)
-    )
-
-
-def normalise_terme(terme: str) -> str:
-    """
-    Forme de comparaison d'un terme : minuscules, sans accents, sans
-    ponctuation. Sert de clé partout où une exigence doit être
-    retrouvée d'un module à l'autre.
-    """
-
-    normalise = _sans_accents(terme).casefold()
-
-    normalise = re.sub(r"[^a-z0-9+#]+", " ", normalise)
-
-    return re.sub(r"\s+", " ", normalise).strip()
+# La clé sous laquelle une exigence est retrouvée d'un module à
+# l'autre. Réexportée sous ce nom : le moteur de matching et le tri
+# des exigences l'emploient tous les deux, et ils doivent employer
+# exactement la même — voir services.text_normalization.
+normalise_terme = forme_comparable
 
 
 # Fins de phrase et séparateurs de puce : la fenêtre de lecture s'y
@@ -361,7 +341,7 @@ def classify_requirement(terme: str, job_text: str) -> str:
     if not cle or not (job_text or "").strip():
         return IMPORTANCE_PAR_DEFAUT
 
-    texte = _sans_accents(job_text).casefold()
+    texte = minuscules_sans_accents(job_text)
 
     # Le terme normalisé perd sa ponctuation, le texte non : on
     # cherche donc le terme mot à mot, en tolérant n'importe quel

@@ -431,7 +431,6 @@ def export_pdf(
         ListItem,
         Paragraph,
         SimpleDocTemplate,
-        Spacer,
         Table,
         TableStyle,
     )
