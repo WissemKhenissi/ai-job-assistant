@@ -29,6 +29,7 @@ from services.experience_duration import (
     total_experience_years,
 )
 from services.requirement_cleaning import clean_required_skills
+from services.skill_candidate_service import record_unknown_terms
 from services.job_requirements_service import (
     extract_required_skills,
     extract_required_years,
@@ -291,6 +292,33 @@ def render_analysis_tab(candidate_id: str) -> None:
                 job_offer_id=job_offer_id,
                 required_skills=required_skills,
             )
+
+            # --------------------------------------------------
+            # CE QUE LE REFERENTIEL NE CONNAIT PAS
+            # --------------------------------------------------
+            #
+            # Un terme inconnu est un trou du référentiel, pas une
+            # compétence absente du candidat. On l'enregistre pour
+            # que l'utilisateur puisse l'intégrer : c'est ainsi que
+            # le référentiel s'étend à d'autres métiers que ceux
+            # prévus à sa livraison.
+
+            try:
+                record_unknown_terms(
+                    required_skills,
+                    job_offer_id=job_offer_id,
+                    was_counted=True,
+                )
+                record_unknown_terms(
+                    exigences_ecartees,
+                    job_offer_id=job_offer_id,
+                    was_counted=False,
+                )
+
+            except Exception:
+                # Ne jamais faire échouer une analyse pour un
+                # apprentissage qui n'a pas abouti.
+                pass
 
             st.session_state["job_matching_result"] = {
                 "job_offer_id": job_offer_id,

@@ -39,6 +39,7 @@ SERVICE_MODULES = (
     "services.market_memory_service",
     "services.matching.analysis",
     "services.profile_service",
+    "services.skill_candidate_service",
     "services.skill_catalog_service",
 )
 

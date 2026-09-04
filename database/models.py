@@ -1,6 +1,15 @@
 from datetime import date, datetime
 
-from sqlalchemy import JSON, Date, DateTime, Float, String, Text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -625,5 +634,101 @@ class GeneratedCVDB(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.utcnow,
+        nullable=False
+    )
+
+
+# ============================================================
+# COMPETENCES INCONNUES DU REFERENTIEL
+# ============================================================
+
+class SkillCandidateDB(Base):
+    """
+    Terme rencontré dans une annonce que le référentiel ne connaît pas.
+
+    Le référentiel pilote tout : matching, vocabulaire autorisé, tri
+    des exigences. Livré figé, il ne vaut que pour les métiers que son
+    auteur a prévus — un développeur, une infirmière ou un juriste n'y
+    trouveraient rien, et l'outil ne fonctionnerait pas pour eux.
+
+    Cette table est la boucle d'apprentissage : chaque terme inconnu y
+    est enregistré avec son nombre d'occurrences, à charge pour
+    l'utilisateur de le promouvoir en compétence, de le rattacher
+    comme alias d'une compétence existante, ou de l'ignorer. Le
+    référentiel se remplit alors par l'usage, quel que soit le métier
+    visé.
+
+    Rien n'est décidé automatiquement : créer une compétence, c'est
+    affirmer qu'un terme en désigne une, et cette affirmation revient
+    à l'utilisateur.
+    """
+
+    __tablename__ = "skill_candidates"
+
+    id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True
+    )
+
+    # Libellé tel que rencontré, conservé pour l'affichage.
+    term: Mapped[str] = mapped_column(
+        String,
+        nullable=False
+    )
+
+    # Forme normalisée : c'est elle qui dédoublonne.
+    canonical_key: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        unique=True,
+        index=True
+    )
+
+    occurrences: Mapped[int] = mapped_column(
+        Integer,
+        default=1,
+        nullable=False
+    )
+
+    # Le terme a-t-il été compté comme exigence, ou écarté comme mot
+    # générique de l'annonce ? Un tri qui se trompe doit rester
+    # rattrapable.
+    was_counted: Mapped[bool] = mapped_column(
+        Boolean,
+        default=True,
+        nullable=False
+    )
+
+    # nouveau / integre / rattache / ignore
+    status: Mapped[str] = mapped_column(
+        String,
+        default="nouveau",
+        nullable=False,
+        index=True
+    )
+
+    # Compétence du référentiel à laquelle le terme a été rattaché.
+    resolved_skill_id: Mapped[str | None] = mapped_column(
+        String,
+        nullable=True
+    )
+
+    # Quelques annonces où le terme est apparu, pour pouvoir juger.
+    job_offer_ids: Mapped[list] = mapped_column(
+        JSON,
+        default=list,
+        nullable=False
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        nullable=False
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow,
         nullable=False
     )
