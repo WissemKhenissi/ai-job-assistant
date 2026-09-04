@@ -1128,6 +1128,10 @@ SKILLS = [
             "Collaboration transverse",
             "Cross-functional collaboration",
             "Travail en transverse",
+            "Coordination d'équipes",
+            "Coordination des équipes",
+            "Coordination des équipes techniques",
+            "Coordination Marketing et Commercial",
         ],
         "parent": None,
         "related_skills": [
@@ -1155,6 +1159,85 @@ SKILLS = [
         "related_skills": [
             "Product Discovery",
             "Spécifications fonctionnelles",
+        ],
+    },
+    # ========================================================
+    # OUTILS ET PILOTAGE — RATTRAPAGE
+    # ========================================================
+    #
+    # Ces entrées manquaient alors que le candidat déclarait les
+    # compétences correspondantes : « CRM » était demandé trois fois
+    # et compté absent, faute d'entrée au référentiel.
+
+    {
+        "id": "catalog-crm",
+        "canonical_name": "CRM",
+        "category": "Tools",
+        "subcategory": "Relation client",
+        "description": (
+            "Utilisation d'un outil de gestion de la relation "
+            "client pour suivre les contacts, les opportunités et "
+            "les campagnes adressées."
+        ),
+        "aliases": [
+            "CRM",
+            "Customer Relationship Management",
+            "Gestion de la relation client",
+            "Outils CRM",
+            "Outil CRM",
+            "Outils CRM et Présentation",
+        ],
+        "parent": None,
+        "related_skills": [
+            "Gestion de campagnes",
+            "Data / KPI",
+        ],
+    },
+
+    {
+        "id": "catalog-pilotage-operationnel",
+        "canonical_name": "Pilotage opérationnel",
+        "category": "Management",
+        "subcategory": "Pilotage",
+        "description": (
+            "Conduite au quotidien d'une activité : suivi de "
+            "l'avancement, arbitrage des priorités courantes et "
+            "traitement des aléas."
+        ),
+        "aliases": [
+            "Pilotage opérationnel",
+            "Pilotage des opérations",
+            "Suivi opérationnel",
+            "Operational Management",
+        ],
+        "parent": None,
+        "related_skills": [
+            "Gestion de projet",
+            "Coordination transverse",
+        ],
+    },
+
+    {
+        "id": "catalog-formation-equipes",
+        "canonical_name": "Formation des équipes",
+        "category": "Management",
+        "subcategory": "Accompagnement",
+        "description": (
+            "Transmission d'une méthode ou d'un outil à des équipes, "
+            "de la conception du support à l'accompagnement dans la "
+            "durée."
+        ),
+        "aliases": [
+            "Formation des équipes",
+            "Formation commerciale",
+            "Formation interne",
+            "Accompagnement des équipes",
+            "Training",
+        ],
+        "parent": None,
+        "related_skills": [
+            "Coordination transverse",
+            "Business Development",
         ],
     },
 ]

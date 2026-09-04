@@ -28,6 +28,7 @@ from services.experience_duration import (
     format_experience_years,
     total_experience_years,
 )
+from services.requirement_cleaning import clean_required_skills
 from services.job_requirements_service import (
     extract_required_skills,
     extract_required_years,
@@ -246,6 +247,20 @@ def render_analysis_tab(candidate_id: str) -> None:
 
             remote_details = ""
 
+        # --------------------------------------------------------
+        # TRI DES EXIGENCES
+        # --------------------------------------------------------
+        #
+        # L'extraction IA est libre : sur une annonce marketing elle
+        # rapporte « Data », « mobile », « acquisition » — des mots
+        # de l'annonce, pas des compétences. Comptés comme exigences,
+        # ils font baisser le score et interdisent à la rédaction des
+        # mots ordinaires.
+
+        required_skills, exigences_ecartees = clean_required_skills(
+            required_skills
+        )
+
         if not required_skills:
 
             st.error(
@@ -286,6 +301,7 @@ def render_analysis_tab(candidate_id: str) -> None:
                     else "catalogue"
                 ),
                 "required_skills": required_skills,
+                "requirements_dropped": exigences_ecartees,
                 "result": result,
                 "contract_type": contract_type,
                 "remote_policy": remote_policy,
@@ -337,6 +353,17 @@ def render_analysis_tab(candidate_id: str) -> None:
             f"{stored_result['extraction_source']} : "
             f"{', '.join(stored_result['required_skills'])}"
         )
+
+        # Ce que le tri a refusé de compter comme exigence. Affiché
+        # plutôt que tu : un tri silencieux qui se trompe est
+        # indétectable.
+        ecartees = stored_result.get("requirements_dropped") or []
+
+        if ecartees:
+            st.caption(
+                "Écartés du décompte (mots de l'annonce, pas des "
+                f"compétences) : {', '.join(ecartees)}"
+            )
 
         st.divider()
 
