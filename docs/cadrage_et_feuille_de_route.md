@@ -1,12 +1,14 @@
 # AI Job Assistant — Cadrage et feuille de route
 
-*Document établi le 2 septembre 2026, à partir du rapport de reprise du 1er septembre 2026 et d'une session de recadrage. Complété le 2 septembre 2026 (soir) avec la décision sur le choix du LLM et une note V2 sur la solution IA pour un produit grand public.*
+*Document établi le 2 septembre 2026, à partir du rapport de reprise du 1er septembre 2026 et d'une session de recadrage.*
+
+*Refondu le 5 septembre 2026. Le document décrivait un plan ; il décrivait de moins en moins le projet. La V1 est close, et le projet a changé de nature depuis — il fallait l'acter plutôt que d'empiler les mentions « ajouté le… ». L'historique des décisions est conservé, ce qui change est la structure : ce qui est fait, ce qui est ouvert, ce qui est su et assumé.*
 
 ---
 
 ## 1. Finalité du projet
 
-L'application n'est pas un simple générateur de CV : c'est un outil personnel qui transforme un Master CV structuré en un assistant de recherche d'emploi honnête, pour Wissem Khenissi (positionnement Product Owner / Product Manager / Chef de projet IT / PMO).
+L'application n'est pas un simple générateur de CV : c'est un outil qui transforme un Master CV structuré en un assistant de recherche d'emploi honnête.
 
 Le parcours cible :
 
@@ -17,144 +19,182 @@ Offre d'emploi collée
     ↓
 Extraction des compétences demandées
     ↓
-Matching explicable (prouvé / déduit / manquant)
+Matching explicable (prouvé / déclaré / déduit / manquant)
     ↓
 CV ciblé + lettre de motivation
     ↓
 Suivi automatique de la candidature
 ```
 
-Trois principes portent l'ensemble du projet :
+**Changement de portée acté le 3 septembre 2026**, à la demande de l'utilisateur (« il faut garder en tête que l'outil n'est pas destiné qu'à mon expérience ») : l'outil ne vise plus le seul positionnement Product Owner / Product Manager / Chef de projet IT / PMO de Wissem Khenissi, mais **n'importe quel candidat, dans n'importe quel métier**. Cette décision n'a pas modifié la finalité ; elle a modifié à peu près tout le reste, et une partie du moteur ne l'a pas encore rattrapée — voir section 6.
+
+### Principes non négociables
 
 1. **Le Master CV est la seule source de vérité.** Rien n'est inventé — ni compétence, ni expérience, ni réalisation.
 2. **Le matching doit être honnête, pas flatteur.** Une compétence déduite reste une hypothèse, jamais un fait affirmé.
 3. **Chaque candidature laisse une trace.** Ce qui a été généré et envoyé doit rester retrouvable.
 
----
+Déclinaisons opérationnelles :
 
-## 2. Portée retenue pour cette première étape (V1 — projet personnel)
-
-Décision de cadrage : on construit d'abord un outil **pour un usage personnel**, avant d'envisager une éventuelle V2 destinée à d'autres utilisateurs.
-
-La V1 couvre :
-
-- Le moteur de matching existant (Master CV ↔ offre), **stabilisé et testé**.
-- La **génération d'un CV ciblé** à partir du Master CV et du résultat de matching.
-- La **génération d'une lettre de motivation** personnalisée.
-- Un **suivi de candidature** créé automatiquement à chaque génération de CV/lettre.
-
-Rien d'autre n'est développé tant que ces quatre briques ne sont pas fiables.
+- Une compétence **déduite** n'est jamais affichée comme affirmée sur un CV généré. Seules les compétences **prouvées** (preuve `EvidenceDB` liée) peuvent apparaître comme ligne de compétence explicite.
+- Toute génération (CV, lettre) reste traçable jusqu'à une donnée du Master CV.
+- Une lettre générée par IA est **validée par l'utilisateur** avant d'être finale. Aucun envoi automatique.
+- Le profil reste local ; chaque appel à une IA externe est un choix explicite. **Tranché le 2 septembre 2026 : Gemini (API Google, palier gratuit)** — le texte du CV et de la lettre transite donc par les serveurs Google à chaque génération, décision assumée par l'utilisateur.
+- Un garde-fou déterministe prime toujours sur une auto-vérification par l'IA. Concrètement : comparaison des chiffres, présence mot pour mot de l'extrait source, vocabulaire interdit, rehaussement de séniorité. En cas de déclenchement, repli automatique sur le contenu déterministe.
+- `skill_catalog` est l'unique source de vérité pour la normalisation des compétences.
 
 ---
 
-## 3. Explicitement hors périmètre de la V1 (backlog V2 — produit grand public)
+## 2. État au 5 septembre 2026
 
-Le document de vision élargie ("Career Intelligence Platform") reste une **carte de référence à long terme**, pas un plan d'exécution actuel. Sont repoussés à une éventuelle V2 :
+**La V1 est close.** Les cinq phases prévues sont livrées, plus quatre briques qui appartenaient au backlog V2.
 
-- Career DNA complet (profil humain, préférences, motivations, frustrations, personnalité professionnelle).
-- Orientation métier, compétences transférables à grande échelle, séniorité par dimension.
+Ordres de grandeur : 78 modules applicatifs, 531 tests, 41 fichiers de test, un référentiel de 13 476 compétences, 13 annonces analysées, 7 candidatures suivies.
+
+### Phases V1
+
+| phase | objet | état |
+|---|---|---|
+| 0 | Stabilité opérationnelle | fait |
+| 1 | Base, migrations, source de vérité | fait |
+| 2 | Refactor du matching + couche de tests | fait |
+| 3 | Génération CV / lettre + suivi de candidature | fait |
+| 4 | Qualité de sortie | fait |
+| 5 | Entretien IA d'enrichissement du Master CV | fait |
+
+**Phase 1** — `alembic/env.py` importe `database.model_registry` ; stratégie Alembic tranchée (conservation de l'historique + migrations prospectives) ; `skill_catalog` unifié, fin du dictionnaire `SKILL_ALIASES` dupliqué.
+
+**Phase 2** — `matching_service.py` éclaté en `services/matching/` (`analysis`, `config`, `inference`, `normalization`, `profile_text`, `results`) ; double calcul de `score_experience` corrigé ; table `job_skill_matches` historisant le détail par compétence ; harnais de mesure precision/recall dans `evaluation/`.
+
+**Phase 3** — sélection déterministe du contenu (`services/cv/selection.py`), export DOCX et PDF, lettre déterministe puis rédigée par IA, table `applications` créée automatiquement à chaque génération.
+
+**Phase 4** — la reformulation paragraphe par paragraphe s'est révélée insuffisante après test réel (elle polissait des formules déjà pauvres) ; remplacée pour la lettre par une **rédaction complète** (`services/ai/letter_authoring.py`) à partir d'une fiche de faits structurée, garde-fou numérique sur l'ensemble de la fiche, panneau des faits affiché pour relecture. Le CV garde une reformulation encadrée, son contenu factuel restant sélectionné déterministiquement. S'y ajoutent : champ `motivations` sur le profil, sections du CV activables à l'export, page candidatures en onglets, cahier des charges de génération découpé par étape (`services/cv/prompt_rules.py`) avec vocabulaire borné par le référentiel, contrainte d'une page par **mesure réelle** puis élagage priorisé (`services/cv/fitting.py`), validateur déterministe (`services/cv/validation.py`), réalisations chiffrées atteignant enfin le CV, seuil des compétences affichées au choix du candidat.
+
+**Phase 5** — page unique « Mon Master CV » en onglets, entretien IA par expérience (récit puis relance ciblée), historique d'entretien persistant, compétences en pastilles éditables. Réponses **vocales** livrées le même jour que le textuel : chaque enregistrement est transcrit avant tout traitement, puis emprunte exactement le même chemin qu'une réponse écrite — garde-fou de traçabilité compris, jamais une porte dérobée. Garde-fou principal : toute proposition dont l'extrait source cité par l'IA n'est pas retrouvé mot pour mot dans une réponse réellement donnée est rejetée avant même d'être affichée.
+
+### Livré au-delà de la V1 (3 – 5 septembre 2026)
+
+Ces quatre chantiers découlent du changement de portée. Ils appartenaient au backlog V2 ; ils ont été faits parce que sans eux l'outil ne servait qu'un seul profil.
+
+- **Le référentiel apprend des annonces analysées.** Tout terme inconnu est enregistré, l'IA propose une entrée complète (nom canonique, catégorie, alias), l'utilisateur intègre / rattache / ignore, et chaque décision est réversible.
+- **Import de CV pour amorcer le Master CV.** Extraction par IA sous quatre garde-fous : puces verbatim, compétence obligatoirement présente dans le document, chiffres, identité (e-mail, téléphone, LinkedIn doivent figurer dans le document). L'import ajoute sans écraser et refuse les expériences en double. Validé sur un CV d'infirmière.
+- **Cloisonnement multi-profils.** `get_candidate` / `get_experiences` filtrent par candidat, sélecteur de profil courant, création et suppression en cascade (avec saisie du nom du profil pour confirmer).
+- **Référentiel multi-métiers : ESCO.** 13 476 compétences importées (v1.2.1, CC BY 4.0, jointure FR/EN par `conceptUri`, 26 catégories dérivées). Rendu viable par un index n-grammes : la détection coûte 0,4 à 0,6 ms, qu'il y ait 46 ou 14 000 entrées, contre près de sept secondes en extrapolant l'ancienne méthode.
+
+Trois correctifs ont suivi l'import, parce qu'un référentiel large casse ce qu'un référentiel étroit masquait : la recherche sémantique encodait tout le corpus à chaque appel (209 s par analyse → 1,4 s), les quasi-doublons ESCO doublaient des entrées maison, et une entrée importée bénéficiait du même blanc-seing qu'une entrée curée à la main.
+
+Enfin, le **niveau d'exigence** (5 septembre) : chaque exigence extraite porte désormais « essentielle », « souhaitée » ou « mention », lu dans l'annonce par marqueurs de langage, l'IA pouvant proposer un niveau que le code n'accepte que s'il fait partie des trois valeurs connues. Le score confondait auparavant « exigence » et « mention » — une énumération de dix outils comptait pour dix conditions non couvertes.
+
+---
+
+## 3. Ce qui reste ouvert
+
+Par ordre d'importance décroissante, telle qu'elle apparaît aujourd'hui.
+
+### 3.1 Le moteur est encore mono-profil par endroits
+
+C'est la dette la plus lourde, et la plus contradictoire avec la portée retenue. Détail en section 6.
+
+### 3.2 Qualité de l'extraction des exigences
+
+Le niveau d'exigence n'a pas corrigé ce qui entre dans la liste, il a seulement cessé de l'amplifier. Restent comptées comme exigences :
+
+- des libellés ESCO en forme de phrase verbale (« utiliser des outils en ligne pour collaborer ») ;
+- des concepts périphériques cités en passant (« logistique », « responsabilité sociale des entreprises ») ;
+- l'**intitulé du poste** lui-même (« Product Owner » compté comme compétence manquante sur une annonce de Product Owner) — le prompt le proscrit désormais, aucun garde-fou déterministe ne le rattrape.
+
+`GENERIC_TERMS` (`services/requirement_cleaning.py`) filtre le bruit, mais c'est une liste écrite à la main, non modifiable depuis l'interface : quand elle se trompe, l'utilisateur ne peut rien.
+
+### 3.3 Le score reste un chiffre, pas une décision
+
+La question à laquelle un candidat veut une réponse n'est pas « 52 sur 100 ? » mais « quelles conditions je ne couvre pas ? ». `missing_essential_skills` répond maintenant à la seconde, et l'interface l'affiche en premier. Reste à décider si le score global unique garde un sens, ou s'il doit céder la place à la seule couverture des conditions.
+
+### 3.4 Français uniquement
+
+Mots de séniorité, suffixes « k€ / M€ », forme nominale des puces, marqueurs d'exigence : tout est écrit en français, en dur. La rédaction du CV dans la langue de l'annonce (§46 du cahier des charges) est repoussée pour une raison précise : les garde-fous chiffres et verbatim s'affaiblissent à la traversée d'une traduction, et il faudrait leur en substituer d'autres avant d'ouvrir la porte.
+
+### 3.5 Reliquats de données V1
+
+- L'annonce parasite « Emplois | Indeed » est toujours en base.
+- Deux expériences sans `business_context` ; mois exacts manquants sur les expériences datées approximativement ; URL LinkedIn absente du profil.
+- 16 compétences au statut `declared` qu'un entretien assisté pourrait convertir en `proven`.
+
+---
+
+## 4. Backlog V2 — produit grand public
+
+Le document de vision élargie (« Career Intelligence Platform ») reste une carte de référence à long terme, pas un plan d'exécution.
+
+Non commencé :
+
+- Career DNA complet (profil humain, préférences, motivations, frustrations).
+- Orientation métier, séniorité par dimension.
 - Career Value Score, analyse de salaire, salary gap/upside, simulateur what-if.
-- Training Recommendation Engine.
-- Side Business Engine.
-- Market Intelligence (données marché, demande, concurrence).
-- Interview Preparation, STAR Evidence automatisé, Career Analytics.
-- Feedback Loop (apprentissage à partir des résultats de candidature).
-- Authentification, multi-utilisateur, séparation User/Candidate.
+- Training Recommendation Engine. Side Business Engine.
+- Market Intelligence (au-delà de la mémoire de marché déjà en place).
+- Préparation d'entretien d'embauche, STAR Evidence automatisé, Career Analytics.
+- **Authentification et multi-utilisateur.** Le cloisonnement par candidat est fait ; il n'y a ni compte, ni mot de passe, ni séparation User/Candidate.
 - Migration technique PostgreSQL / FastAPI / React-Next.js.
 - RAG, connecteurs job boards, lecture automatique d'emails.
-- **Solution IA de reformulation adaptée à un produit grand public** (ajouté le 2 septembre 2026, en réponse à une question exploratoire — pas une décision d'implémentation). Le choix fait pour la V1 (Gemini, palier gratuit) ne tient pas à l'échelle :
-  - Ollama en local devient inapproprié : hébergé pour tous les utilisateurs, il perd son avantage de confidentialité (les données de tous les utilisateurs transiteraient par des serveurs centraux, sous la responsabilité RGPD de l'éditeur) et impose un coût GPU dédié.
-  - Les paliers gratuits (Gemini, Groq) sont dimensionnés pour un seul compte/projet, pas pour un produit — le quota serait épuisé en quelques heures avec plusieurs dizaines d'utilisateurs actifs.
-  - À cette échelle, le critère change : coût par génération × nombre d'utilisateurs, politique de non-entraînement sur les données contractuelle, conformité RGPD/localisation des données (Mistral, hébergement France/UE, est un candidat pertinent pour cet argument même si ce n'est pas l'option la moins chère).
-  - Implique une architecture différente : clé API strictement côté serveur, comptage d'usage par utilisateur, et un modèle économique (freemium avec quota, abonnement...) qui absorbe le coût — à trancher avec le reste de la bascule V2, pas isolément.
-- **Récupération fiable du contenu d'une annonce depuis un lien, tous sites confondus** (ajouté le 2 septembre 2026, après test réel). La version V1 (téléchargement HTTP simple + extraction de texte, sans IA) fonctionne sur les pages au contenu statique, mais échoue sur la plupart des grands jobboards (LinkedIn en tête, qui bloque activement ce type de requête et charge son contenu en JavaScript). Une version fiable demanderait un rendu JavaScript complet (navigateur headless) voire une intégration officielle par site — hors périmètre V1, le copier-coller manuel reste la solution.
-- ~~**Entretien vocal pour enrichir le Master CV**~~ (ajouté puis **remonté en V1 le 2 septembre 2026**, à la demande de l'utilisateur juste après la livraison de l'entretien textuel — voir Phase 5). Fait : réponse orale par question ou en un seul champ libre, transcrite par Gemini avant de suivre exactement le même chemin qu'une réponse écrite.
 
-Ces éléments ne sont pas abandonnés : ils constituent le backlog de la V2, à réévaluer une fois la V1 stable et testée.
+Deux points étudiés et documentés, non implémentés :
+
+- **Solution IA à l'échelle d'un produit** (2 septembre 2026). Le choix V1 ne tient pas : Ollama hébergé perd son avantage de confidentialité et impose un coût GPU ; les paliers gratuits sont dimensionnés pour un compte, pas pour un produit. À cette échelle le critère change — coût par génération × utilisateurs, non-entraînement contractuel, localisation RGPD (Mistral, hébergement UE, est un candidat pertinent sur ce dernier argument). Implique clé API strictement serveur, comptage d'usage, et un modèle économique. À trancher avec le reste de la bascule, pas isolément.
+- **Récupération fiable d'une annonce depuis un lien** (2 septembre 2026, après test réel). La version V1 (HTTP simple + extraction de texte) fonctionne sur les pages statiques et échoue sur la plupart des grands jobboards, LinkedIn en tête. Une version fiable demanderait un navigateur headless voire une intégration officielle par site. Le copier-coller manuel reste la solution.
 
 ---
 
-## 4. Principes non négociables
+## 5. Décisions actées
 
-- Ne jamais inventer une compétence, une expérience ou une réalisation.
-- Une compétence **déduite** n'est jamais affichée comme une compétence affirmée sur un CV généré. Seules les compétences **prouvées** (avec une preuve `EvidenceDB` liée) peuvent apparaître comme ligne de compétence explicite.
-- Toute génération (CV, lettre) doit rester traçable jusqu'à une donnée du Master CV.
-- Une lettre générée par IA doit être **validée par l'utilisateur** avant d'être considérée comme finale. Aucun envoi automatique.
-- Le profil reste local ; tout appel à une IA externe pour la reformulation de lettre est un choix explicite à valider au moment venu (confidentialité des données personnelles). **Décidé le 2 septembre 2026 : Gemini (API Google, palier gratuit) pour la V1** — voir section 7.
-- `skill_catalog` devient l'unique source de vérité pour la normalisation des compétences — fin du dictionnaire `SKILL_ALIASES` dupliqué dans `matching_service.py`.
-
----
-
-## 5. Plan de phases
-
-### Phase 0 — Stabilité opérationnelle
-
-- Arrêter toutes les instances Streamlit actives.
-- Lancer une seule instance depuis la racine (`streamlit run .\app.py`).
-- Vérifier que l'application testée est bien celle servie sur le bon port.
-
-### Phase 1 — Fondations : base de données, migrations, source de vérité
-
-- Corriger `alembic/env.py` pour importer `database.model_registry`.
-- Décider d'une stratégie Alembic : reconstruire proprement l'historique en dev, ou figer l'existant et ne créer que des migrations prospectives.
-- Nettoyer ou désélectionner les offres de démonstration qui polluent la mémoire de marché.
-- Unifier `skill_catalog` comme référentiel unique de compétences (alias, relations, exclusions).
-
-### Phase 2 — Refactor du matching + couche de tests
-
-- Découper `matching_service.py` en sous-modules (ex. `skill_matching`, `semantic_matching`, `composite_skills`, `scoring`, `explanations`).
-- Corriger le bug identifié de double calcul de `score_experience`.
-- Ajouter une table `job_skill_matches` pour historiser le détail par compétence (score individuel, explication, preuves) — aujourd'hui perdu après l'analyse.
-- Construire un dataset de test (annonce + compétences attendues + résultat attendu) et mesurer precision / recall / faux positifs.
-- Couvrir en priorité par des tests unitaires : normalisation des accents/alias, exclusion des compétences techniques de l'inférence sémantique, statut `proven` avec et sans preuve, mémoire de marché à 0/1/2/3 annonces.
-
-### Phase 3 — Génération CV / lettre + suivi de candidature
-
-- **Générateur de CV ciblé** : sélection déterministe des expériences, réalisations et preuves pertinentes à partir du résultat de matching. Seules les compétences au statut `proven` apparaissent comme compétences listées.
-- **Générateur de lettre de motivation** : squelette assemblé à partir du Master CV et de l'offre, puis reformulation IA légère, avec validation obligatoire de l'utilisateur avant finalisation.
-- Export DOCX / PDF (dépendances déjà présentes : `python-docx`, `reportlab`).
-- Nouvelle table `applications` : `candidate_id`, `job_offer_id`, date, texte et lien de l'offre, fichier CV généré, fichier lettre générée, statut. **Créée automatiquement** dès qu'un CV et une lettre sont générés pour une offre.
-- Les statuts suivants (entretien, réponse, refus, etc.) sont mis à jour manuellement dans l'interface — pas de lecture automatique d'emails en V1.
-
-### Phase 4 — Qualité de sortie (ajoutée le 2 septembre 2026)
-
-- ~~Reformulation IA (Gemini) du CV et de la lettre, contrainte à reformuler le contenu déjà sélectionné sans y ajouter de compétence, chiffre ou fait absent du texte source.~~ **Fait, puis dépassé le 2 septembre 2026** : après test réel, la reformulation paragraphe par paragraphe s'est révélée insuffisante (elle ne fait que polir des formules déjà pauvres). Remplacée pour la lettre par une **rédaction IA complète** (`services/ai/letter_authoring.py`) : Gemini compose l'argumentaire à partir d'une fiche de faits structurée (Master CV + motivations + analyse de matching + offre), avec un garde-fou numérique sur l'ensemble de la fiche et un panneau des faits affiché à l'écran pour la relecture humaine. Le CV garde la reformulation légère (résumé + lignes de preuve), le contenu factuel restant sélectionné déterministiquement.
-- **Ajouté le 2 septembre 2026** : champ `motivations` sur le profil candidat (reconversion, intérêt pour un secteur ou une entreprise) — collecté via une vraie UI de profil (`ui/profile_page.py`, qui n'existait pas avant), et seule source utilisée par la lettre pour parler de motivation personnelle.
-- **Ajouté le 2 septembre 2026** : sections du CV activables/désactivables à l'export (Profil, Compétences, Expériences, Formation & certifications, Langues, Centres d'intérêt) — le candidat choisit, par candidature, ce qui reste pertinent à montrer.
-- **Ajouté le 2 septembre 2026** : page "Mes candidatures" réorganisée en onglets (`ui/job_matching/`, éclaté depuis un fichier unique de 880 lignes) — Nouvelle annonce / CV & lettre / Suivi / Mémoire de marché.
-- CV limité à une page, avec un budget de contenu qui remplit la page au mieux sans jamais la dépasser. **Toujours ouvert.**
-- Validation explicite d'une compétence déclarée sans preuve par l'utilisateur lui-même (son attestation, pas une invention du système) pour qu'elle devienne utilisable par le générateur. **Toujours ouvert.**
-- Suggestions de compétences déduites du parcours, soumises à validation utilisateur avant d'entrer au Master CV. **Toujours ouvert** — voir Phase 5, qui l'englobe dans un mécanisme plus large.
-
-### Phase 5 — Entretien IA d'enrichissement du Master CV (brainstorm ouvert le 2 septembre 2026)
-
-Constat déclencheur : construire un Master CV riche et honnête à la seule initiative du candidat plafonne vite — on oublie des expériences, on sous-décrit ce qu'on a fait, on ne pense pas à formuler une compétence qu'on possède réellement. L'utilisateur demande :
-
-- Une seule page regroupant profil, expériences et compétences (aujourd'hui trois pages séparées dans `app.py`), pour construire/enrichir le Master CV en un seul endroit.
-- Une IA (Gemini) qui analyse le profil/CV envoyé et pose les questions de relance les plus pertinentes, expérience par expérience, jusqu'à ce que continuer n'apporte plus de valeur.
-- Que l'IA "creuse" chaque expérience pour suggérer des compétences et des éléments d'expérience plausibles mais non explicitement mentionnés — **jamais ajoutés directement** : ce sont des suggestions soumises à validation explicite, exactement comme pour les compétences déduites (voir ci-dessus) et par cohérence avec le principe "rien n'est inventé" (une suggestion validée par le candidat devient un fait qu'il atteste, pas une invention du système).
-- Explicitement repoussé en V2 par l'utilisateur lui-même : la collecte par **chat vocal retranscrit**, pour que le candidat soit à l'aise et prenne le temps de développer à l'oral. Le mécanisme d'entretien (textuel, V1) doit être conçu pour ne pas dépendre de la modalité de saisie, afin qu'ajouter la voix en V2 n'implique pas de le refondre.
-
-**Fait le 2 septembre 2026**, après brainstorm avec l'utilisateur (préférence confirmée : largeur plutôt que profondeur — un éventail de questions couvrant plusieurs expériences et le poste recherché, pas un dialogue adaptatif expérience par expérience) :
-
-- Page unique "Mon Master CV" (`ui/master_cv/`), qui remplace les trois anciennes pages.
-- Entretien IA en un seul round (`services/ai/interview.py`) : poste recherché optionnel, upload optionnel de CV externe (`.pdf`/`.docx`, texte extrait par `services/document_extraction.py`) et de captures d'écran (`.png`/`.jpg`, transmises à Gemini en pièces multimodales via `services/ai/gemini_client.generate_multimodal`, sans OCR local) → génération d'un éventail large de questions (8 à 15) couvrant plusieurs expériences → réponses libres, aucune obligatoire → propositions de preuves reformulées à partir des réponses données, chacune éditable et validée une par une avant d'écrire en base (`SkillDB`/`EvidenceDB`, mécanisme existant — aucun nouveau statut, aucune nouvelle table).
-- Garde-fou principal : toute proposition dont l'extrait source cité par l'IA n'est pas retrouvé mot pour mot dans une réponse réellement donnée est rejetée automatiquement avant même d'être affichée.
-- Vérifié en conditions réelles (clé Gemini) : 10 questions générées couvrant les 3 expériences du Master CV + le poste recherché indiqué, réponse à une question ayant produit 3 propositions distinctes et correctement tracées, validation écrivant réellement une nouvelle compétence prouvée.
-- **Réponses vocales : finalement livrées en V1 le même jour**, à la demande de l'utilisateur immédiatement après le premier test de l'entretien textuel. Deux modalités : un enregistreur sous chaque question, ou un mode "réponse libre" où les questions deviennent de simples pistes de réflexion et où le candidat répond en une seule fois (texte et/ou audio), l'IA se chargeant du tri. Chaque enregistrement est transcrit (`transcribe_audio`, Gemini multimodal) **avant** tout traitement : la voix emprunte ensuite exactement le même chemin qu'une réponse écrite, garde-fou de traçabilité compris — ce n'est jamais une porte dérobée. Vérifié en conditions réelles : audio/wav accepté par le modèle, phrase française transcrite fidèlement puis transformée en proposition de preuve correctement tracée.
+| date | décision |
+|---|---|
+| 2 sept. 2026 | `applications` se relie à `job_offers` plutôt que de dupliquer l'offre. |
+| 2 sept. 2026 | Pas d'automatisation par lecture d'emails en V1. |
+| 2 sept. 2026 | Deux voies pour la lettre — squelette déterministe (zéro invention, sans IA) ou rédaction complète par Gemini à partir d'une fiche de faits — avec repli automatique sur la première. |
+| 2 sept. 2026 | LLM : Gemini, palier gratuit. Préféré à Ollama local (qualité) et aux options payantes (tant que le gratuit suffit). |
+| 2 sept. 2026 | Alembic : conservation de l'historique + migrations prospectives. |
+| 3 sept. 2026 | **L'outil vise tout candidat, pas un seul profil.** |
+| 4 sept. 2026 | Référentiel public plutôt que catalogue écrit à la main : ESCO, CC BY 4.0, attribution affichée dans l'application. |
+| 4 sept. 2026 | Une entrée de référentiel importée en masse ne bénéficie pas de la confiance accordée à une entrée curée : elle passe la même épreuve que l'inconnu. |
+| 5 sept. 2026 | Le niveau d'exigence est lu dans l'annonce, l'IA ne fait que proposer ; en cas de doute, le niveau médian. |
+| 5 sept. 2026 | La couche de modèles Pydantic parallèle est supprimée plutôt que maintenue : le projet n'a qu'une représentation, les modèles SQLAlchemy. |
 
 ---
 
-## 6. Décisions de conception actées lors du cadrage
+## 6. Dette technique — état au 5 septembre 2026
 
-- La table `applications` se relie à `job_offers` existante plutôt que de dupliquer les informations de l'offre.
-- Pas d'automatisation par lecture d'emails pour le suivi de candidature en V1 — ça nécessiterait un connecteur externe, explicitement hors périmètre.
-- La lettre de motivation peut être générée de deux façons, toujours soumises à validation avant d'être considérées comme finales : un squelette déterministe (zéro invention, toujours disponible sans IA) ou une rédaction complète par Gemini à partir d'une fiche de faits (repli automatique sur le déterministe en cas d'échec ou de garde-fou déclenché).
+Un balayage complet a été passé le 5 septembre 2026. Ce qui suit distingue ce qui a été corrigé de ce qui reste **su et assumé** : une dette écrite est une décision, une dette tue est un piège.
+
+### 6.1 Corrigé le 5 septembre 2026
+
+- **Code mort supprimé** : la branche de reformulation de lettre (remplacée le 2 septembre par `letter_authoring` et jamais retirée, encore couverte par quatre tests) ; une couche de modèles Pydantic parallèle jamais utilisée, présente depuis l'import initial et déjà désynchronisée du schéma réel ; sept fonctions ou constantes définies et jamais appelées ; huit imports inutilisés. 718 lignes en moins.
+- **Formes de comparaison unifiées** dans `services/text_normalization.py`. Deux copies mot pour mot de « minuscules sans accents », deux quasi-copies de « sans ponctuation ». Ce n'était pas qu'une redite : le tri des exigences dédupliquait sur une forme quand le classement de leur niveau indexait sur l'autre — une divergence d'un caractère aurait suffi à ce qu'une exigence retenue cesse silencieusement de retrouver son niveau.
+- Ce regroupement a **révélé un vrai défaut** : la normalisation NFKD réécrit « … » en trois points, et la fenêtre de lecture se coupait au premier. Sur une annonce réelle, « maîtrise des outils produits (Jira, Confluence, Figma, …) » perdait son dernier élément et Jira redevenait une condition d'entrée. Corrigé et couvert par un test.
+
+Vérification : 531 tests verts, `alembic check` sans dérive, scores des 13 annonces inchangés après regroupement.
+
+### 6.2 Dette assumée, non corrigée
+
+**Le moteur de matching contient encore trois artefacts mono-profil**, hérités d'avant le changement de portée du 3 septembre. Aucun n'a été touché ce jour-là, et chacun contredit la portée retenue :
+
+1. `score_domain` (`services/matching/analysis.py`) ne reconnaît que trois domaines : « e-commerce », « adtech », « digital ». Pour tout autre métier, ce dixième du score global ne mesure rien.
+2. `SEMANTIC_INFERENCE_SKILLS` (`services/matching/config.py`) est une liste blanche de douze compétences produit, écrite à la main : elle seule autorise l'inférence sémantique. Avec 13 476 entrées au référentiel, un profil d'infirmière ou de développeur ne peut structurellement produire aucune compétence « déduite ».
+3. `INFERENCE_KEYWORDS` et l'inférence composite `PRODUCT_MANAGEMENT_COMPONENTS` codent en dur le vocabulaire d'un rôle produit.
+
+C'est la dette prioritaire. Elle ne se voit pas en lisant les scores d'un profil produit — elle ne se voit que sur un autre métier.
+
+**Trois `_normalize` restent séparés** dans `services/job_requirements_service.py`, `services/matching/normalization.py` et `services/skill_semantic_service.py`. Leurs règles diffèrent réellement (traitement des tirets, du point de « node.js », des séparateurs de chemin) : les fusionner changerait les résultats de matching. À traiter comme un arbitrage, pas comme un nettoyage.
+
+**Deux pondérations de statut restent volontairement neutres** : une compétence `declared` sans preuve pèse autant qu'une `proven` dans le score d'expérience et dans l'inférence composite. Leur donner un poids intermédiaire ferait baisser tous les scores existants — arbitrage à part entière, noté dans le code, jamais fait.
+
+**Un arbre de travail Git abandonné** subsiste dans `.claude/worktrees/hungry-gagarin-102307`, sur un commit du 2 septembre, avec du travail non commité sur des horodatages (`database/timestamps.py`, `tests/test_timestamps.py`) qui n'a jamais atterri sur `master`. À reprendre ou à supprimer — décision de l'utilisateur, pas une suppression à faire à sa place.
+
+**Seize sauvegardes de base** s'accumulent dans `data/` (60 Mo). Correctement ignorées par Git, mais personne ne les purge.
 
 ---
 
-## 7. Points ouverts à trancher plus tard
+## 7. Points ouverts à trancher
 
-- ~~Choix du LLM pour la reformulation de la lettre~~ **Tranché le 2 septembre 2026 : Gemini (API Google), palier gratuit (1 500 requêtes/jour, largement suffisant pour un usage personnel), sans carte bancaire.** Préféré à Ollama en local (qualité inférieure pour ce cas d'usage) et aux options payantes (OpenAI, Anthropic — écartées tant que le gratuit suffit). Implique d'accepter que le texte du CV/de la lettre transite par les serveurs Google à chaque reformulation — décision explicite de l'utilisateur, conformément au principe de confidentialité du cadrage.
-- Stratégie Alembic définitive : reconstruction de l'historique vs conservation + migrations prospectives. **Tranché en Phase 1 : conservation + migrations prospectives.**
-- Moment de bascule vers la V2 (produit grand public) : à réexaminer uniquement une fois la V1 stable, testée et utilisée en conditions réelles. Voir section 3 pour la note sur la solution IA à cette échelle.
+- **Le score global unique doit-il survivre ?** Voir 3.3.
+- **La V2 est-elle un objectif ?** La section 4 la décrit, la section 2 montre que quatre de ses briques sont déjà là. Le moment de bascule devait être réexaminé « une fois la V1 stable, testée et utilisée en conditions réelles » : c'est le cas.
+- **Jusqu'où ouvrir le multi-métiers ?** Corriger les trois artefacts de la section 6.2 est nécessaire ; suffisant est une autre question, et seule une série de tests sur des profils réellement éloignés y répondra.
