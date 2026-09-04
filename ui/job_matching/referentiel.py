@@ -403,6 +403,42 @@ def _rendre_les_traites() -> None:
                     st.rerun()
 
 
+def _rendre_attribution() -> None:
+    """
+    Attribution exigée par la licence du référentiel importé.
+
+    ESCO est publiée sous CC BY 4.0 : la réutilisation est libre, le
+    crédit est obligatoire. Il est affiché ici plutôt que caché dans
+    un fichier — c'est sur cette page que le référentiel se regarde.
+    """
+
+    from database.db import SessionLocal
+    from database.models import SkillCatalogDB
+
+    session = SessionLocal()
+
+    try:
+        importees = (
+            session.query(SkillCatalogDB)
+            .filter(SkillCatalogDB.id.like("esco-%"))
+            .count()
+        )
+
+    finally:
+        session.close()
+
+    if not importees:
+        return
+
+    st.caption(
+        f"{importees} compétences proviennent d'**ESCO** "
+        "(European Skills, Competences, Qualifications and "
+        "Occupations), publiée par la Commission européenne sous "
+        "licence [CC BY 4.0]"
+        "(https://creativecommons.org/licenses/by/4.0/)."
+    )
+
+
 def render_referentiel_tab() -> None:
 
     st.write(
@@ -416,6 +452,8 @@ def render_referentiel_tab() -> None:
         "qui l'emploie compte une exigence que rien ne peut couvrir, "
         "et la rédaction s'interdit ce mot."
     )
+
+    _rendre_attribution()
 
     message = st.session_state.pop("referentiel_message", "")
 
