@@ -226,3 +226,25 @@ SEMANTIC_INFERENCE_EXCLUDED = {
     "jira",
 }
 
+
+
+# ============================================================
+# PONDERATION DES EXIGENCES
+# ============================================================
+#
+# Les exigences d'une annonce n'ont pas toutes le même poids. Le score
+# les moyennait à égalité : un outil cité dans une énumération de fin
+# d'annonce comptait autant que la compétence cœur du poste. Avec un
+# référentiel large, une annonce citant « Jira, Miro, GitLab, Planner,
+# MS Project » voyait son score s'effondrer sur des détails.
+#
+# Le poids décroît selon le rang d'apparition dans l'annonce :
+#
+#     rang 0  -> 1,00        rang 9  -> 0,36
+#     rang 4  -> 0,56        rang 19 -> 0,21
+#
+# Plus la valeur est grande, plus la décroissance est douce. À 5, la
+# vingtième exigence pèse un cinquième de la première — assez pour
+# qu'une longue liste d'outils ne domine pas, pas assez pour qu'elle
+# disparaisse.
+SKILL_WEIGHT_DECAY = 5.0

@@ -30,6 +30,7 @@ from services.matching.config import (
     INFERRED_STRONG_SCORE,
     INFERRED_VERY_STRONG_SCORE,
     PROVEN_SCORE,
+    SKILL_WEIGHT_DECAY,
     SEMANTIC_INFERENCE_EXCLUDED,
 )
 from services.matching.inference import (
@@ -657,15 +658,35 @@ def analyze_candidate_against_skills(
         #
         # ----------------------------------------------------
 
+        # ----------------------------------------------------
+        # PONDERATION PAR L'ORDRE D'APPARITION
+        # ----------------------------------------------------
+        #
+        # La moyenne simple traitait un outil cité en fin de liste à
+        # égalité avec la compétence cœur du poste. Tant que le
+        # référentiel ne reconnaissait que quelques termes par
+        # annonce, cela passait inaperçu ; avec un référentiel large,
+        # une annonce qui énumère « Jira, Miro, GitLab, Planner, MS
+        # Project » voyait son score s'effondrer sur des détails.
+        #
+        # Les exigences arrivent dans leur ordre d'apparition dans
+        # l'annonce. Ce que l'annonce cite en premier pèse davantage :
+        # c'est une heuristique, mais elle correspond à la façon dont
+        # une offre est rédigée — l'essentiel d'abord, l'outillage
+        # ensuite.
+
+        poids = [
+            1.0 / (1.0 + rang / SKILL_WEIGHT_DECAY)
+            for rang in range(len(matches))
+        ]
+
         total_skill_score = sum(
-            match.score
-            for match in matches
+            match.score * poids_match
+            for match, poids_match in zip(matches, poids)
         )
 
         score_skills = round(
-            total_skill_score
-            / len(matches)
-            * 100,
+            total_skill_score / sum(poids) * 100,
             1,
         )
 

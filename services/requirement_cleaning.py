@@ -113,6 +113,14 @@ GENERIC_TERMS = frozenset(
         # Interlocuteurs
         "client",
         "clients",
+        # Observés en faux positifs après l'import d'ESCO, qui
+        # possède une entrée portant chacun de ces noms.
+        "paris",
+        "anglais",
+        "francais",
+        "mecanique",
+        "administration",
+        "informatique",
         "utilisateur",
         "utilisateurs",
         "equipe",
@@ -129,9 +137,15 @@ def is_plausible_requirement(skill: str) -> bool:
     """
     Ce terme peut-il désigner une compétence ?
 
-    Le référentiel tranche en premier : s'il connaît le terme, la
-    question ne se pose pas. Sinon, seul un mot isolé et générique est
-    écarté.
+    Le référentiel tranche en premier — mais seulement pour ses
+    entrées **curées**. Une taxonomie importée en masse contient des
+    concepts qui portent le nom d'un mot courant : ESCO connaît
+    « communication », « acquisition » et « paris ». Leur accorder un
+    blanc-seing revenait à compter une exigence dès qu'une annonce
+    prononçait ces mots — et à faire chuter le score d'autant.
+
+    Une entrée importée doit donc passer la même épreuve que
+    l'inconnu : un mot isolé et générique reste écarté.
     """
 
     normalise = _normalize(skill)
@@ -139,18 +153,30 @@ def is_plausible_requirement(skill: str) -> bool:
     if not normalise:
         return False
 
-    if find_skill_by_name(skill) is not None:
-        return True
-
     if len(normalise) < 2:
         return False
 
-    mots = normalise.split(" ")
+    connue = find_skill_by_name(skill)
 
-    if len(mots) > 1:
+    if connue is not None and not _vient_d_un_import(connue):
+        return True
+
+    if " " in normalise:
         return True
 
     return normalise not in GENERIC_TERMS
+
+
+def _vient_d_un_import(competence) -> bool:
+    """
+    Cette entrée du référentiel a-t-elle été importée en masse ?
+
+    Les entrées écrites à la main ont été choisies pour ce candidat :
+    elles méritent la confiance. Celles d'une taxonomie générale
+    n'ont été choisies par personne.
+    """
+
+    return str(getattr(competence, "id", "")).startswith("esco-")
 
 
 def clean_required_skills(

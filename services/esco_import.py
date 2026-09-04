@@ -152,6 +152,44 @@ def _lire_csv(source: Path, nom_partiel: str) -> list[dict]:
             return list(csv.DictReader(texte))
 
 
+# Mots vides ignorés pour reconnaître deux écritures d'un même
+# concept : « gestion de projets » et « Gestion de projet » doivent
+# se ramener à la même chose.
+_LIAISONS = frozenset(
+    {
+        "de", "du", "des", "le", "la", "les", "un", "une", "et",
+        "en", "au", "aux", "a", "the", "of", "for", "and", "to",
+    }
+)
+
+
+def forme_souple(texte: str) -> str:
+    """
+    Forme normalisée insensible au pluriel et aux mots de liaison.
+
+    Sans elle, l'import laissait passer l'entrée ESCO « gestion de
+    projets » alors que le référentiel contenait déjà « Gestion de
+    projet ». Résultat observé : une annonce demandant la gestion de
+    projet comptait cette compétence **absente** pour un candidat qui
+    la prouvait — la forme exacte différait d'un « s ».
+    """
+
+    mots = []
+
+    for mot in normalize_skill_text(texte).split(" "):
+
+        if not mot or mot in _LIAISONS:
+            continue
+
+        # Pluriel français et anglais le plus courant.
+        if len(mot) > 3 and mot.endswith(("s", "x")):
+            mot = mot[:-1]
+
+        mots.append(mot)
+
+    return " ".join(mots)
+
+
 def alias_exploitable(alias: str) -> bool:
     """
     Cet alias peut-il désigner une compétence à lui seul ?
@@ -240,10 +278,10 @@ def _categorie(uri: str, parents: dict, groupes: dict) -> str:
 # IMPORT
 # ============================================================
 
-def _formes_deja_revendiquees(db) -> dict[str, str]:
-    """Forme normalisée -> nom canonique qui la revendique."""
+def _formes_deja_revendiquees(db) -> dict[str, tuple[str, str]]:
+    """Forme normalisée -> (nom canonique, identifiant)."""
 
-    index: dict[str, str] = {}
+    index: dict[str, tuple[str, str]] = {}
 
     for competence in db.query(SkillCatalogDB).all():
 
@@ -264,8 +302,21 @@ def _formes_deja_revendiquees(db) -> dict[str, str]:
 
             forme = normalize_skill_text(etiquette)
 
+            reference = (
+                competence.canonical_name,
+                competence.id,
+            )
+
             if forme:
-                index.setdefault(forme, competence.canonical_name)
+                index.setdefault(forme, reference)
+
+            # La forme souple attrape les quasi-doublons : sans elle,
+            # « gestion de projets » entrait alors que le référentiel
+            # connaissait déjà « Gestion de projet ».
+            souple = forme_souple(etiquette)
+
+            if souple:
+                index.setdefault(souple, reference)
 
     return index
 
@@ -325,6 +376,10 @@ def import_esco(
 
         nouvelles: list[SkillCatalogDB] = []
 
+        # Libellés ESCO refusés comme entrées, mais ajoutés en
+        # alias de l'entrée maison qu'ils désignaient.
+        a_enrichir: dict[str, list[str]] = {}
+
         for ligne in lignes_fr:
 
             if limit is not None and crees >= limit:
@@ -358,8 +413,23 @@ def import_esco(
                 continue
 
             # Le référentiel maison gagne : plus précis pour ce
-            # candidat que son équivalent générique.
-            if forme_nom in revendiquees:
+            # candidat que son équivalent générique. La comparaison
+            # porte aussi sur la forme souple, sans quoi un simple
+            # pluriel créerait une entrée concurrente.
+            proche = revendiquees.get(forme_nom) or revendiquees.get(
+                forme_souple(nom)
+            )
+
+            if proche is not None:
+
+                # Le libellé refusé n'est pas perdu : il devient un
+                # alias de l'entrée maison. Sans cela, « gestion de
+                # projets » ne résolvait plus rien du tout, alors que
+                # « Gestion de projet » est une compétence prouvée.
+                if forme_nom not in revendiquees:
+                    a_enrichir.setdefault(proche[1], []).append(nom)
+                    revendiquees[forme_nom] = proche
+
                 nom_pris += 1
                 continue
 
@@ -381,14 +451,19 @@ def import_esco(
                 if not forme or not alias_exploitable(candidat):
                     continue
 
-                if forme in revendiquees:
+                souple = forme_souple(candidat)
+
+                if forme in revendiquees or souple in revendiquees:
 
                     if forme != forme_nom:
                         alias_perdus += 1
 
                     continue
 
-                revendiquees[forme] = nom
+                revendiquees[forme] = (nom, identifiant)
+
+                if souple:
+                    revendiquees[souple] = (nom, identifiant)
                 alias.append(candidat)
                 alias_gardes += 1
 
@@ -419,9 +494,32 @@ def import_esco(
 
             crees += 1
 
-        if not dry_run and nouvelles:
+        if not dry_run:
 
-            db.bulk_save_objects(nouvelles)
+            for identifiant_maison, libelles in a_enrichir.items():
+
+                competence = db.get(
+                    SkillCatalogDB, identifiant_maison
+                )
+
+                if competence is None:
+                    continue
+
+                try:
+                    alias_actuels = json.loads(
+                        competence.aliases or "[]"
+                    )
+                except (TypeError, ValueError):
+                    alias_actuels = []
+
+                competence.aliases = json.dumps(
+                    [*alias_actuels, *libelles],
+                    ensure_ascii=False,
+                )
+
+            if nouvelles:
+                db.bulk_save_objects(nouvelles)
+
             db.commit()
 
         return EscoImportSummary(
