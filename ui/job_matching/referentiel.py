@@ -24,6 +24,10 @@ from __future__ import annotations
 
 import streamlit as st
 
+from services.ai.gemini_client import is_configured as ai_is_configured
+from services.ai.skill_proposal import propose_catalog_entry
+from services.job_service import get_job_offer_text
+
 from services.skill_candidate_service import (
     IGNORE,
     INTEGRE,
@@ -37,21 +41,130 @@ from services.skill_candidate_service import (
 from services.skill_catalog_service import get_active_skills
 
 
-CATEGORIES = [
-    "",
-    "Product",
-    "Project Management",
-    "Management",
-    "Business",
-    "Data",
-    "Technology",
-    "Tools",
-    "Design",
-    "AI",
-]
+def _categories_existantes(competences) -> list[str]:
+    """
+    Les catégories réellement présentes au référentiel.
+
+    Volontairement pas une liste figée : elle refléterait les métiers
+    prévus à la livraison, et l'outil doit pouvoir servir un candidat
+    dont le métier n'y figure pas.
+    """
+
+    return sorted(
+        {
+            competence.category.strip()
+            for competence in competences
+            if competence.category and competence.category.strip()
+        }
+    )
 
 
-def _rendre_un_terme(candidat: dict, competences) -> bool:
+def _contexte_du_terme(candidat: dict) -> str:
+    """
+    Extrait de l'annonce où le terme est apparu.
+
+    Un sigle n'a pas le même sens partout : « CDP » désigne une
+    Customer Data Platform dans une annonce marketing, autre chose
+    ailleurs. Sans contexte, la proposition serait un pari.
+    """
+
+    identifiants = candidat.get("job_offer_ids") or []
+
+    if not identifiants:
+        return ""
+
+    try:
+        texte = get_job_offer_text(identifiants[0])
+
+    except Exception:
+        return ""
+
+    if not texte:
+        return ""
+
+    position = texte.casefold().find(candidat["term"].casefold())
+
+    if position < 0:
+        return texte[:600]
+
+    return texte[max(0, position - 300) : position + 300]
+
+
+def _rendre_proposition(identifiant: str, proposition) -> bool:
+    """
+    Affiche ce que l'IA propose. Retourne True si un rattachement
+    proposé a été appliqué.
+    """
+
+    if proposition is None:
+        return False
+
+    if proposition.reasoning:
+        st.caption(f"💡 {proposition.reasoning}")
+
+    if proposition.warning:
+        st.warning(proposition.warning)
+
+    if not proposition.attach_to_id:
+        return False
+
+    st.info(
+        f"L'IA estime que ce terme désigne « "
+        f"{proposition.attach_to_name} », déjà au référentiel. "
+        "Mieux vaut l'y rattacher que créer un doublon."
+    )
+
+    if st.button(
+        f"🔗 Rattacher à « {proposition.attach_to_name} »",
+        key=f"proposition_rattacher_{identifiant}",
+        type="primary",
+        use_container_width=True,
+    ):
+        attach_as_alias(identifiant, proposition.attach_to_id)
+        st.session_state.pop(f"proposition_{identifiant}", None)
+        return True
+
+    return False
+
+
+def _defauts_du_formulaire(candidat: dict, proposition) -> dict:
+    """
+    Valeurs initiales du formulaire de création.
+
+    `version` change dès qu'une proposition arrive : sans cela,
+    Streamlit conserverait la saisie précédente et la proposition
+    resterait invisible.
+    """
+
+    if proposition is None or not proposition.canonical_name:
+        return {
+            "nom": candidat["term"],
+            "categorie": "",
+            "alias": "",
+            "description": "",
+            "version": "manuel",
+        }
+
+    autres = [
+        alias
+        for alias in proposition.aliases
+        if alias.casefold() != proposition.canonical_name.casefold()
+    ]
+
+    return {
+        "nom": proposition.canonical_name,
+        "categorie": proposition.category,
+        "alias": "\n".join(autres),
+        "description": proposition.description,
+        "version": f"ia-{abs(hash(proposition.canonical_name))}",
+    }
+
+
+def _rendre_un_terme(
+    candidat: dict,
+    competences,
+    categories: list[str],
+) -> bool:
     """Affiche un terme et ses trois issues. Retourne True si traité."""
 
     identifiant = candidat["id"]
@@ -114,16 +227,62 @@ def _rendre_un_terme(candidat: dict, competences) -> bool:
                 "ne couvrait pas."
             )
 
-            nom = st.text_input(
-                "Nom de la compétence",
-                value=candidat["term"],
-                key=f"creer_nom_{identifiant}",
+            proposition = st.session_state.get(
+                f"proposition_{identifiant}"
             )
 
-            categorie = st.selectbox(
+            if st.button(
+                "✨ Demander une proposition à l'IA",
+                key=f"proposer_{identifiant}",
+                use_container_width=True,
+                disabled=not ai_is_configured(),
+            ):
+                with st.spinner("Analyse du terme..."):
+                    proposition = propose_catalog_entry(
+                        candidat["term"],
+                        context=_contexte_du_terme(candidat),
+                    )
+
+                st.session_state[f"proposition_{identifiant}"] = (
+                    proposition
+                )
+
+            if not ai_is_configured():
+                st.caption(
+                    "Clé GEMINI_API_KEY absente : remplissez le "
+                    "formulaire à la main."
+                )
+
+            if _rendre_proposition(identifiant, proposition):
+                traite = True
+
+            defauts = _defauts_du_formulaire(candidat, proposition)
+
+            nom = st.text_input(
+                "Nom de la compétence",
+                value=defauts["nom"],
+                key=f"creer_nom_{identifiant}_{defauts['version']}",
+            )
+
+            categorie = st.text_input(
                 "Catégorie",
-                options=CATEGORIES,
-                key=f"creer_categorie_{identifiant}",
+                value=defauts["categorie"],
+                key=(
+                    f"creer_categorie_{identifiant}"
+                    f"_{defauts['version']}"
+                ),
+                help=(
+                    "Catégories déjà utilisées : "
+                    + (", ".join(categories) if categories else "aucune")
+                ),
+            )
+
+            alias_saisis = st.text_area(
+                "Autres façons de nommer cette compétence "
+                "(une par ligne)",
+                value=defauts["alias"],
+                key=f"creer_alias_{identifiant}_{defauts['version']}",
+                height=90,
             )
 
             if st.button(
@@ -137,6 +296,15 @@ def _rendre_un_terme(candidat: dict, competences) -> bool:
                         identifiant,
                         canonical_name=nom,
                         category=categorie,
+                        description=defauts["description"],
+                        aliases=[
+                            ligne.strip()
+                            for ligne in alias_saisis.splitlines()
+                            if ligne.strip()
+                        ],
+                    )
+                    st.session_state.pop(
+                        f"proposition_{identifiant}", None
                     )
                     traite = True
 
@@ -268,6 +436,7 @@ def render_referentiel_tab() -> None:
         return
 
     competences = get_active_skills()
+    categories = _categories_existantes(competences)
 
     st.info(
         f"{len(candidats)} terme(s) à trier. Après un ajout, "
@@ -279,7 +448,9 @@ def render_referentiel_tab() -> None:
 
         with st.container(border=True):
 
-            if _rendre_un_terme(candidat, competences):
+            if _rendre_un_terme(
+                candidat, competences, categories
+            ):
                 st.rerun()
 
     _rendre_les_traites()

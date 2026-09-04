@@ -386,9 +386,15 @@ def promote_to_catalog(
     canonical_name: str = "",
     category: str = "",
     description: str = "",
+    aliases: list[str] | tuple[str, ...] | None = None,
 ) -> str:
     """
     Crée une compétence du référentiel à partir du terme rencontré.
+
+    `aliases` complète les deux formes toujours présentes — le nom
+    retenu et le terme de l'annonce. Chaque alias est confronté au
+    référentiel : un mot déjà revendiqué par une autre compétence est
+    refusé, car il ne peut appartenir qu'à une seule entrée.
 
     Retourne l'identifiant de la compétence créée.
     """
@@ -417,10 +423,34 @@ def promote_to_catalog(
                 f"« {collision} »."
             )
 
+        # Le nom retenu et le mot de l'annonce sont toujours là : sans
+        # le second, l'annonce qui l'emploie resterait incomprise.
         alias = [nom]
 
-        if normalize_skill_text(ligne.term) != cle:
-            alias.append(ligne.term)
+        vus = {cle}
+
+        for propose in [ligne.term, *(aliases or [])]:
+
+            candidat = (propose or "").strip()
+
+            if not candidat:
+                continue
+
+            cle_alias = normalize_skill_text(candidat)
+
+            if not cle_alias or cle_alias in vus:
+                continue
+
+            conflit = _competence_revendiquant(db, cle_alias)
+
+            if conflit is not None:
+                raise ValueError(
+                    f"L'alias « {candidat} » appartient déjà à "
+                    f"« {conflit} »."
+                )
+
+            vus.add(cle_alias)
+            alias.append(candidat)
 
         identifiant = f"catalog-{uuid4()}"
 

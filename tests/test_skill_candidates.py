@@ -136,6 +136,44 @@ def test_un_terme_promu_peut_etre_renomme(catalogue):
     assert find_skill_by_name("K8s") is not None
 
 
+def test_les_alias_fournis_sont_enregistres(catalogue):
+    """
+    La proposition de l'IA arrive avec ses synonymes : ils doivent
+    atteindre le référentiel, sinon la moitié du travail est perdue.
+    """
+
+    record_unknown_terms(["K8s"])
+
+    promote_to_catalog(
+        get_candidates()[0]["id"],
+        canonical_name="Kubernetes",
+        aliases=["Container orchestration", "K8"],
+    )
+
+    for nom in ("Kubernetes", "K8s", "Container orchestration", "K8"):
+        assert find_skill_by_name(nom) is not None, nom
+
+
+def test_un_alias_deja_pris_fait_echouer_la_creation(catalogue):
+    """
+    Un alias appartient à une seule compétence : accepté ici, il
+    rattacherait silencieusement une compétence du Master CV à la
+    mauvaise entrée.
+    """
+
+    record_unknown_terms(["K8s"])
+
+    with pytest.raises(ValueError, match="Product Discovery"):
+        promote_to_catalog(
+            get_candidates()[0]["id"],
+            canonical_name="Kubernetes",
+            aliases=["Découverte produit"],
+        )
+
+    # Rien ne doit avoir été créé au passage.
+    assert find_skill_by_name("Kubernetes") is None
+
+
 def test_un_terme_peut_etre_rattache_a_une_competence_existante(
     catalogue,
 ):
