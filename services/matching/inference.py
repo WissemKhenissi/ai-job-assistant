@@ -118,11 +118,15 @@ def _find_semantic_inference_evidence(
 
         try:
 
+            # On ne cherche qu'une compétence : inutile de faire
+            # comparer tout le référentiel, et le restreindre évite
+            # qu'elle soit évincée du classement par dix autres.
             semantic_matches = (
                 find_semantic_skill_matches(
                     profile_block,
                     threshold=0.45,
                     limit=10,
+                    restrict_to={canonical_skill},
                 )
             )
 

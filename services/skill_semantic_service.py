@@ -917,12 +917,40 @@ def find_semantic_skill_matches(
     text: str,
     threshold: float = SEMANTIC_MATCH_THRESHOLD,
     limit: int = 10,
+    restrict_to: set[str] | None = None,
 ) -> list[SemanticSkillMatch]:
+    """
+    Compétences du référentiel sémantiquement proches d'un texte.
+
+    `restrict_to` limite la recherche à des formes canoniques
+    précises. Ce n'est pas une optimisation accessoire : l'appelant
+    principal ne s'intéresse qu'à **une** compétence à la fois, et
+    faire encoder tout le référentiel pour la retrouver coûtait 209
+    secondes par appel une fois le référentiel ESCO importé — l'analyse
+    d'une seule annonce devenait impraticable.
+
+    Restreindre corrige aussi un défaut de fond : avec `limit`, la
+    compétence recherchée pouvait être évincée du classement par dix
+    autres mieux notées, et déclarée absente à tort.
+    """
 
     if not text or not text.strip():
         return []
 
     corpus = get_skill_semantic_corpus()
+
+    if restrict_to:
+
+        from services.matching.normalization import (
+            _canonical_skill_name,
+        )
+
+        corpus = [
+            item
+            for item in corpus
+            if _canonical_skill_name(item["skill"].canonical_name)
+            in restrict_to
+        ]
 
     if not corpus:
         return []
