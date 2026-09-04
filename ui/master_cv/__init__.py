@@ -15,6 +15,7 @@ import streamlit as st
 
 from services.profile_service import get_skills
 from ui.master_cv.experiences_section import render_experiences_section
+from ui.master_cv.import_section import render_import_section
 from ui.master_cv.interview_section import render_interview_section
 from ui.master_cv.skills_section import render_skills_section
 from ui.profile_page import render_profile_page
@@ -36,6 +37,14 @@ def render_master_cv_page(candidate, experiences) -> None:
     )
 
     with onglet_profil:
+
+        # Placé en tête du profil : c'est la première chose dont un
+        # nouvel utilisateur a besoin, et le repli s'ouvre de
+        # lui-même tant que le parcours est vide.
+        render_import_section(
+            candidate.id, profil_vide=not experiences
+        )
+
         render_profile_page(
             candidate,
             experiences_count=len(experiences),
