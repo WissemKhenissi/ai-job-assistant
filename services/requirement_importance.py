@@ -82,7 +82,26 @@ LIBELLES = {
 #
 # Écrits sans accents : le texte est désaccentué avant la recherche.
 
+# Titres de section qui annoncent ce que l'annonce exige. Relevés
+# dans le corpus de mesure, pas imaginés : « Votre profil »,
+# « Les compétences qui feront votre succès », « Vous maîtrisez : »,
+# « Vous êtes reconnu(e) pour : », « Hard skills ».
+#
+# Ils qualifient toutes les puces de leur section, pas seulement la
+# première — voir _entete().
 MARQUEURS_ESSENTIELLE = (
+    "votre profil",
+    "ton profil",
+    "profil souhaite",
+    "profil du candidat",
+    "qualifications",
+    "hard skills",
+    "vous etes reconnu",
+    "tu es reconnu",
+    "les competences qui",
+    "competences cles",
+    "ce que vous apportez",
+    "ce que tu apportes",
     "indispensable",
     "imperatif",
     "imperativement",
@@ -108,7 +127,13 @@ MARQUEURS_ESSENTIELLE = (
     "necessairement",
 )
 
+# Titres et formules qui annoncent un souhait plutôt qu'une
+# condition. « Nice to have » a son pendant en français dans les
+# annonces du corpus : « ce qui ferait la différence ».
 MARQUEURS_SOUHAITEE = (
+    "ce qui ferait la difference",
+    "ce serait un plus",
+    "en bonus",
     "un plus",
     "un atout",
     "un vrai plus",
@@ -237,22 +262,61 @@ def _fenetre_ligne(texte: str, position: int) -> str:
     return texte[debut : fin if fin != -1 else len(texte)]
 
 
-def _entete(texte: str, position: int, lignes: int = 2) -> str:
+# Caractères qui ouvrent une puce : une puce n'est jamais un titre.
+_PUCES = "-•*▶●–—>+"
+
+# Un titre de section est court. Au-delà, c'est une phrase — sauf si
+# elle se termine par « : », qui annonce explicitement ce qui suit.
+_MOTS_MAX_TITRE = 8
+
+# Jusqu'où remonter pour trouver le titre. Une section d'annonce
+# dépasse rarement la dizaine de puces ; au-delà, un titre trouvé ne
+# qualifie plus ce qu'on lit.
+_PORTEE_TITRE = 12
+
+
+def _ressemble_a_un_titre(ligne: str) -> bool:
+
+    ligne = ligne.strip()
+
+    if not ligne or ligne[0] in _PUCES:
+        return False
+
+    if ligne.endswith(":"):
+        return True
+
+    return len(ligne.split()) <= _MOTS_MAX_TITRE
+
+
+def _entete(texte: str, position: int) -> str:
     """
-    Les lignes non vides qui précèdent — souvent un titre de section
-    (« Environnement technique : », « Compétences requises : ») qui
-    qualifie tout ce qui suit.
+    Le titre de la section qui contient cette position.
+
+    Cherché en remontant jusqu'à la première ligne qui ressemble à un
+    titre : sans puce, et courte ou terminée par « : ».
+
+    Cette fonction ne regardait auparavant que les deux lignes non
+    vides précédentes. Dans une liste à puces — la forme la plus
+    répandue dans une annonce — ces deux lignes sont les puces
+    voisines, jamais le titre. « Votre profil : » ne qualifiait donc
+    que sa première puce, et l'annonce restait muette sur toutes les
+    autres : 53 exigences sur 178 dans le corpus de mesure.
     """
 
     debut_ligne = texte.rfind("\n", 0, position) + 1
 
     precedentes = [
-        ligne.strip()
+        ligne
         for ligne in texte[:debut_ligne].split("\n")
         if ligne.strip()
     ]
 
-    return " ".join(precedentes[-lignes:])
+    for ligne in reversed(precedentes[-_PORTEE_TITRE:]):
+
+        if _ressemble_a_un_titre(ligne):
+            return ligne.strip()
+
+    return ""
 
 
 # ============================================================
@@ -288,6 +352,12 @@ def _niveau_dans(fenetre: str) -> str:
 _MINIMUM_ELEMENTS = 4
 _MOTS_MAX_PAR_ELEMENT = 4
 
+# Exiger que TOUS les éléments soient courts disqualifiait des listes
+# manifestes pour un seul membre bavard : « CRM, CDP, CMS, solutions
+# marketing automation et e-commerce » cessait d'être une énumération
+# à cause du dernier. Une majorité franche suffit.
+_PART_MINIMALE_COURTE = 0.75
+
 
 def _est_une_enumeration(fenetre: str) -> bool:
 
@@ -300,10 +370,13 @@ def _est_une_enumeration(fenetre: str) -> bool:
     if len(elements) < _MINIMUM_ELEMENTS:
         return False
 
-    return all(
-        len(element.split()) <= _MOTS_MAX_PAR_ELEMENT
+    courts = sum(
+        1
         for element in elements
+        if len(element.split()) <= _MOTS_MAX_PAR_ELEMENT
     )
+
+    return courts / len(elements) >= _PART_MINIMALE_COURTE
 
 
 def _enumeration_illustrative(phrase: str, position: int) -> bool:
@@ -343,25 +416,13 @@ def _enumeration_illustrative(phrase: str, position: int) -> bool:
 # CLASSEMENT
 # ============================================================
 
-def _lire_niveau(terme: str, job_text: str) -> str | None:
-    """
-    Ce que l'annonce dit de ce terme, ou ``None`` si elle n'en dit
-    rien.
-
-    Le vide est une réponse à part entière, et il ne se confond pas
-    avec « souhaitée ». Une annonce qui écrit « serait un plus » se
-    prononce ; une annonce qui mentionne un terme sans le qualifier
-    ne se prononce pas. Les deux aboutissent au même niveau, mais pas
-    au même degré de certitude — et c'est ce degré qui décide si la
-    proposition de l'IA a droit de cité.
-    """
+def _trouver(texte: str, terme: str) -> int | None:
+    """Position de la première occurrence du terme, ou ``None``."""
 
     cle = normalise_terme(terme)
 
-    if not cle or not (job_text or "").strip():
+    if not cle:
         return None
-
-    texte = minuscules_sans_accents(job_text)
 
     # Le terme normalisé perd sa ponctuation, le texte non : on
     # cherche donc le terme mot à mot, en tolérant n'importe quel
@@ -376,10 +437,53 @@ def _lire_niveau(terme: str, job_text: str) -> str | None:
 
     occurrence = motif.search(texte)
 
-    if occurrence is None:
+    return occurrence.start() if occurrence else None
+
+
+def _lire_niveau(
+    terme: str,
+    job_text: str,
+    alias: tuple[str, ...] | list[str] = (),
+) -> str | None:
+    """
+    Ce que l'annonce dit de ce terme, ou ``None`` si elle n'en dit
+    rien.
+
+    Le vide est une réponse à part entière, et il ne se confond pas
+    avec « souhaitée ». Une annonce qui écrit « serait un plus » se
+    prononce ; une annonce qui mentionne un terme sans le qualifier
+    ne se prononce pas.
+
+    ``alias`` sert quand l'exigence ne figure pas telle quelle dans
+    l'annonce. C'est le cas ordinaire : le référentiel reconnaît
+    « Agile / Scrum » derrière le mot « Agile », et c'est son nom
+    canonique qui devient l'exigence. Sans les alias, l'annonce
+    restait muette sur 69 exigences du corpus de mesure — non pas
+    faute de le dire, mais faute qu'on sache où regarder.
+
+    Les alias sont essayés du plus long au plus court : le plus
+    spécifique donne le contexte le plus sûr.
+    """
+
+    if not (job_text or "").strip():
         return None
 
-    position = occurrence.start()
+    texte = minuscules_sans_accents(job_text)
+
+    position = None
+
+    for candidat in (
+        terme,
+        *sorted(alias, key=len, reverse=True),
+    ):
+
+        position = _trouver(texte, candidat)
+
+        if position is not None:
+            break
+
+    if position is None:
+        return None
 
     phrase, debut_phrase = _fenetre_phrase(texte, position)
 
@@ -390,23 +494,25 @@ def _lire_niveau(terme: str, job_text: str) -> str | None:
     if _enumeration_illustrative(phrase, position - debut_phrase):
         return MENTION
 
-    for fenetre in (
-        phrase,
-        _fenetre_ligne(texte, position),
-        _entete(texte, position),
-    ):
+    for fenetre in (phrase, _fenetre_ligne(texte, position)):
 
         niveau = _niveau_dans(fenetre)
 
         if niveau:
             return niveau
 
-    # Dernier recours : une énumération que rien n'introduit se
-    # reconnaît encore à sa forme.
+    # Une énumération que rien n'introduit se reconnaît encore à sa
+    # forme. Elle passe avant le titre de section : « vous
+    # maîtrisez : » chapeaute la section entière, mais la puce qui
+    # aligne huit leviers séparés par des virgules et se termine par
+    # « etc » en dit plus long sur ces huit-là.
     if _est_une_enumeration(phrase):
         return MENTION
 
-    return None
+    # Le titre de section en dernier : c'est l'indice le plus
+    # distant, celui qu'un signal de la phrase elle-même doit
+    # pouvoir contredire.
+    return _niveau_dans(_entete(texte, position)) or None
 
 
 def classify_requirement(terme: str, job_text: str) -> str:
@@ -426,6 +532,7 @@ def classify_requirement(terme: str, job_text: str) -> str:
 def classify_requirements(
     termes: list[str] | tuple[str, ...],
     job_text: str,
+    alias_par_terme: dict[str, tuple[str, ...]] | None = None,
 ) -> dict[str, str]:
     """
     Niveau de chaque exigence, indexé par forme normalisée.
@@ -433,7 +540,15 @@ def classify_requirements(
     Deux fois le même texte donnent deux fois le même résultat :
     c'est la propriété qu'on attend d'un score dont on se sert pour
     comparer des annonces entre elles.
+
+    ``alias_par_terme`` porte les autres façons de nommer chaque
+    exigence, pour les retrouver dans une annonce qui n'emploie pas
+    le nom canonique. Ce module reste sans base de données : c'est à
+    l'appelant, qui a déjà le référentiel sous la main, de les
+    fournir.
     """
+
+    alias_par_terme = alias_par_terme or {}
 
     niveaux: dict[str, str] = {}
 
@@ -445,7 +560,12 @@ def classify_requirements(
             continue
 
         niveaux[cle] = (
-            _lire_niveau(terme, job_text) or IMPORTANCE_PAR_DEFAUT
+            _lire_niveau(
+                terme,
+                job_text,
+                alias_par_terme.get(terme, ()),
+            )
+            or IMPORTANCE_PAR_DEFAUT
         )
 
     return niveaux

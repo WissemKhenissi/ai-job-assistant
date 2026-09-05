@@ -359,3 +359,163 @@ def test_le_silence_de_l_annonce_se_distingue_d_un_souhait():
     )
 
     assert _lire_niveau("Figma", "Vous travaillerez sur Figma.") is None
+
+
+# ============================================================
+# TITRES DE SECTION
+# ============================================================
+#
+# Le classement ne se prononçait que sur 57 exigences du corpus de
+# mesure sur 178. Trois causes, toutes corrigées ici : le titre de
+# section ne portait que sur sa première puce, l'exigence était
+# cherchée sous un nom que l'annonce n'emploie pas, et une liste
+# manifeste était rejetée pour un seul membre bavard.
+
+
+def test_un_titre_de_section_porte_sur_toutes_ses_puces():
+    """
+    Le défaut principal : la recherche du titre ne remontait que de
+    deux lignes non vides. Dans une liste à puces — la forme la plus
+    répandue dans une annonce — ces deux lignes sont les puces
+    voisines, jamais le titre.
+    """
+
+    annonce = (
+        "Votre profil :\n"
+        "- Une première expérience en gestion de projet\n"
+        "- La pratique de Docker au quotidien\n"
+        "- Un goût prononcé pour Kubernetes\n"
+    )
+
+    assert classify_requirement("Kubernetes", annonce) == ESSENTIELLE
+
+
+def test_un_titre_ne_porte_pas_indefiniment():
+    """
+    Un titre trouvé vingt puces plus haut ne qualifie plus rien : la
+    remontée s'arrête.
+    """
+
+    annonce = "Votre profil :\n" + "".join(
+        f"- Une ligne de remplissage numéro {indice}\n"
+        for indice in range(20)
+    ) + "- La pratique de Kubernetes\n"
+
+    assert classify_requirement("Kubernetes", annonce) == SOUHAITEE
+
+
+def test_une_puce_n_est_jamais_prise_pour_un_titre():
+
+    from services.requirement_importance import _ressemble_a_un_titre
+
+    assert _ressemble_a_un_titre("Votre profil :")
+    assert _ressemble_a_un_titre("Hard skills")
+    assert not _ressemble_a_un_titre("- Vous maîtrisez Docker")
+    assert not _ressemble_a_un_titre("• Vous maîtrisez Docker")
+
+    # Une phrase longue n'est pas un titre, sauf si elle annonce
+    # explicitement ce qui suit.
+    assert not _ressemble_a_un_titre(
+        "Vous rejoindrez une équipe de douze personnes réparties "
+        "sur trois sites en France"
+    )
+    assert _ressemble_a_un_titre(
+        "Pour ce poste nous recherchons impérativement les "
+        "compétences suivantes :"
+    )
+
+
+# ============================================================
+# L'EXIGENCE SOUS UN AUTRE NOM
+# ============================================================
+
+def test_un_alias_permet_de_situer_l_exigence():
+    """
+    L'exigence porte le nom canonique du référentiel, l'annonce
+    emploie le sien. Sans les alias, l'annonce restait muette sur 69
+    exigences du corpus — non pas faute de le dire, mais faute qu'on
+    sache où regarder.
+    """
+
+    annonce = "La maîtrise d'Agile est indispensable."
+
+    # Le nom canonique ne figure pas dans l'annonce.
+    assert classify_requirement("Agile / Scrum", annonce) == SOUHAITEE
+
+    niveaux = classify_requirements(
+        ["Agile / Scrum"],
+        annonce,
+        alias_par_terme={"Agile / Scrum": ("Agile", "Scrum")},
+    )
+
+    assert niveaux[normalise_terme("Agile / Scrum")] == ESSENTIELLE
+
+
+def test_l_alias_le_plus_specifique_est_essaye_en_premier():
+    """
+    Un alias court tombe n'importe où ; le plus long désigne le
+    passage qui parle vraiment de la compétence.
+    """
+
+    from services.requirement_importance import _lire_niveau
+
+    annonce = (
+        "Environnement : outils divers, tests, suivi, reporting.\n"
+        "La maîtrise du test A/B est indispensable."
+    )
+
+    assert (
+        _lire_niveau(
+            "Experimentation", annonce, ("Tests", "test A/B")
+        )
+        == ESSENTIELLE
+    )
+
+
+# ============================================================
+# UNE LISTE RESTE UNE LISTE
+# ============================================================
+
+def test_un_element_bavard_ne_disqualifie_pas_la_liste():
+    """
+    Relevé tel quel : « les principales plateformes du marché : CRM,
+    CDP, CMS, solutions marketing automation et e-commerce ». Trois
+    éléments courts, un long — la liste redevenait une exigence.
+    """
+
+    annonce = (
+        "Vous maîtrisez :\n"
+        "- les principales plateformes du marché : CRM, CDP, CMS, "
+        "solutions marketing automation et e-commerce\n"
+    )
+
+    assert classify_requirement("CDP", annonce) == MENTION
+
+
+def test_une_enumeration_l_emporte_sur_le_titre_de_section():
+    """
+    « Vous maîtrisez : » chapeaute la section entière, mais la puce
+    qui aligne huit leviers séparés par des virgules et se termine
+    par « etc » en dit plus long sur ces huit-là.
+    """
+
+    annonce = (
+        "Vous maîtrisez :\n"
+        "- les leviers de performance digitale : e-commerce, "
+        "acquisition, fidélisation, social media, influence, "
+        "web-to-store, mobile, e-réputation, etc\n"
+    )
+
+    assert classify_requirement("web-to-store", annonce) == MENTION
+
+
+def test_une_liste_de_conditions_resiste_encore():
+    """
+    Le pendant : une énumération que rien n'annonce comme un exemple,
+    dans une phrase qui la présente comme des conditions, reste une
+    liste de conditions.
+    """
+
+    annonce = "Compétences requises : Python, Docker, SQL, Git."
+
+    assert classify_requirement("Docker", annonce) == ESSENTIELLE

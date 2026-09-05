@@ -479,9 +479,23 @@ def analyze_candidate_against_skills(
     # faut les deux pour qu'un écart veuille dire quelque chose :
     # « Jira absent » ne pèse pas comme « gestion de projet absente ».
 
+    # Les alias permettent de retrouver l'exigence dans une annonce
+    # qui n'emploie pas le nom canonique du referentiel : « Agile »
+    # pour « Agile / Scrum ». Sans eux, l'annonce reste muette sur
+    # une exigence qu'elle nomme pourtant.
+    alias_par_terme = {}
+
+    for match in matches:
+
+        entree = find_skill_by_name(match.skill)
+
+        if entree is not None and entree.aliases:
+            alias_par_terme[match.skill] = entree.aliases
+
     niveaux = classify_requirements(
         [match.skill for match in matches],
         job_text,
+        alias_par_terme=alias_par_terme,
     )
 
     for match in matches:
