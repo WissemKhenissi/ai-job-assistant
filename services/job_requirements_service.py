@@ -262,6 +262,52 @@ def _index_extraction() -> tuple[dict, int]:
     return _index_extraction_cache
 
 
+# Ponctuation qu'un groupe de mots ne doit jamais franchir.
+#
+# La normalisation efface la ponctuation : « gestion de projet,
+# agile/scrum » devenait la suite de mots « gestion de projet agile
+# scrum », et le groupe de quatre mots « gestion de projet agile »
+# reconnaissait une compétence ESCO qui n'est nulle part dans
+# l'annonce. Deux exigences pour une, dont une fantôme, comptée
+# manquante.
+#
+# Le tiret, l'apostrophe et la barre oblique restent franchissables :
+# « agile/scrum » et « e-commerce » sont des compétences uniques, et
+# le référentiel les nomme avec un espace.
+#
+# Le point ne sépare que suivi d'une espace ou d'une fin de texte :
+# sans cette précaution, « node.js » deviendrait deux termes que rien
+# ne pourrait plus rapprocher de l'entrée « Node.js ».
+_SEPARATEUR_DUR = re.compile(
+    r"[,;:!?()\[\]{}«»\"\n\r\u2022\u00b7\u2026|]|\.(?=\s|$)"
+)
+
+
+def _segments(job_description: str) -> list[tuple[str, int]]:
+    """
+    Les fragments d'annonce à l'intérieur desquels un groupe de mots
+    peut être cherché, avec le décalage de chacun dans le texte
+    normalisé complet.
+
+    Le décalage sert à restituer l'ordre d'apparition, qui porte une
+    information : ce que l'annonce cite en premier compte davantage.
+    """
+
+    fragments = []
+    decalage = 0
+
+    for brut in _SEPARATEUR_DUR.split(job_description):
+
+        fragments.append((_normalize(brut), decalage))
+
+        # Le fragment brut et sa forme normalisée n'ont pas la même
+        # longueur, mais l'ordre relatif suffit : on avance d'autant
+        # que le brut, séparateur compris.
+        decalage += len(brut) + 1
+
+    return fragments
+
+
 def _detecter(job_description: str) -> list[tuple]:
     """
     Compétences reconnues dans l'annonce.
@@ -272,24 +318,39 @@ def _detecter(job_description: str) -> list[tuple]:
 
     index, taille_max = _index_extraction()
 
-    texte = _normalize(job_description)
-
-    if not texte:
+    if not _normalize(job_description):
         return []
 
-    # Les mots et leur position dans le texte normalisé, en une seule
-    # passe : la position restitue l'ordre d'apparition, qui porte une
-    # information — ce que l'annonce cite en premier compte davantage.
-    reperes = list(_MOT.finditer(texte))
+    mots: list[str] = []
+    positions: list[int] = []
 
-    mots = [repere.group() for repere in reperes]
-    positions = [repere.start() for repere in reperes]
+    # Une frontière dure interrompt les groupes de mots : on remplit
+    # les listes segment par segment en marquant les coupures.
+    coupures: set[int] = set()
+
+    for fragment, decalage in _segments(job_description):
+
+        coupures.add(len(mots))
+
+        for repere in _MOT.finditer(fragment):
+            mots.append(repere.group())
+            positions.append(decalage + repere.start())
 
     trouvees: dict[str, tuple] = {}
 
     for depart in range(len(mots)):
 
-        limite = min(taille_max, len(mots) - depart)
+        # Le groupe s'arrête à la prochaine frontière dure.
+        fin_du_segment = next(
+            (
+                coupure
+                for coupure in sorted(coupures)
+                if coupure > depart
+            ),
+            len(mots),
+        )
+
+        limite = min(taille_max, fin_du_segment - depart)
 
         for longueur in range(1, limite + 1):
 

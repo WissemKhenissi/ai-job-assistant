@@ -244,3 +244,146 @@ def test_un_gros_referentiel_reconnait_toujours(session_factory):
     assert extract_required_skills(
         "Vous maîtrisez la compétence numéro 7 et l'alias 1234."
     ) == ["compétence numéro 7", "compétence numéro 1234"]
+
+
+# ============================================================
+# FRONTIERES DE PONCTUATION
+# ============================================================
+#
+# La normalisation efface la ponctuation. Un groupe de mots pouvait
+# donc enjamber une virgule et reconnaître une compétence que
+# l'annonce ne nomme nulle part.
+
+
+def test_un_groupe_de_mots_ne_franchit_pas_une_virgule(
+    session_factory,
+):
+    """
+    Cas relevé sur une annonce réelle : « Compétences attendues :
+    gestion de projet, agile/scrum » faisait apparaître l'entrée
+    « gestion de projet agile », reconnue à cheval sur la virgule.
+    Deux exigences pour une, dont une fantôme — et comptée manquante,
+    puisque le candidat ne peut pas prouver une compétence que
+    l'annonce ne demande pas.
+    """
+
+    session = session_factory()
+
+    add_catalog_skill(
+        session,
+        canonical_name="Gestion de projet",
+        aliases=["Gestion de projet"],
+    )
+    add_catalog_skill(
+        session,
+        canonical_name="Agile / Scrum",
+        aliases=["Agile", "Scrum"],
+    )
+    add_catalog_skill(
+        session,
+        canonical_name="Gestion de projet agile",
+        aliases=["gestion de projet agile"],
+    )
+
+    session.close()
+    invalidate_caches()
+
+    detectees = extract_required_skills(
+        "Compétences attendues : gestion de projet, agile/scrum."
+    )
+
+    assert "Gestion de projet" in detectees
+    assert "Agile / Scrum" in detectees
+    assert "Gestion de projet agile" not in detectees
+
+
+def test_une_barre_oblique_reste_franchissable(session_factory):
+    """
+    « agile/scrum » désigne une compétence unique, et le référentiel
+    la nomme avec un espace. Traiter la barre oblique comme une
+    frontière la rendrait indétectable.
+    """
+
+    session = session_factory()
+
+    add_catalog_skill(
+        session,
+        canonical_name="Agile / Scrum",
+        aliases=["Agile / Scrum"],
+    )
+
+    session.close()
+    invalidate_caches()
+
+    assert extract_required_skills(
+        "Méthodologie agile/scrum au quotidien."
+    ) == ["Agile / Scrum"]
+
+
+def test_un_point_de_version_ne_coupe_pas_le_terme(session_factory):
+    """
+    Le point ne sépare que suivi d'une espace ou d'une fin de texte :
+    sans cette précaution, « node.js » deviendrait deux termes que
+    rien ne pourrait plus rapprocher de l'entrée du référentiel.
+    """
+
+    session = session_factory()
+
+    add_catalog_skill(
+        session,
+        canonical_name="Node.js",
+        aliases=["Node.js", "NodeJS"],
+    )
+
+    session.close()
+    invalidate_caches()
+
+    assert extract_required_skills(
+        "Environnement node.js, en production."
+    ) == ["Node.js"]
+
+
+def test_une_fin_de_phrase_coupe_bien(session_factory):
+    """
+    Le pendant : « ... la gestion. Projet agile ... » ne doit pas
+    faire apparaître « gestion de projet ».
+    """
+
+    session = session_factory()
+
+    add_catalog_skill(
+        session,
+        canonical_name="Gestion de projet",
+        aliases=["gestion projet"],
+    )
+
+    session.close()
+    invalidate_caches()
+
+    assert (
+        extract_required_skills(
+            "Vous assurez la gestion. Projet livré en juin."
+        )
+        == []
+    )
+
+
+def test_l_ordre_d_apparition_survit_au_decoupage(session_factory):
+    """
+    L'ordre porte une information — ce que l'annonce cite en premier
+    pèse davantage dans le score. Découper l'annonce en fragments ne
+    doit pas le brouiller.
+    """
+
+    session = session_factory()
+
+    add_catalog_skill(session, canonical_name="Python", aliases=["Python"])
+    add_catalog_skill(session, canonical_name="SQL", aliases=["SQL"])
+    add_catalog_skill(session, canonical_name="Docker", aliases=["Docker"])
+
+    session.close()
+    invalidate_caches()
+
+    assert extract_required_skills(
+        "D'abord Docker. Ensuite Python ; enfin SQL."
+    ) == ["Docker", "Python", "SQL"]

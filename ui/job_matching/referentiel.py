@@ -37,6 +37,10 @@ from services.skill_candidate_service import (
     promote_to_catalog,
     undo_decision,
 )
+from services.catalog_hygiene import (
+    detections_douteuses,
+    remove_alias,
+)
 from services.skill_catalog_service import get_active_skills
 
 
@@ -455,6 +459,110 @@ def _rendre_attribution() -> None:
     )
 
 
+# ============================================================
+# RECONNAISSANCES DOUTEUSES
+# ============================================================
+#
+# Le pendant du tri des termes inconnus : les termes que le
+# référentiel croit connaître, et qu'il reconnaît de travers.
+
+
+def _rendre_les_reconnaissances_douteuses() -> None:
+
+    st.divider()
+
+    st.subheader("Reconnaissances à vérifier")
+
+    st.caption(
+        "Des alias qui ont reconnu une compétence sans lui "
+        "ressembler. La plupart sont justes — « IA » pour "
+        "Artificial Intelligence, « SEO » pour l'optimisation des "
+        "moteurs de recherche. Quelques-uns viennent d'un tout autre "
+        "métier, et ajoutent alors à vos analyses une exigence que "
+        "l'annonce ne demande pas."
+    )
+
+    try:
+        douteuses = detections_douteuses()
+
+    except Exception as erreur:
+        st.caption(f"Vérification indisponible ({erreur}).")
+        return
+
+    if not douteuses:
+
+        st.success(
+            "Aucune reconnaissance douteuse dans vos annonces "
+            "analysées."
+        )
+
+        return
+
+    st.caption(
+        f"{len(douteuses)} reconnaissance(s) relevée(s) dans vos "
+        "annonces. Retirer un alias ne supprime pas la compétence : "
+        "elle cesse simplement d'être reconnue sous ce mot."
+    )
+
+    for douteuse in douteuses:
+
+        with st.container(border=True):
+
+            colonne_texte, colonne_action = st.columns([5, 1])
+
+            with colonne_texte:
+
+                st.markdown(
+                    f"« **{douteuse.alias}** » est reconnu comme "
+                    f"**{douteuse.canonical_name}**"
+                )
+
+                origine = (
+                    "importé d'ESCO"
+                    if douteuse.vient_d_un_import
+                    else "entrée du référentiel maison"
+                )
+
+                st.caption(
+                    f"{origine} · vu dans "
+                    f"{len(douteuse.offres)} annonce(s) : "
+                    + ", ".join(douteuse.offres[:3])
+                )
+
+            with colonne_action:
+
+                if st.button(
+                    "Retirer",
+                    key=(
+                        f"retirer_alias_{douteuse.skill_id}"
+                        f"_{douteuse.alias}"
+                    ),
+                    use_container_width=True,
+                    help=(
+                        "Cet alias ne désigne pas cette compétence. "
+                        "Il sera retiré du référentiel."
+                    ),
+                ):
+
+                    try:
+
+                        remove_alias(
+                            douteuse.skill_id, douteuse.alias
+                        )
+
+                        st.session_state["referentiel_message"] = (
+                            f"« {douteuse.alias} » ne désigne plus "
+                            f"{douteuse.canonical_name}. Relancez "
+                            "l'analyse des annonces concernées pour "
+                            "en voir l'effet."
+                        )
+
+                        st.rerun()
+
+                    except ValueError as erreur:
+                        st.error(str(erreur))
+
+
 def render_referentiel_tab() -> None:
 
     st.write(
@@ -486,6 +594,7 @@ def render_referentiel_tab() -> None:
         )
 
         _rendre_les_traites()
+        _rendre_les_reconnaissances_douteuses()
 
         return
 
@@ -508,3 +617,4 @@ def render_referentiel_tab() -> None:
                 st.rerun()
 
     _rendre_les_traites()
+    _rendre_les_reconnaissances_douteuses()

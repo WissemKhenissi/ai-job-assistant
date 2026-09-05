@@ -103,6 +103,11 @@ Le niveau d'exigence n'a pas corrigé ce qui entre dans la liste, il a seulement
 
 `GENERIC_TERMS` (`services/requirement_cleaning.py`) filtre le bruit, mais c'est une liste écrite à la main, non modifiable depuis l'interface : quand elle se trompe, l'utilisateur ne peut rien.
 
+**Corrigé le 5 septembre 2026** — deux causes mesurées, pas supposées :
+
+- Les groupes de mots franchissaient la ponctuation. « Compétences attendues : gestion de projet, agile/scrum » faisait apparaître l'entrée ESCO « gestion de projet agile », reconnue à cheval sur la virgule ; « un(e) Business Manager » faisait apparaître « E-business ». Cinq exigences fantômes sur le corpus, toutes comptées manquantes. La détection s'arrête désormais aux frontières dures — la barre oblique et le tiret restent franchissables (« agile/scrum », « e-commerce »), et le point ne sépare que suivi d'une espace, sans quoi « node.js » deviendrait deux termes.
+- Un alias venu d'un autre métier capture son mot partout : « CMS » désignait la technologie de montage en surface, « FNAC » une ponction à l'aiguille fine. Aucune règle ne peut trancher — sur les vingt-neuf reconnaissances de ce type dans le corpus, la majorité est juste (« IA », « SEO », « Figma »). L'onglet Référentiel les montre désormais avec les annonces où elles se sont produites, et permet de retirer l'alias (`services/catalog_hygiene.py`). Le pendant du tri des termes inconnus, qui existait déjà.
+
 ### 3.2 Le score reste un chiffre, pas une décision
 
 La question à laquelle un candidat veut une réponse n'est pas « 52 sur 100 ? » mais « quelles conditions je ne couvre pas ? ». `missing_essential_skills` répond maintenant à la seconde, et l'interface l'affiche en premier. Reste à décider si le score global unique garde un sens, ou s'il doit céder la place à la seule couverture des conditions.
