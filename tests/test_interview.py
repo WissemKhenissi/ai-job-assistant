@@ -681,3 +681,36 @@ def test_une_majuscule_de_debut_de_phrase_ne_situe_pas(
     assert not interview.evidence_is_situated(
         "Veille sur le marché. Analyse des pratiques."
     )
+
+
+def test_le_controle_juge_la_reponse_autant_que_la_ligne():
+    """
+    Étendu ligne à ligne au parcours par expérience, le contrôle
+    décochait quatre propositions sur cinq d'un récit ordinaire —
+    « rédaction de spécifications fonctionnelles », « animation des
+    points de suivi » : des faits réels, sans chiffre.
+
+    Le récit qui les porte, lui, est situé. C'est donc lui qui situe
+    ses lignes.
+    """
+
+    recit = (
+        "Je coordonnais les équipes techniques et métier au "
+        "quotidien. Je rédigeais les spécifications fonctionnelles "
+        "et j'animais les points de suivi."
+    )
+
+    assert interview.evidence_is_situated(recit)
+
+    # Les lignes qui en sortent, prises isolément, n'en portent pas
+    # la trace — et n'ont pas à en porter une.
+    assert not interview.evidence_is_situated(
+        "Rédaction de spécifications fonctionnelles"
+    )
+
+    vague = (
+        "Oui je fais de la veille, c'est important dans mon métier, "
+        "je regarde ce que font les autres et je m'informe."
+    )
+
+    assert not interview.evidence_is_situated(vague)

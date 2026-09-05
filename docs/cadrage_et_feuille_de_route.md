@@ -208,8 +208,6 @@ Deux régressions trouvées en mesurant, corrigées avant le commit :
 
 **Deux propriétés du référentiel ne sont pas entièrement modifiables depuis l'interface.** `is_inferable` se règle à la création d'une compétence (case à cocher dans l'onglet Référentiel) ; `is_composite` et les compétences associées, non — les corriger demande une écriture en base. Une entrée mal classée reste donc mal classée.
 
-**Le contrôle « fait situé » ne s'applique qu'à la variante compétence.** Une ligne de preuve qui ne rapporte ni chiffre, ni rythme, ni nom propre est décochée par défaut quand l'entretien documente une compétence déclarée — parce que la valider ferait passer cette compétence de « déclarée » à « prouvée » sur une simple reformulation. Le même mécanisme crée pourtant des preuves dans le parcours par expérience, où le contrôle ne s'applique pas. À étendre ou à justifier.
-
 **Une inférence perdue, et c'est une donnée qui manque, pas une règle.** « Product Delivery » n'est plus déduit sur une annonce, parce que la formulation qui le déclenchait (« piloter les développements par cycles itératifs ») vivait dans le moteur et n'a pas d'équivalent au référentiel. L'y ajouter comme alias la rétablirait — et rendrait aussi l'expression détectable dans les annonces, ce qui n'est pas forcément souhaité. À trancher.
 
 **Trois `_normalize` restent séparés** dans `services/job_requirements_service.py`, `services/matching/normalization.py` et `services/skill_semantic_service.py`. Leurs règles diffèrent réellement (traitement des tirets, du point de « node.js », des séparateurs de chemin) : les fusionner changerait les résultats de matching. À traiter comme un arbitrage, pas comme un nettoyage.

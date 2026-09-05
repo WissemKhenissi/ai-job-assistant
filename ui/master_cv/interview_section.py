@@ -34,6 +34,10 @@ que sur une expérience, et la suite est identique.
 Rien n'entre au Master CV sans validation explicite. Chaque
 proposition reste rattachée à l'expérience en cours, ce qui permet
 ensuite de générer un CV ciblé cohérent.
+
+Et rien n'est coché d'office quand la réponse ne rapporte aucun fait
+situé : valider une ligne rend sa compétence « prouvée », et une
+affirmation reformulée ne prouve rien.
 """
 
 from __future__ import annotations
@@ -75,6 +79,9 @@ def _etat_initial() -> dict:
         # les propositions qui en sortent se rattachent à cette
         # compétence-là, pas à une compétence devinée par l'IA.
         "skill_name": "",
+        # La réponse dont sont tirées les propositions : c'est elle
+        # qui décide si elles sont cochées par défaut.
+        "reponse": "",
         "etape": "recit",
         "narration": "",
         "questions": [],
@@ -582,6 +589,8 @@ def _render_relance(etat: dict) -> None:
             if etat["exchange_ids"]:
                 save_answer(etat["exchange_ids"][0], reponse)
 
+            etat["reponse"] = reponse
+
             propositions, avertissement = propose_evidence_from_answers(
                 [
                     InterviewAnswer(
@@ -646,35 +655,45 @@ def _render_propositions(candidate_id: str, etat: dict) -> None:
         "affichable telle quelle sur un CV généré."
     )
 
+    # Une preuve est un fait situé. Si la réponse n'en rapporte aucun
+    # — ni chiffre, ni rythme, ni nom de projet ou d'outil — les
+    # lignes qui en sortent reformulent une affirmation plutôt que de
+    # la démontrer, et les cocher rendrait « prouvées » des
+    # compétences que rien ne prouve.
+    #
+    # Le contrôle porte sur la réponse, pas sur chaque ligne : un
+    # récit situé situe les lignes qu'il porte, même celles qui ne
+    # répètent pas son chiffre.
+    reponse_situee = evidence_is_situated(etat.get("reponse", ""))
+
+    if not reponse_situee:
+
+        st.warning(
+            "Votre réponse ne rapporte aucun fait situé — ni chiffre, "
+            "ni rythme, ni nom de projet, d'outil ou d'entreprise. "
+            "Ces lignes redisent ce que vous affirmez sans le "
+            "démontrer : elles sont décochées par défaut. Complétez "
+            "votre réponse, ou cochez celles qui vous conviennent "
+            "malgré tout."
+        )
+
     retenues = []
 
     for proposition in propositions:
 
         with st.container(border=True):
 
-            # Documenter une compétence déclarée la fait passer de
-            # « déclarée » à « prouvée » : une ligne qui ne fait que
-            # reformuler la déclaration deviendrait sa propre preuve.
-            # Elle est décochée par défaut — jamais refusée, une case
-            # se recoche d'un clic.
-            situee = evidence_is_situated(proposition.text)
-
-            documente_une_competence = bool(etat.get("skill_name"))
-
+            # Une ligne qui porte elle-même un chiffre ou un nom
+            # propre se suffit, même si le reste de la réponse est
+            # resté vague.
             garder = st.checkbox(
                 "Ajouter cette ligne",
-                value=situee or not documente_une_competence,
+                value=(
+                    reponse_situee
+                    or evidence_is_situated(proposition.text)
+                ),
                 key=f"{_STATE_KEY}_garder_{proposition.id}",
             )
-
-            if documente_une_competence and not situee:
-                st.caption(
-                    "⚠️ Cette ligne ne rapporte aucun fait situé — "
-                    "ni chiffre, ni rythme, ni nom de projet ou "
-                    "d'outil. Telle quelle, elle reformule votre "
-                    "déclaration plutôt que de la démontrer. "
-                    "Complétez-la, ou cochez si elle vous convient."
-                )
 
             texte = st.text_area(
                 "Ligne d'expérience",

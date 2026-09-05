@@ -478,6 +478,15 @@ def transcribe_audio(audio_bytes: bytes, mime_type: str = "audio/wav") -> tuple[
 # avec l'équipe produit » est un fait concret qu'il ne reconnaît pas
 # — et une case se recoche d'un clic. L'erreur va donc vers la
 # prudence, jamais vers la complaisance.
+#
+# Il s'applique d'abord à la RÉPONSE, ensuite à la ligne. Étendu
+# ligne à ligne au parcours par expérience, il décochait quatre
+# propositions sur cinq d'un récit ordinaire — « rédaction de
+# spécifications fonctionnelles », « animation des points de suivi » :
+# des faits réels, sans chiffre. Le récit qui les porte, lui, était
+# situé (« au quotidien », « les nouveaux arrivants »). C'est donc
+# le récit qui situe ses lignes ; une ligne chiffrée se suffit à
+# elle-même.
 
 _NOMBRES_ET_RYTHMES = frozenset(
     {
