@@ -224,10 +224,11 @@ def test_chaque_exigence_recoit_son_niveau():
     assert niveaux[normalise_terme("Figma")] == SOUHAITEE
 
 
-def test_une_proposition_de_l_ia_est_retenue():
+def test_l_ia_tranche_la_ou_le_texte_se_tait():
     """
-    L'IA lit mieux le découpage en sections qu'une recherche de
-    marqueurs : sa proposition prime quand elle est exploitable.
+    L'annonce ne dit pas toujours « indispensable ». Là où la lecture
+    des marqueurs n'a rien trouvé, la proposition de l'IA vaut mieux
+    que le niveau médian par défaut.
     """
 
     niveaux = classify_requirements(
@@ -239,22 +240,55 @@ def test_une_proposition_de_l_ia_est_retenue():
     assert niveaux[normalise_terme("Docker")] == ESSENTIELLE
 
 
-def test_une_proposition_hors_des_valeurs_connues_est_ecartee():
+def test_l_ia_ne_contredit_pas_ce_que_l_annonce_ecrit():
     """
-    Même garde-fou que pour le type de contrat : une valeur inventée
-    par l'IA n'est jamais réinterprétée, le classement déterministe
-    reprend la main.
+    Le cœur de la priorité : quand l'annonce se prononce, elle a
+    raison contre l'IA.
+
+    Cette priorité a d'abord été posée dans l'autre sens. Mesuré sur
+    treize annonces réelles, l'IA et le texte divergeaient sur 29
+    exigences, toujours dans le même sens — l'IA promeut en condition
+    ce que l'annonce se contente de citer. Deux captures d'une même
+    offre, identiques à 99,3 %, obtenaient 38,3 et 44,1.
     """
 
-    annonce = "Environnement : Jira, Confluence, Miro, Notion."
+    annonce = (
+        "Environnement technique : Jira, Confluence, Miro, Notion."
+    )
 
     niveaux = classify_requirements(
         ["Jira"],
         annonce,
-        hints={"Jira": "critique"},
+        hints={"Jira": ESSENTIELLE},
     )
 
     assert niveaux[normalise_terme("Jira")] == MENTION
+
+
+def test_un_souhait_explicite_resiste_aussi_a_l_ia():
+
+    niveaux = classify_requirements(
+        ["Figma"],
+        "La connaissance de Figma serait un plus.",
+        hints={"Figma": ESSENTIELLE},
+    )
+
+    assert niveaux[normalise_terme("Figma")] == SOUHAITEE
+
+
+def test_une_proposition_hors_des_valeurs_connues_est_ecartee():
+    """
+    Même garde-fou que pour le type de contrat : une valeur inventée
+    par l'IA n'est jamais réinterprétée.
+    """
+
+    niveaux = classify_requirements(
+        ["Docker"],
+        "Vous interviendrez sur Docker.",
+        hints={"Docker": "critique"},
+    )
+
+    assert niveaux[normalise_terme("Docker")] == SOUHAITEE
 
 
 # ============================================================
@@ -338,3 +372,22 @@ def test_des_points_de_suspension_ne_coupent_pas_la_liste():
     )
 
     assert classify_requirement("Jira", annonce) == MENTION
+
+
+def test_le_silence_de_l_annonce_se_distingue_d_un_souhait():
+    """
+    Les deux donnent « souhaitée », mais pas au même titre : quand
+    l'annonce se prononce, l'IA ne peut plus la contredire ; quand
+    elle se tait, l'IA a la parole. Sans cette distinction, un
+    « serait un plus » explicite se faisait promouvoir en condition
+    d'entrée.
+    """
+
+    from services.requirement_importance import _lire_niveau
+
+    assert (
+        _lire_niveau("Figma", "La connaissance de Figma serait un plus.")
+        == SOUHAITEE
+    )
+
+    assert _lire_niveau("Figma", "Vous travaillerez sur Figma.") is None

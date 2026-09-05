@@ -78,9 +78,10 @@ def analyze_candidate_against_skills(
 
     ``importance_hints`` porte ce que l'IA a compris du statut de
     chaque exigence en lisant l'annonce (condition, souhait, simple
-    mention). C'est facultatif : sans lui, le niveau est déduit du
-    texte de l'annonce par marqueurs, et sans texte d'annonce toutes
-    les exigences comptent pareil — le comportement d'origine.
+    mention). C'est un appoint : le niveau est d'abord lu dans le
+    texte de l'annonce, et la proposition de l'IA ne sert que là où
+    cette lecture n'a rien trouvé. Sans texte d'annonce, toutes les
+    exigences comptent pareil — le comportement d'origine.
     """
 
     if not required_skills:

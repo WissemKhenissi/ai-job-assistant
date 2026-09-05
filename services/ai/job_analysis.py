@@ -91,9 +91,12 @@ class JobOfferAnalysis:
     # "essentielle", "souhaitee" ou "mention", indexé par le
     # libellé tel qu'il figure dans required_skills.
     #
-    # C'est une proposition, pas une décision : le moteur ne la
-    # retient que si elle est l'une des trois valeurs connues, et
-    # reclasse lui-même le reste depuis le texte de l'annonce.
+    # C'est une proposition, pas une décision. Le moteur lit
+    # d'abord l'annonce ; il ne consulte cette proposition que là où
+    # sa lecture n'a rien trouvé, et seulement si elle est l'une des
+    # trois valeurs connues. Mesuré sur treize annonces réelles :
+    # quand les deux divergent, c'est l'IA qui gonfle, jamais
+    # l'inverse.
     skill_importance: dict[str, str] = field(default_factory=dict)
 
     warning: str = ""

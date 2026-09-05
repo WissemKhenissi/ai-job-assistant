@@ -21,10 +21,21 @@ Trois niveaux :
 
 Le classement est déterministe et lisible : il repose sur des
 marqueurs de langage explicites, cherchés dans une fenêtre étroite
-autour de la première occurrence du terme. L'IA peut proposer un
-niveau (elle lit mieux le découpage en sections), mais sa proposition
-n'est retenue que si elle appartient aux trois valeurs autorisées —
-même garde-fou que pour le type de contrat.
+autour de la première occurrence du terme.
+
+L'IA peut proposer un niveau, mais elle ne tranche que là où le texte
+ne tranche pas. Cette priorité a d'abord été posée dans l'autre sens,
+au motif que l'IA lit mieux le découpage en sections d'une annonce.
+La mesure a démenti : sur treize annonces réelles, l'IA et le texte
+divergeaient sur 29 exigences, et **toujours dans le même sens** —
+l'IA promeut en condition d'entrée ce que l'annonce se contente de
+citer (14 fois) ou de souhaiter (13 fois), jamais l'inverse.
+
+Le cas décisif : deux captures d'une même offre, identiques à 99,3 %,
+notées 38,3 et 44,1. Huit termes y étaient classés « essentielle »
+d'un côté et « mention » de l'autre par l'IA, quand la lecture du
+texte répondait « mention » aux deux. Un score qui varie de six
+points sur le même texte ne sert à rien.
 
 En cas de doute, ``SOUHAITEE`` : ni écarter une vraie condition, ni
 transformer un décor en exigence.
@@ -327,19 +338,23 @@ def _enumeration_illustrative(phrase: str, position: int) -> bool:
 # CLASSEMENT
 # ============================================================
 
-def classify_requirement(terme: str, job_text: str) -> str:
+def _lire_niveau(terme: str, job_text: str) -> str | None:
     """
-    Ce que l'annonce dit de ce terme : essentielle, souhaitée, ou
-    simple mention.
+    Ce que l'annonce dit de ce terme, ou ``None`` si elle n'en dit
+    rien.
 
-    Retourne toujours l'un des trois niveaux — jamais de vide : une
-    exigence sans niveau ne pourrait pas être pondérée.
+    Le vide est une réponse à part entière, et il ne se confond pas
+    avec « souhaitée ». Une annonce qui écrit « serait un plus » se
+    prononce ; une annonce qui mentionne un terme sans le qualifier
+    ne se prononce pas. Les deux aboutissent au même niveau, mais pas
+    au même degré de certitude — et c'est ce degré qui décide si la
+    proposition de l'IA a droit de cité.
     """
 
     cle = normalise_terme(terme)
 
     if not cle or not (job_text or "").strip():
-        return IMPORTANCE_PAR_DEFAUT
+        return None
 
     texte = minuscules_sans_accents(job_text)
 
@@ -357,7 +372,7 @@ def classify_requirement(terme: str, job_text: str) -> str:
     occurrence = motif.search(texte)
 
     if occurrence is None:
-        return IMPORTANCE_PAR_DEFAUT
+        return None
 
     position = occurrence.start()
 
@@ -386,7 +401,21 @@ def classify_requirement(terme: str, job_text: str) -> str:
     if _est_une_enumeration(phrase):
         return MENTION
 
-    return IMPORTANCE_PAR_DEFAUT
+    return None
+
+
+def classify_requirement(terme: str, job_text: str) -> str:
+    """
+    Ce que l'annonce dit de ce terme : essentielle, souhaitée, ou
+    simple mention.
+
+    Retourne toujours l'un des trois niveaux — jamais de vide : une
+    exigence sans niveau ne pourrait pas être pondérée. Quand
+    l'annonce ne se prononce pas, c'est le niveau médian, qui
+    n'exagère ni ne minimise l'écart.
+    """
+
+    return _lire_niveau(terme, job_text) or IMPORTANCE_PAR_DEFAUT
 
 
 def classify_requirements(
@@ -397,11 +426,19 @@ def classify_requirements(
     """
     Niveau de chaque exigence, indexé par forme normalisée.
 
-    ``hints`` porte ce que l'IA a proposé en lisant l'annonce : elle
-    distingue mieux les sections qu'une recherche de marqueurs. Sa
-    proposition est retenue **seulement** si elle est l'un des trois
-    niveaux connus ; sinon le classement déterministe reprend la
-    main, comme il le fait déjà quand l'IA n'est pas disponible.
+    ``hints`` porte ce que l'IA a proposé en lisant l'annonce. Le
+    texte passe avant : la proposition de l'IA n'est retenue que
+    lorsque la lecture des marqueurs n'a rien trouvé — c'est-à-dire
+    là où le classement déterministe se rabattrait sur le niveau
+    médian faute de raison de trancher.
+
+    Elle doit en outre être l'un des trois niveaux connus, même
+    garde-fou que pour le type de contrat.
+
+    L'IA garde donc un rôle réel — une annonce ne dit pas toujours
+    « indispensable », et sur les treize annonces du corpus les deux
+    tiers des exigences tombent dans ce silence — mais elle ne peut
+    plus contredire ce que l'annonce écrit noir sur blanc.
     """
 
     proposes = {
@@ -419,8 +456,12 @@ def classify_requirements(
         if not cle or cle in niveaux:
             continue
 
-        niveaux[cle] = proposes.get(cle) or classify_requirement(
-            terme, job_text
+        lu = _lire_niveau(terme, job_text)
+
+        # Le silence de l'annonce n'est pas une conclusion, c'est un
+        # aveu d'ignorance : c'est la seule place laissée à l'IA.
+        niveaux[cle] = (
+            lu or proposes.get(cle) or IMPORTANCE_PAR_DEFAUT
         )
 
     return niveaux

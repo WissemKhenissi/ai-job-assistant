@@ -209,7 +209,8 @@ def render_analysis_tab(candidate_id: str) -> None:
         avertissement_ia = ""
 
         # Ce que l'IA aura compris du statut de chaque exigence.
-        # Vide sans IA : le moteur reclasse alors depuis le texte.
+        # Le moteur lit l'annonce d'abord et ne s'en sert que là où
+        # sa lecture n'a rien trouvé.
         niveaux_proposes: dict[str, str] = {}
 
         if ai_is_configured():
