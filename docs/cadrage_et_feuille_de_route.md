@@ -4,6 +4,8 @@
 
 *Refondu le 5 septembre 2026. Le document décrivait un plan ; il décrivait de moins en moins le projet. La V1 est close, et le projet a changé de nature depuis — il fallait l'acter plutôt que d'empiler les mentions « ajouté le… ». L'historique des décisions est conservé, ce qui change est la structure : ce qui est fait, ce qui est ouvert, ce qui est su et assumé.*
 
+*Complété le même jour, après la correction des artefacts mono-profil du moteur (section 6.2).*
+
 ---
 
 ## 1. Finalité du projet
@@ -26,7 +28,7 @@ CV ciblé + lettre de motivation
 Suivi automatique de la candidature
 ```
 
-**Changement de portée acté le 3 septembre 2026**, à la demande de l'utilisateur (« il faut garder en tête que l'outil n'est pas destiné qu'à mon expérience ») : l'outil ne vise plus le seul positionnement Product Owner / Product Manager / Chef de projet IT / PMO de Wissem Khenissi, mais **n'importe quel candidat, dans n'importe quel métier**. Cette décision n'a pas modifié la finalité ; elle a modifié à peu près tout le reste, et une partie du moteur ne l'a pas encore rattrapée — voir section 6.
+**Changement de portée acté le 3 septembre 2026**, à la demande de l'utilisateur (« il faut garder en tête que l'outil n'est pas destiné qu'à mon expérience ») : l'outil ne vise plus le seul positionnement Product Owner / Product Manager / Chef de projet IT / PMO de Wissem Khenissi, mais **n'importe quel candidat, dans n'importe quel métier**. Cette décision n'a pas modifié la finalité ; elle a modifié à peu près tout le reste. Le moteur de matching l'a rattrapée le 5 septembre — voir section 6.2.
 
 ### Principes non négociables
 
@@ -49,7 +51,7 @@ Déclinaisons opérationnelles :
 
 **La V1 est close.** Les cinq phases prévues sont livrées, plus quatre briques qui appartenaient au backlog V2.
 
-Ordres de grandeur : 78 modules applicatifs, 531 tests, 41 fichiers de test, un référentiel de 13 476 compétences, 13 annonces analysées, 7 candidatures suivies.
+Ordres de grandeur : 79 modules applicatifs, 540 tests, 42 fichiers de test, un référentiel de 13 476 compétences, 13 annonces analysées, 7 candidatures suivies.
 
 ### Phases V1
 
@@ -91,11 +93,7 @@ Enfin, le **niveau d'exigence** (5 septembre) : chaque exigence extraite porte d
 
 Par ordre d'importance décroissante, telle qu'elle apparaît aujourd'hui.
 
-### 3.1 Le moteur est encore mono-profil par endroits
-
-C'est la dette la plus lourde, et la plus contradictoire avec la portée retenue. Détail en section 6.
-
-### 3.2 Qualité de l'extraction des exigences
+### 3.1 Qualité de l'extraction des exigences
 
 Le niveau d'exigence n'a pas corrigé ce qui entre dans la liste, il a seulement cessé de l'amplifier. Restent comptées comme exigences :
 
@@ -105,15 +103,15 @@ Le niveau d'exigence n'a pas corrigé ce qui entre dans la liste, il a seulement
 
 `GENERIC_TERMS` (`services/requirement_cleaning.py`) filtre le bruit, mais c'est une liste écrite à la main, non modifiable depuis l'interface : quand elle se trompe, l'utilisateur ne peut rien.
 
-### 3.3 Le score reste un chiffre, pas une décision
+### 3.2 Le score reste un chiffre, pas une décision
 
 La question à laquelle un candidat veut une réponse n'est pas « 52 sur 100 ? » mais « quelles conditions je ne couvre pas ? ». `missing_essential_skills` répond maintenant à la seconde, et l'interface l'affiche en premier. Reste à décider si le score global unique garde un sens, ou s'il doit céder la place à la seule couverture des conditions.
 
-### 3.4 Français uniquement
+### 3.3 Français uniquement
 
 Mots de séniorité, suffixes « k€ / M€ », forme nominale des puces, marqueurs d'exigence : tout est écrit en français, en dur. La rédaction du CV dans la langue de l'annonce (§46 du cahier des charges) est repoussée pour une raison précise : les garde-fous chiffres et verbatim s'affaiblissent à la traversée d'une traduction, et il faudrait leur en substituer d'autres avant d'ouvrir la porte.
 
-### 3.5 Reliquats de données V1
+### 3.4 Reliquats de données V1
 
 - L'annonce parasite « Emplois | Indeed » est toujours en base.
 - Deux expériences sans `business_context` ; mois exacts manquants sur les expériences datées approximativement ; URL LinkedIn absente du profil.
@@ -173,15 +171,38 @@ Un balayage complet a été passé le 5 septembre 2026. Ce qui suit distingue ce
 
 Vérification : 531 tests verts, `alembic check` sans dérive, scores des 13 annonces inchangés après regroupement.
 
-### 6.2 Dette assumée, non corrigée
+### 6.2 Corrigé le 5 septembre 2026 — les artefacts mono-profil
 
-**Le moteur de matching contient encore trois artefacts mono-profil**, hérités d'avant le changement de portée du 3 septembre. Aucun n'a été touché ce jour-là, et chacun contredit la portée retenue :
+Le moteur portait le vocabulaire d'un seul métier à **quatre** endroits, hérités d'avant le changement de portée du 3 septembre. Le quatrième n'a été trouvé qu'en vérifiant la correction des trois premiers, et c'était le plus bloquant.
 
-1. `score_domain` (`services/matching/analysis.py`) ne reconnaît que trois domaines : « e-commerce », « adtech », « digital ». Pour tout autre métier, ce dixième du score global ne mesure rien.
-2. `SEMANTIC_INFERENCE_SKILLS` (`services/matching/config.py`) est une liste blanche de douze compétences produit, écrite à la main : elle seule autorise l'inférence sémantique. Avec 13 476 entrées au référentiel, un profil d'infirmière ou de développeur ne peut structurellement produire aucune compétence « déduite ».
-3. `INFERENCE_KEYWORDS` et l'inférence composite `PRODUCT_MANAGEMENT_COMPONENTS` codent en dur le vocabulaire d'un rôle produit.
+| artefact | remplacé par |
+|---|---|
+| `SEMANTIC_INFERENCE_SKILLS` (12 compétences produit) et `SEMANTIC_INFERENCE_EXCLUDED` (11 technologies) | `skill_catalog.is_inferable` — un savoir-faire se devine d'un récit, un outil ou un corpus de connaissances non |
+| `INFERENCE_KEYWORDS` (champ lexical de 12 compétences) | les alias et les mots marquants de la description, déjà au référentiel |
+| `PRODUCT_MANAGEMENT_COMPONENTS` (9 composantes d'une seule compétence) | `skill_catalog.is_composite` + `related_skills` |
+| `SPECIFIC_PATTERNS` et `CONTEXT_PATTERNS` (280 lignes, 27 compétences produit) | le nom, les alias, la description et les compétences associées |
+| `score_domain` (« e-commerce », « adtech », « digital ») | la part des catégories de l'annonce que le candidat couvre |
 
-C'est la dette prioritaire. Elle ne se voit pas en lisant les scores d'un profil produit — elle ne se voit que sur un autre métier.
+Le quatrième décidait plus que la liste blanche : sans entrée pour une compétence, spécificité et contexte valaient zéro, et aucune règle d'inférence sémantique ne pouvait plus être satisfaite. Mesuré sur un profil d'infirmière, la ressemblance atteignait 0,65 — au-dessus du seuil — et l'inférence échouait quand même.
+
+Le score de domaine, lui, ne mesurait plus rien du tout : sur les treize annonces du corpus, il valait **100 sur les treize**, toutes contenant le mot « digital ». Il ajoutait dix points à tout le monde.
+
+**Vérification sur un métier éloigné** : un profil d'infirmière construit pour l'occasion produit deux compétences déduites, là où l'ancien moteur en produisait zéro par construction. « Premiers soins aux animaux » reste manquante.
+
+**Effet sur le corpus de l'utilisateur** : 42/24/13/102 → 42/24/15/100 (deux déductions de plus), et les scores globaux baissent de 2,5 à 8,8 points — exactement ce que le score de domaine ajoutait à tort.
+
+Deux régressions trouvées en mesurant, corrigées avant le commit :
+
+- « Jira » se retrouvait déduit par composition, parce que le référentiel l'associe à Agile, au backlog et à la gestion de projet. *Associé* n'est pas *fait de* : d'où `is_composite`, distinct de `is_inferable`.
+- l'inférence lexicale, en prenant les noms des compétences associées comme indices, refaisait l'inférence composite avec un seuil plus bas et sans son garde-fou.
+
+**Performance** : ouvrir l'inférence a porté le moteur sémantique de quelques appels à une centaine par annonce, et une analyse de dix-sept exigences à 165 secondes — le corpus des 13 476 entrées était recomposé et réencodé à chaque appel. Corpus, index par forme canonique et vecteurs sont désormais mis en cache, vidés par le point d'entrée unique `invalidate_caches()`. Retour à 14,6 s au premier appel d'un processus, instantané ensuite.
+
+### 6.3 Dette assumée, non corrigée
+
+**Deux propriétés du référentiel ne sont pas entièrement modifiables depuis l'interface.** `is_inferable` se règle à la création d'une compétence (case à cocher dans l'onglet Référentiel) ; `is_composite` et les compétences associées, non — les corriger demande une écriture en base. Une entrée mal classée reste donc mal classée.
+
+**Une inférence perdue, et c'est une donnée qui manque, pas une règle.** « Product Delivery » n'est plus déduit sur une annonce, parce que la formulation qui le déclenchait (« piloter les développements par cycles itératifs ») vivait dans le moteur et n'a pas d'équivalent au référentiel. L'y ajouter comme alias la rétablirait — et rendrait aussi l'expression détectable dans les annonces, ce qui n'est pas forcément souhaité. À trancher.
 
 **Trois `_normalize` restent séparés** dans `services/job_requirements_service.py`, `services/matching/normalization.py` et `services/skill_semantic_service.py`. Leurs règles diffèrent réellement (traitement des tirets, du point de « node.js », des séparateurs de chemin) : les fusionner changerait les résultats de matching. À traiter comme un arbitrage, pas comme un nettoyage.
 
@@ -195,6 +216,6 @@ C'est la dette prioritaire. Elle ne se voit pas en lisant les scores d'un profil
 
 ## 7. Points ouverts à trancher
 
-- **Le score global unique doit-il survivre ?** Voir 3.3.
+- **Le score global unique doit-il survivre ?** Voir 3.2.
 - **La V2 est-elle un objectif ?** La section 4 la décrit, la section 2 montre que quatre de ses briques sont déjà là. Le moment de bascule devait être réexaminé « une fois la V1 stable, testée et utilisée en conditions réelles » : c'est le cas.
 - **Jusqu'où ouvrir le multi-métiers ?** Corriger les trois artefacts de la section 6.2 est nécessaire ; suffisant est une autre question, et seule une série de tests sur des profils réellement éloignés y répondra.
