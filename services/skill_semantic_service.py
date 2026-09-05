@@ -50,6 +50,34 @@ _model = None
 _model_load_attempted = False
 
 
+# ============================================================
+# CACHES
+# ============================================================
+#
+# Le moteur sémantique était appelé une poignée de fois par analyse,
+# tant que douze compétences seulement pouvaient être déduites.
+# Depuis que le référentiel décide lui-même, il l'est une fois par
+# exigence déductible et par bloc du parcours — une centaine de fois.
+#
+# Sans mémoire, chaque appel refiltrait 13 476 entrées et réencodait
+# les mêmes textes : 165 secondes pour une annonce de dix-sept
+# exigences. Les deux caches ci-dessous sont vidés par
+# skill_catalog_service.invalidate_caches(), seul point d'entrée
+# après une écriture dans le référentiel.
+
+# Forme canonique -> entrées du corpus, pour servir `restrict_to`
+# sans balayer le référentiel.
+_index_corpus_par_forme: dict[str, list[dict]] | None = None
+
+# Texte -> vecteur. Les blocs du parcours reviennent à chaque
+# exigence, et le texte d'une compétence à chaque bloc.
+_embeddings: dict[str, object] = {}
+
+# Au-delà, on repart de zéro plutôt que de laisser le cache enfler
+# indéfiniment dans une session longue.
+_MAX_EMBEDDINGS = 5000
+
+
 def _get_model():
     """
     Charge sentence-transformers uniquement lorsque nécessaire.
@@ -149,420 +177,129 @@ def _contains_term(
 
 
 # ============================================================
-# SPECIFICITE
+# VOCABULAIRE PROPRE A UNE COMPETENCE
 # ============================================================
+#
+# Deux dictionnaires vivaient ici : SPECIFIC_PATTERNS, vingt-sept
+# compétences avec leurs formulations caractéristiques écrites à la
+# main, et CONTEXT_PATTERNS, onze compétences avec leur vocabulaire
+# de contexte. Deux cent quatre-vingts lignes, toutes d'un métier
+# produit, plus six branches `if skill_name == ...`.
+#
+# Ils décidaient plus que la liste blanche de l'inférence : sans
+# entrée pour une compétence, spécificité et contexte valaient zéro,
+# et aucune des règles d'inférence sémantique ne pouvait plus être
+# satisfaite. Mesuré sur un profil d'infirmière, la ressemblance
+# sémantique atteignait 0,65 — au-dessus du seuil — et l'inférence
+# échouait quand même, faute de renfort.
+#
+# Ce que ces dictionnaires écrivaient à la main, le référentiel le
+# porte déjà : le vocabulaire propre à une compétence, ce sont son
+# nom et ses alias ; son contexte, ce sont sa description et les
+# compétences qu'il lui associe.
 
-SPECIFIC_PATTERNS: dict[str, tuple[str, ...]] = {
+# Mots trop courants pour distinguer quoi que ce soit. La longueur
+# minimale en écarte déjà la plupart ; ceux-ci lui survivent.
+_MOTS_VIDES = frozenset(
+    {
+        "avec", "sans", "pour", "dans", "cette", "cettes", "leur",
+        "leurs", "elle", "elles", "nous", "vous", "sont", "etre",
+        "avoir", "faire", "fait", "plus", "moins", "tres", "tout",
+        "tous", "toute", "toutes", "autre", "autres", "meme",
+        "memes", "selon", "entre", "chaque", "afin", "ainsi",
+        "dont", "lors", "apres", "avant", "pendant", "depuis",
+        "aussi", "encore", "quand", "comme", "parce", "donc",
+        "mais", "puis", "alors", "cela", "celui", "celle",
+        "notamment", "permettant", "permet", "peut", "doit",
+        "type", "types", "niveau", "cadre", "partir", "grace",
+        "ensemble", "different", "differents", "differente",
+        "differentes", "general", "generale", "divers", "diverses",
+    }
+)
 
-    "Product Management": (
-        "product management",
-        "product manager",
-        "gestion de produit",
-        "management produit",
-        "vision produit",
-    ),
-
-    "Product Discovery": (
-        "product discovery",
-        "discovery produit",
-        "decouverte produit",
-        "identifier les besoins",
-        "identifier les problemes utilisateurs",
-        "identifier les opportunites",
-        "comprendre les besoins utilisateurs",
-    ),
-
-    "Product Delivery": (
-        "product delivery",
-        "delivery produit",
-        "livraison du produit",
-        "piloter le delivery",
-        "piloter les developpements",
-        "livraison incrementale",
-        "mise en production",
-        "suivi des livraisons",
-    ),
-
-    "Product Strategy": (
-        "product strategy",
-        "strategie produit",
-        "vision produit",
-        "objectifs produit",
-        "proposition de valeur",
-        "valeur business",
-    ),
-
-    "Roadmap produit": (
-        "product roadmap",
-        "roadmap produit",
-        "definir la roadmap",
-        "gerer la roadmap",
-        "planifier la roadmap",
-        "trajectoire produit",
-    ),
-
-    "Priorisation": (
-        "priorisation",
-        "prioritisation",
-        "prioritize",
-        "prioritization",
-        "definir les priorites",
-        "prioriser les fonctionnalites",
-        "prioriser les features",
-        "prioriser les taches",
-        "arbitrer les fonctionnalites",
-        "arbitrage",
-        "valeur et faisabilite",
-        "impact et faisabilite",
-        "valeur utilisateur",
-    ),
-
-    "Backlog Management": (
-        "backlog management",
-        "gestion du backlog",
-        "product backlog",
-        "backlog produit",
-        "gerer le backlog",
-        "maintenir le backlog",
-        "prioriser le backlog",
-        "alimenter le backlog",
-        "refinement du backlog",
-        "backlog refinement",
-    ),
-
-    "Gestion de projet": (
-        "gestion de projet",
-        "pilotage de projet",
-        "conduite de projet",
-        "project management",
-        "piloter un projet",
-        "coordonner un projet",
-        "suivre un projet",
-        "planifier un projet",
-    ),
-
-    "Stakeholder Management": (
-        "stakeholder management",
-        "stakeholders management",
-        "gestion des parties prenantes",
-        "gestion des stakeholders",
-        "parties prenantes",
-        "parties prenantes internes",
-        "parties prenantes externes",
-        "equipes metiers",
-        "equipes techniques",
-        "clients et partenaires",
-        "coordination des parties prenantes",
-        "coordonner les parties prenantes",
-        "alignement des parties prenantes",
-        "coordination transverse",
-    ),
-
-    "Agile / Scrum": (
-        "agile",
-        "scrum",
-        "agile scrum",
-        "methodologie agile",
-        "methodes agiles",
-        "sprint",
-        "sprints",
-        "cycles iteratifs",
-        "cycle iteratif",
-        "developpement iteratif",
-        "developpements iteratifs",
-        "livraison incrementale",
-        "amelioration continue",
-        "ceremonies scrum",
-        "daily scrum",
-        "sprint planning",
-        "sprint review",
-        "retrospective",
-    ),
-
-    "Kanban": (
-        "kanban",
-        "flux de travail",
-        "work in progress",
-        "wip",
-        "limitation du travail en cours",
-    ),
-
-    "Data Analysis": (
-        "data analysis",
-        "data analytics",
-        "analyse de donnees",
-        "analyse des donnees",
-        "analyser les donnees",
-        "analyse des performances",
-        "analyse de performance",
-        "indicateurs de performance",
-        "indicateur de performance",
-        "kpi",
-        "kpis",
-        "mesurer la performance",
-        "mesurer les performances",
-        "data driven",
-    ),
-
-    "Data Science": (
-        "data science",
-        "data scientist",
-        "science des donnees",
-        "modeles predictifs",
-        "modelisation predictive",
-        "modeles statistiques",
-    ),
-
-    "Machine Learning": (
-        "machine learning",
-        "apprentissage automatique",
-        "modeles de machine learning",
-        "modeles ml",
-        "machine learning engineering",
-        "modeles predictifs",
-        "prediction",
-        "classification automatique",
-    ),
-
-    "Artificial Intelligence": (
-        "artificial intelligence",
-        "intelligence artificielle",
-        "produits ia",
-        "produit ia",
-        "solutions ia",
-        "technologies ia",
-    ),
-
-    "SQL": (
-        "sql",
-        "requete sql",
-        "requetes sql",
-        "sql queries",
-        "langage sql",
-    ),
-
-    "Python": (
-        "python",
-        "programmation python",
-        "developpement python",
-        "python programming",
-    ),
-
-    "R": (
-        "langage r",
-        "r programming",
-        "r programming language",
-        "programmation r",
-    ),
-
-    "AWS": (
-        "aws",
-        "amazon web services",
-    ),
-
-    "Azure": (
-        "azure",
-        "microsoft azure",
-    ),
-
-    "Google Cloud": (
-        "google cloud",
-        "google cloud platform",
-        "gcp",
-    ),
-
-    "User Research": (
-        "user research",
-        "recherche utilisateur",
-        "recherche utilisateurs",
-        "customer research",
-        "etude utilisateur",
-        "etude utilisateurs",
-        "entretiens utilisateurs",
-        "interviews utilisateurs",
-        "besoins utilisateurs",
-        "besoin utilisateur",
-        "besoins et comportements des utilisateurs",
-        "comportements des utilisateurs",
-        "analyser les besoins utilisateurs",
-        "analyser les comportements utilisateurs",
-        "analyser les besoins et comportements",
-        "comprendre les besoins utilisateurs",
-        "comprendre les comportements utilisateurs",
-        "problemes utilisateurs",
-        "opportunites utilisateurs",
-        "feedback utilisateurs",
-    ),
-
-    "UX": (
-        "ux",
-        "user experience",
-        "experience utilisateur",
-        "ux design",
-        "parcours utilisateur",
-        "experience digitale",
-    ),
-
-    "UI": (
-        "ui",
-        "user interface",
-        "interface utilisateur",
-        "ui design",
-        "interface graphique",
-    ),
-
-    "Jira": (
-        "jira",
-        "atlassian jira",
-    ),
-
-    "Microsoft Excel": (
-        "excel",
-        "microsoft excel",
-        "excel macros",
-        "macros excel",
-        "vba excel",
-    ),
-
-    "E-commerce": (
-        "e commerce",
-        "ecommerce",
-        "commerce electronique",
-        "digital commerce",
-        "parcours d achat",
-        "conversion ecommerce",
-    ),
-}
+# En deçà, un mot ne distingue rien.
+_LONGUEUR_MOT_SIGNIFIANT = 4
 
 
-# ============================================================
-# CONTEXTE
-# ============================================================
+def _mots_signifiants(texte: str) -> tuple[str, ...]:
+    """Mots d'un texte assez longs et assez rares pour distinguer."""
 
-CONTEXT_PATTERNS: dict[str, tuple[str, ...]] = {
+    return tuple(
+        mot
+        for mot in _normalize(texte).split()
+        if len(mot) >= _LONGUEUR_MOT_SIGNIFIANT
+        and mot not in _MOTS_VIDES
+    )
 
-    "Stakeholder Management": (
-        "parties prenantes",
-        "stakeholders",
-        "equipes metiers",
-        "equipes techniques",
-        "clients",
-        "partenaires",
-        "coordination",
-        "alignement",
-        "communication",
-    ),
 
-    "Priorisation": (
-        "priorites",
-        "valeur",
-        "impact",
-        "faisabilite",
-        "effort",
-        "cout",
-        "urgence",
-        "fonctionnalites",
-    ),
+# Les deux vocabulaires ne dépendent que du référentiel : on les
+# calcule une fois par compétence. Vidés par
+# skill_catalog_service.invalidate_caches().
+_vocabulaires: dict[str, tuple[tuple, tuple, tuple]] = {}
 
-    "User Research": (
-        "utilisateurs",
-        "besoins",
-        "comportements",
-        "usages",
-        "attentes",
-        "frustrations",
-        "interviews",
-        "sondages",
-        "insights",
-    ),
 
-    "Product Discovery": (
-        "utilisateurs",
-        "besoins",
-        "problemes",
-        "opportunites",
-        "hypotheses",
-        "discovery",
-        "insights",
-    ),
+def _vocabulaire(
+    skill: CatalogSkill,
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    """
+    Trois listes tirées de l'entrée de référentiel :
 
-    "Agile / Scrum": (
-        "iteration",
-        "iteratif",
-        "iterative",
-        "sprint",
-        "sprints",
-        "cycle de developpement",
-        "cycles de developpement",
-        "cycles iteratifs",
-        "developpement iteratif",
-        "developpements iteratifs",
-        "equipe",
-        "livraison",
-        "increment",
-        "livraison incrementale",
-        "retrospective",
-        "amelioration continue",
-    ),
+    - les formulations propres à la compétence (nom et alias en
+      plusieurs mots) — les retrouver telles quelles dans un texte
+      est le signal le plus fort ;
+    - les mots signifiants de ce nom et de ces alias ;
+    - les mots de contexte : description et compétences associées.
+    """
 
-    "Product Delivery": (
-        "product delivery",
-        "delivery produit",
-        "livraison du produit",
-        "piloter le delivery",
-        "piloter les developpements",
-        "developpements par cycles iteratifs",
-        "livraison incrementale",
-        "mise en production",
-        "suivi des livraisons",
-    ),
+    if skill.id in _vocabulaires:
+        return _vocabulaires[skill.id]
 
-    "Data Analysis": (
-        "donnees",
-        "data",
-        "kpi",
-        "indicateurs",
-        "performance",
-        "analytics",
-        "mesurer",
-        "analyse",
-    ),
+    formulations: list[str] = []
+    mots_propres: list[str] = []
 
-    "Machine Learning": (
-        "modele",
-        "modeles",
-        "donnees",
-        "prediction",
-        "classification",
-        "algorithme",
-    ),
+    for terme in (skill.canonical_name, *skill.aliases):
 
-    "Data Science": (
-        "donnees",
-        "statistiques",
-        "modeles",
-        "prediction",
-        "analyse",
-    ),
+        normalise = _normalize(terme)
 
-    "Product Strategy": (
-        "vision",
-        "strategie",
-        "objectifs",
-        "valeur",
-        "business",
-        "marche",
-    ),
+        if not normalise:
+            continue
 
-    "Backlog Management": (
-        "backlog",
-        "stories",
-        "fonctionnalites",
-        "priorisation",
-        "sprint",
-        "product owner",
-    ),
-}
+        if " " in normalise and normalise not in formulations:
+            formulations.append(normalise)
+
+        for mot in _mots_signifiants(terme):
+            if mot not in mots_propres:
+                mots_propres.append(mot)
+
+    mots_contexte: list[str] = []
+
+    for terme in (skill.description, *skill.related_skills):
+
+        for mot in _mots_signifiants(terme or ""):
+
+            # Un mot déjà propre à la compétence ne dit rien de son
+            # contexte : il dirait deux fois la même chose.
+            if mot in mots_propres or mot in mots_contexte:
+                continue
+
+            mots_contexte.append(mot)
+
+    _vocabulaires[skill.id] = (
+        tuple(formulations),
+        tuple(mots_propres),
+        tuple(mots_contexte),
+    )
+
+    return _vocabulaires[skill.id]
+
+
+def _compte(texte_normalise: str, termes: tuple[str, ...]) -> int:
+
+    return sum(
+        1
+        for terme in termes
+        if _contains_term(texte_normalise, terme)
+    )
 
 
 # ============================================================
@@ -573,207 +310,31 @@ def _specificity_score(
     text: str,
     skill: CatalogSkill,
 ) -> float:
+    """
+    Le texte emploie-t-il le vocabulaire propre à cette compétence ?
+
+    Retrouver une formulation entière — le nom de la compétence ou
+    l'un de ses alias, en plusieurs mots — vaut le maximum : c'est
+    la compétence nommée, pas simplement évoquée. À défaut, on compte
+    les mots qui lui appartiennent en propre.
+    """
 
     normalized_text = _normalize(text)
-    skill_name = skill.canonical_name
 
-    # --------------------------------------------------------
-    # USER RESEARCH
-    # --------------------------------------------------------
+    formulations, mots_propres, _ = _vocabulaire(skill)
 
-    if skill_name == "User Research":
+    if _compte(normalized_text, formulations):
+        return 1.0
 
-        signals = (
-            "besoins et comportements des utilisateurs",
-            "comportements des utilisateurs",
-            "analyser les besoins utilisateurs",
-            "analyser les comportements utilisateurs",
-            "analyser les besoins et comportements",
-            "recherche utilisateur",
-            "recherche utilisateurs",
-            "user research",
-            "customer research",
-            "entretiens utilisateurs",
-        )
+    trouves = _compte(normalized_text, mots_propres)
 
-        if any(
-            _contains_term(
-                normalized_text,
-                signal,
-            )
-            for signal in signals
-        ):
-            return 1.0
-
-    # --------------------------------------------------------
-    # STAKEHOLDER
-    # --------------------------------------------------------
-
-    if skill_name == "Stakeholder Management":
-
-        signals = (
-            "gestion des parties prenantes",
-            "gestion des stakeholders",
-            "stakeholder management",
-            "coordination des parties prenantes",
-            "coordonner les parties prenantes",
-            "parties prenantes",
-            "equipes metiers",
-            "equipes techniques",
-        )
-
-        if any(
-            _contains_term(
-                normalized_text,
-                signal,
-            )
-            for signal in signals
-        ):
-            return 0.9
-
-    # --------------------------------------------------------
-    # PRIORISATION
-    # --------------------------------------------------------
-
-    if skill_name == "Priorisation":
-
-        signals = (
-            "priorisation",
-            "prioritization",
-            "prioritize",
-            "definir les priorites",
-            "prioriser les fonctionnalites",
-            "prioriser les features",
-            "prioriser les taches",
-            "valeur et faisabilite",
-            "impact et faisabilite",
-        )
-
-        if any(
-            _contains_term(
-                normalized_text,
-                signal,
-            )
-            for signal in signals
-        ):
-            return 0.8
-
-    # --------------------------------------------------------
-    # DATA ANALYSIS
-    # --------------------------------------------------------
-
-    if skill_name == "Data Analysis":
-
-        signals = (
-            "analyse de donnees",
-            "analyse des donnees",
-            "analyser les donnees",
-            "indicateurs de performance",
-            "indicateur de performance",
-            "kpi",
-            "kpis",
-            "data analysis",
-            "data analytics",
-        )
-
-        if any(
-            _contains_term(
-                normalized_text,
-                signal,
-            )
-            for signal in signals
-        ):
-            return 0.9
-
-    # --------------------------------------------------------
-    # AGILE
-    # --------------------------------------------------------
-
-    if skill_name == "Agile / Scrum":
-
-        signals = (
-            "agile",
-            "scrum",
-            "methodologie agile",
-            "methodes agiles",
-            "sprint",
-            "sprints",
-            "cycles iteratifs",
-            "cycle iteratif",
-            "developpement iteratif",
-            "developpements iteratifs",
-            "retrospective",
-            "sprint planning",
-            "sprint review",
-            "piloter les developpements par cycles iteratifs",
-            "piloter le developpement par cycles iteratifs",
-            "developpements par cycles iteratifs",
-            "cycles de developpement iteratifs",
-        )
-
-        if any(
-            _contains_term(
-                normalized_text,
-                signal,
-            )
-            for signal in signals
-        ):
-            return 1.0
-
-    # --------------------------------------------------------
-    # PRODUCT DELIVERY
-    # --------------------------------------------------------
-
-    if skill_name == "Product Delivery":
-
-        signals = (
-            "product delivery",
-            "delivery produit",
-            "livraison du produit",
-            "piloter le delivery",
-            "piloter les developpements",
-            "piloter les developpements par cycles iteratifs",
-            "mise en production",
-            "suivi des livraisons",
-        )
-
-        if any(
-            _contains_term(
-                normalized_text,
-                signal,
-            )
-            for signal in signals
-        ):
-            return 0.9
-
-    # --------------------------------------------------------
-    # REGLES GENERALES
-    # --------------------------------------------------------
-
-    patterns = SPECIFIC_PATTERNS.get(
-        skill_name,
-        (),
-    )
-
-    if not patterns:
-        return 0.0
-
-    matched = sum(
-        1
-        for pattern in patterns
-        if _contains_term(
-            normalized_text,
-            pattern,
-        )
-    )
-
-    if matched >= 3:
+    if trouves >= 3:
         return 0.9
 
-    if matched == 2:
+    if trouves == 2:
         return 0.7
 
-    if matched == 1:
+    if trouves == 1:
         return 0.5
 
     return 0.0
@@ -787,33 +348,28 @@ def _context_score(
     text: str,
     skill: CatalogSkill,
 ) -> float:
+    """
+    Le texte parle-t-il du même monde que cette compétence ?
+
+    Le vocabulaire de contexte vient de la description de la
+    compétence et de celles que le référentiel lui associe. Il pèse
+    moins que la spécificité : partager un champ lexical n'est pas
+    exercer une compétence.
+    """
 
     normalized_text = _normalize(text)
 
-    patterns = CONTEXT_PATTERNS.get(
-        skill.canonical_name,
-        (),
-    )
+    _, _, mots_contexte = _vocabulaire(skill)
 
-    if not patterns:
-        return 0.0
+    trouves = _compte(normalized_text, mots_contexte)
 
-    matched = sum(
-        1
-        for pattern in patterns
-        if _contains_term(
-            normalized_text,
-            pattern,
-        )
-    )
-
-    if matched >= 4:
+    if trouves >= 4:
         return 0.45
 
-    if matched >= 2:
+    if trouves >= 2:
         return 0.30
 
-    if matched == 1:
+    if trouves == 1:
         return 0.20
 
     return 0.0
@@ -913,6 +469,64 @@ def _calculate_final_score(
 # MATCHING SEMANTIQUE
 # ============================================================
 
+def _corpus_par_forme() -> dict[str, list[dict]]:
+    """Index du corpus sémantique par forme canonique."""
+
+    global _index_corpus_par_forme
+
+    if _index_corpus_par_forme is None:
+
+        from services.matching.normalization import (
+            _canonical_skill_name,
+        )
+
+        index: dict[str, list[dict]] = {}
+
+        for item in get_skill_semantic_corpus():
+
+            forme = _canonical_skill_name(
+                item["skill"].canonical_name
+            )
+
+            index.setdefault(forme, []).append(item)
+
+        _index_corpus_par_forme = index
+
+    return _index_corpus_par_forme
+
+
+def _encode(model, textes: list[str]):
+    """
+    Vecteurs des textes donnés, en ne faisant encoder que les
+    inconnus.
+
+    Retourne un tableau dans l'ordre demandé.
+    """
+
+    import numpy
+
+    manquants = [
+        texte
+        for texte in dict.fromkeys(textes)
+        if texte not in _embeddings
+    ]
+
+    if manquants:
+
+        if len(_embeddings) + len(manquants) > _MAX_EMBEDDINGS:
+            _embeddings.clear()
+
+        vecteurs = model.encode(
+            manquants,
+            normalize_embeddings=True,
+        )
+
+        for texte, vecteur in zip(manquants, vecteurs):
+            _embeddings[texte] = vecteur
+
+    return numpy.array([_embeddings[texte] for texte in textes])
+
+
 def find_semantic_skill_matches(
     text: str,
     threshold: float = SEMANTIC_MATCH_THRESHOLD,
@@ -937,20 +551,19 @@ def find_semantic_skill_matches(
     if not text or not text.strip():
         return []
 
-    corpus = get_skill_semantic_corpus()
-
     if restrict_to:
 
-        from services.matching.normalization import (
-            _canonical_skill_name,
-        )
+        index = _corpus_par_forme()
 
         corpus = [
             item
-            for item in corpus
-            if _canonical_skill_name(item["skill"].canonical_name)
-            in restrict_to
+            for forme in restrict_to
+            for item in index.get(forme, ())
         ]
+
+    else:
+
+        corpus = get_skill_semantic_corpus()
 
     if not corpus:
         return []
@@ -1046,15 +659,9 @@ def find_semantic_skill_matches(
 
     try:
 
-        text_embedding = model.encode(
-            text,
-            normalize_embeddings=True,
-        )
+        text_embedding = _encode(model, [text])[0]
 
-        skill_embeddings = model.encode(
-            corpus_texts,
-            normalize_embeddings=True,
-        )
+        skill_embeddings = _encode(model, corpus_texts)
 
     except Exception:
 

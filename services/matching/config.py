@@ -21,122 +21,13 @@ from __future__ import annotations
 # ============================================================
 # INFERENCE LEXICALE
 # ============================================================
+#
+# Les indices qui trahissent une compétence dans un parcours venaient
+# d'un dictionnaire codé en dur : douze entrées, toutes d'un métier
+# produit. Ils viennent maintenant des alias et des compétences
+# associées que le référentiel porte déjà — voir
+# services.matching.inference._indices_possibles().
 
-INFERENCE_KEYWORDS = {
-    "agile scrum": (
-        "iteration",
-        "iterative",
-        "mvp",
-        "test",
-        "amelioration continue",
-        "sprint",
-        "cycle iteratif",
-        "cycles iteratifs",
-        "developpement iteratif",
-        "developpements iteratifs",
-    ),
-    "priorisation": (
-        "priorite",
-        "priorites",
-        "arbitrage",
-        "mvp",
-        "quick win",
-        "optimisation",
-        "valeur",
-        "cout",
-        "faisabilite",
-    ),
-    "backlog management": (
-        "priorite",
-        "arbitrage",
-        "mvp",
-        "iteration",
-        "fonctionnalite",
-        "backlog",
-        "user story",
-        "stories",
-    ),
-    "stakeholder management": (
-        "coordination",
-        "partenaire",
-        "equipe",
-        "juridique",
-        "comptabilite",
-        "ux",
-        "ui",
-        "it",
-        "client",
-        "parties prenantes",
-        "stakeholders",
-    ),
-    "data kpi": (
-        "kpi",
-        "performance",
-        "marge",
-        "chiffre d affaires",
-        "ca",
-        "reporting",
-        "metrique",
-        "conversion",
-        "roi",
-    ),
-    "gestion de projet": (
-        "pilotage",
-        "coordination",
-        "mise en production",
-        "projet",
-        "planning",
-        "blocage",
-        "deadline",
-    ),
-    "e commerce": (
-        "e commerce",
-        "fnac",
-        "france billet",
-        "post achat",
-        "confirmation de commande",
-        "achat",
-    ),
-    "product strategy": (
-        "business model",
-        "proposition de valeur",
-        "opportunite",
-        "valeur business",
-        "monetisation",
-        "offre",
-        "strategie",
-    ),
-    "roadmap produit": (
-        "planning",
-        "priorite",
-        "evolution",
-        "iteration",
-        "projet",
-        "mise en production",
-        "roadmap",
-    ),
-    "experimentation": (
-        "test",
-        "iteration",
-        "optimisation",
-        "mvp",
-        "mesure",
-        "kpi",
-    ),
-    "ux": (
-        "ux",
-        "parcours",
-        "experience utilisateur",
-        "interface",
-        "landing page",
-    ),
-    "ui": (
-        "ui",
-        "interface",
-        "design",
-        "landing page",
-    ),
-}
 
 # ============================================================
 # INFERENCE SEMANTIQUE
@@ -185,44 +76,34 @@ EXPERIENCE_INFERRED_WEIGHT = 60
 
 
 # ============================================================
-# COMPETENCES AUTORISEES A L'INFERENCE
+# CE QUI PEUT ETRE DEDUIT
 # ============================================================
-
-SEMANTIC_INFERENCE_SKILLS = {
-    "agile scrum",
-    "priorisation",
-    "backlog management",
-    "stakeholder management",
-    "product discovery",
-    "product strategy",
-    "roadmap produit",
-    "product delivery",
-    "experimentation",
-    # "analyse utilisateur" fusionne désormais dans "user research"
-    # (alias du référentiel skill_catalog) via _canonical_skill_name().
-    "user research",
-    "data analysis",
-    "gestion de projet",
-}
+#
+# Deux listes vivaient ici : douze compétences seules autorisées à
+# l'inférence, onze technologies explicitement interdites. Toutes
+# choisies pour un seul métier — avec un référentiel de treize mille
+# entrées, la première condamnait tout le reste au silence, et un
+# profil d'infirmière ou de développeur ne pouvait produire aucune
+# compétence « déduite ».
+#
+# La distinction n'a pourtant rien de propre à un métier : un
+# savoir-faire se devine d'un récit d'expérience, un outil ou un
+# corpus de connaissances non. Elle est portée par le référentiel,
+# colonne `skill_catalog.is_inferable`, et lue par
+# services.matching.inference._est_deductible().
 
 
-# ============================================================
-# COMPETENCES QUI NE DOIVENT JAMAIS ETRE INDUITES
-# ============================================================
+# Nombre d'indices distincts à retrouver dans un parcours pour
+# qu'une inférence lexicale tienne. Un seul mot commun ne prouve
+# rien ; deux indices concordants restent une hypothèse, mais une
+# hypothèse défendable.
+MIN_INFERENCE_INDICES = 2
 
-SEMANTIC_INFERENCE_EXCLUDED = {
-    "product management",
-    "python",
-    "sql",
-    "r",
-    "aws",
-    "azure",
-    "google cloud",
-    "machine learning",
-    "data science",
-    "artificial intelligence",
-    "jira",
-}
+
+# Nombre de composantes à retrouver pour qu'une compétence
+# d'ensemble soit déduite de sa composition. Voir l'inférence
+# composite dans services.matching.analysis.
+MIN_COMPOSITE_COMPONENTS = 3
 
 
 # ============================================================

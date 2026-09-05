@@ -27,6 +27,8 @@ from services.requirement_importance import (
     normalise_terme,
 )
 
+from services.skill_catalog_service import find_skill_by_name
+
 from services.matching.config import (
     DECLARED_SCORE,
     EXPERIENCE_INFERRED_WEIGHT,
@@ -36,18 +38,18 @@ from services.matching.config import (
     INFERRED_PRUDENT_SCORE,
     INFERRED_STRONG_SCORE,
     INFERRED_VERY_STRONG_SCORE,
+    MIN_COMPOSITE_COMPONENTS,
     POIDS_IMPORTANCE,
     PROVEN_SCORE,
     SKILL_WEIGHT_DECAY,
-    SEMANTIC_INFERENCE_EXCLUDED,
 )
 from services.matching.inference import (
+    _est_deductible,
     _find_inference_evidence,
     _find_semantic_inference_evidence,
 )
 from services.matching.normalization import (
     _canonical_skill_name,
-    _normalize,
 )
 from services.matching.profile_text import (
     _format_evidence,
@@ -332,11 +334,16 @@ def analyze_candidate_against_skills(
             continue
 
         # ====================================================
-        # 2. COMPETENCES EXCLUES :
-        #    PAS D'INFERENCE
+        # 2. COMPETENCES QUE LE REFERENTIEL DIT
+        #    NON DEDUCTIBLES
         # ====================================================
+        #
+        # Un outil, une technologie, un corpus de connaissances : on
+        # les a appris ou non, aucun récit d'expérience ne permet de
+        # les supposer. Le référentiel porte cette distinction
+        # (skill_catalog.is_inferable), le moteur s'y range.
 
-        if canonical_skill in SEMANTIC_INFERENCE_EXCLUDED:
+        if not _est_deductible(canonical_skill):
 
             matches.append(
                 SkillMatch(
@@ -346,9 +353,11 @@ def analyze_candidate_against_skills(
                     evidence=[],
                     explanation=(
                         "Compétence non déclarée "
-                        "explicitement. Elle ne peut pas "
-                        "être déduite automatiquement par "
-                        "proximité sémantique."
+                        "explicitement. Le référentiel la "
+                        "range parmi celles qui ne se "
+                        "déduisent pas d'un parcours : un "
+                        "outil ou un savoir s'apprend, il "
+                        "ne se suppose pas."
                     ),
                 )
             )
@@ -487,187 +496,115 @@ def analyze_candidate_against_skills(
         )
 
     # ========================================================
-    # INFERENCE COMPOSITE — PRODUCT MANAGEMENT
+    # INFERENCE COMPOSITE
     # ========================================================
     #
-    # Product Management est une compétence transverse.
-    # Elle ne doit pas être déduite par simple similarité
-    # sémantique avec une phrase.
+    # Certaines compétences sont des ensembles : elles ne se
+    # constatent pas dans une phrase, elles se constatent dans un
+    # faisceau. Product Management en est une — la déduire d'une
+    # ressemblance de vocabulaire serait exactement le genre de
+    # flatterie que ce moteur refuse.
     #
-    # On l'infère uniquement lorsque plusieurs compétences
-    # constitutives du métier sont déjà présentes.
+    # Ce que le référentiel associe à une compétence tient lieu de
+    # composition : `related_skills` dit de quoi elle est faite. Le
+    # moteur codait à la place les neuf composantes du Product
+    # Management, ce qui n'a jamais rien pu déduire d'autre.
     #
-    # Règle :
+    # Règle inchangée :
     #
-    # - au moins 3 compétences produit distinctes
-    # - au moins 1 compétence prouvée
+    # - au moins 3 composantes distinctes présentes ou déduites
+    # - au moins 1 composante réellement prouvée ou déclarée
     #
-    # Les compétences techniques ne participent jamais
-    # à cette inférence.
+    # Une entrée sans compétences associées — c'est le cas de toutes
+    # celles importées en masse — ne produit aucune inférence
+    # composite : on ne devine pas une composition qu'on ignore.
     # ========================================================
 
-    PRODUCT_MANAGEMENT_COMPONENTS = {
-        "product discovery",
-        "product strategy",
-        "roadmap produit",
-        "priorisation",
-        "backlog management",
-        "product delivery",
-        "experimentation",
-        "stakeholder management",
-        "agile scrum",
+    par_forme_canonique = {
+        _canonical_skill_name(match.skill): match
+        for match in matches
     }
-
-    product_management_match = None
 
     for match in matches:
 
-        if (
-            _canonical_skill_name(match.skill)
-            == "product management"
-        ):
-            product_management_match = match
-            break
+        if match.status != "missing":
+            continue
 
-    if (
-        product_management_match is not None
-        and product_management_match.status == "missing"
-    ):
+        entree = find_skill_by_name(match.skill)
 
-        component_matches = []
+        if entree is None or not entree.is_composite:
+            continue
 
-        for match in matches:
+        if not entree.related_skills:
+            continue
 
-            canonical_component = (
-                _canonical_skill_name(
-                    match.skill
-                )
+        composantes = []
+
+        for nom in entree.related_skills:
+
+            composante = par_forme_canonique.get(
+                _canonical_skill_name(nom)
             )
 
-            if (
-                canonical_component
-                in PRODUCT_MANAGEMENT_COMPONENTS
-                and match.status
-                in PRESENT_STATUSES | {"inferred"}
-            ):
+            if composante is None:
+                continue
 
-                component_matches.append(
-                    match
-                )
+            if composante.status in PRESENT_STATUSES | {"inferred"}:
+                composantes.append(composante)
 
-        # ----------------------------------------------------
-        # Déduplication
-        # ----------------------------------------------------
-
-        unique_components = {}
-
-        for match in component_matches:
-
-            canonical_component = (
-                _canonical_skill_name(
-                    match.skill
-                )
-            )
-
-            unique_components[
-                canonical_component
-            ] = match
-
-        component_matches = list(
-            unique_components.values()
-        )
-
-        # ----------------------------------------------------
-        # Nombre de compétences réellement démontrées
-        # ----------------------------------------------------
-
-        # NOTE : une compétence déclarée sans preuve compte encore ici,
-        # comme avant l'introduction du statut "declared". Restreindre
-        # cette inférence composite aux seules compétences prouvées
+        # NOTE : une compétence déclarée sans preuve compte encore
+        # ici, comme avant l'introduction du statut "declared".
+        # Restreindre cette inférence aux seules compétences prouvées
         # changerait les résultats de matching : à trancher à part.
-        proven_components = [
-            match
-            for match in component_matches
-            if match.status in PRESENT_STATUSES
+        prouvees = [
+            composante
+            for composante in composantes
+            if composante.status in PRESENT_STATUSES
         ]
 
-        component_count = len(
-            component_matches
+        if len(composantes) < MIN_COMPOSITE_COMPONENTS or not prouvees:
+            continue
+
+        if len(composantes) >= 5:
+            inference_score = INFERRED_STRONG_SCORE
+            inference_level = "forte"
+
+        elif len(composantes) >= 4:
+            inference_score = INFERRED_GOOD_SCORE
+            inference_level = "bonne"
+
+        else:
+            inference_score = INFERRED_MODERATE_SCORE
+            inference_level = "prudente"
+
+        noms = [
+            composante.skill
+            for composante in sorted(
+                composantes,
+                key=lambda item: item.score,
+                reverse=True,
+            )
+        ]
+
+        match.status = "inferred"
+        match.score = inference_score
+
+        match.evidence = [
+            (
+                f"Inférence composite : {len(composantes)} "
+                "compétences que le référentiel associe à "
+                f"« {entree.canonical_name} » sont déjà "
+                "démontrées ou déduites."
+            ),
+            "Composantes : " + ", ".join(noms),
+        ]
+
+        match.explanation = (
+            f"{entree.canonical_name} n'est pas explicitement "
+            f"déclaré, mais une inférence {inference_level} est "
+            "possible à partir d'un ensemble cohérent de "
+            "compétences associées."
         )
-
-        # ----------------------------------------------------
-        # Inférence
-        # ----------------------------------------------------
-
-        if (
-            component_count >= 3
-            and proven_components
-        ):
-
-            if component_count >= 5:
-
-                inference_score = (
-                    INFERRED_STRONG_SCORE
-                )
-
-                inference_level = "forte"
-
-            elif component_count >= 4:
-
-                inference_score = (
-                    INFERRED_GOOD_SCORE
-                )
-
-                inference_level = "bonne"
-
-            else:
-
-                inference_score = (
-                    INFERRED_MODERATE_SCORE
-                )
-
-                inference_level = "prudente"
-
-            component_names = [
-                match.skill
-                for match in sorted(
-                    component_matches,
-                    key=lambda item: item.score,
-                    reverse=True,
-                )
-            ]
-
-            product_management_match.status = (
-                "inferred"
-            )
-
-            product_management_match.score = (
-                inference_score
-            )
-
-            product_management_match.evidence = [
-                (
-                    "Inférence composite Product "
-                    "Management : "
-                    f"{component_count} compétences "
-                    "constitutives du Product Management "
-                    "sont déjà démontrées ou déduites."
-                ),
-                (
-                    "Composantes : "
-                    + ", ".join(
-                        component_names
-                    )
-                ),
-            ]
-
-            product_management_match.explanation = (
-                "Product Management n'est pas "
-                "explicitement déclaré, mais une "
-                f"inférence {inference_level} est "
-                "possible à partir d'un ensemble "
-                "cohérent de compétences produit."
-            )
 
     # ========================================================
     # SCORES
@@ -779,63 +716,53 @@ def analyze_candidate_against_skills(
         # ========================================================
         # DOMAINES
         # ========================================================
+        #
+        # Une annonce couvre plusieurs domaines ; la question est de
+        # savoir dans combien d'entre eux le candidat a quelque chose
+        # à montrer. Couvrir quatre exigences réparties sur quatre
+        # domaines n'est pas la même candidature que couvrir quatre
+        # exigences du même domaine.
+        #
+        # Le moteur cherchait ici trois mots dans le texte :
+        # « e-commerce », « adtech », « digital ». Mesuré sur les
+        # treize annonces du corpus, ce score valait 100 sur les
+        # treize — toutes contiennent « digital », et le profil
+        # aussi. Il ne mesurait plus rien, et ajoutait dix points à
+        # tout le monde. Pour un autre métier il n'aurait rien
+        # mesuré non plus, mais dans l'autre sens.
+        #
+        # Les domaines viennent maintenant du référentiel : la
+        # catégorie de chaque exigence qu'il reconnaît. Aucun
+        # vocabulaire codé en dur, et la mesure vaut pour
+        # l'infirmière comme pour le développeur.
 
-        normalized_job_text = _normalize(
-            job_text
-        )
+        domaines_annonce: set[str] = set()
+        domaines_couverts: set[str] = set()
 
-        profile_domains = set()
+        for match in matches:
 
-        if "e commerce" in profile_text:
+            entree = find_skill_by_name(match.skill)
 
-            profile_domains.add(
-                "e commerce"
-            )
+            if entree is None or not entree.category:
+                continue
 
-        if "adtech" in profile_text:
+            domaines_annonce.add(entree.category)
 
-            profile_domains.add(
-                "adtech"
-            )
+            if match.status in PRESENT_STATUSES:
+                domaines_couverts.add(entree.category)
 
-        if "digital" in profile_text:
+        if not domaines_annonce:
 
-            profile_domains.add(
-                "digital"
-            )
-
-        job_domains = set()
-
-        if "e commerce" in normalized_job_text:
-
-            job_domains.add(
-                "e commerce"
-            )
-
-        if "adtech" in normalized_job_text:
-
-            job_domains.add(
-                "adtech"
-            )
-
-        if "digital" in normalized_job_text:
-
-            job_domains.add(
-                "digital"
-            )
-
-        if not job_domains:
-
+            # Aucune exigence rattachée au référentiel : il n'y a
+            # pas de domaine à comparer. Mieux vaut reprendre le
+            # score des compétences que d'inventer une valeur.
             score_domain = score_skills
 
         else:
 
             score_domain = round(
-                len(
-                    profile_domains
-                    & job_domains
-                )
-                / len(job_domains)
+                len(domaines_couverts)
+                / len(domaines_annonce)
                 * 100,
                 1,
             )

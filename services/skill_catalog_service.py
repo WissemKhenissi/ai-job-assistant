@@ -38,6 +38,17 @@ class CatalogSkill:
     parent_skill_id: str | None
     related_skills: tuple[str, ...]
 
+    # Cette compétence peut-elle être déduite d'un parcours, ou
+    # doit-elle être déclarée ? Un savoir-faire se devine d'un récit,
+    # un outil ou un corpus de connaissances non. Voir la colonne du
+    # même nom dans database.models.SkillCatalogDB.
+    is_inferable: bool = True
+
+    # Cette compétence est-elle un ensemble, déductible de ses
+    # composantes ? Voir la colonne du même nom dans
+    # database.models.SkillCatalogDB.
+    is_composite: bool = False
+
 
 # ============================================================
 # NORMALISATION
@@ -164,6 +175,12 @@ def _to_catalog_skill(
         related_skills=_parse_json_list(
             skill.related_skills
         ),
+        is_inferable=bool(
+            getattr(skill, "is_inferable", True)
+        ),
+        is_composite=bool(
+            getattr(skill, "is_composite", False)
+        ),
     )
 
 
@@ -214,6 +231,14 @@ def get_active_skills() -> list[CatalogSkill]:
 # fois par exigence d'annonce. Le coût devient constant.
 _index_par_forme: dict[str, CatalogSkill] | None = None
 
+# Corpus sémantique complet. Le construire réclame de composer cinq
+# textes par compétence : 13 476 entrées, à chaque appel du moteur
+# sémantique. Tant que douze compétences seulement pouvaient être
+# déduites, il n'était sollicité qu'une poignée de fois ; ouvrir
+# l'inférence à tout le référentiel l'a porté à cent appels par
+# annonce, et une analyse de dix-sept exigences à 165 secondes.
+_corpus_semantique: list[dict] | None = None
+
 
 def invalidate_caches() -> None:
     """
@@ -227,14 +252,20 @@ def invalidate_caches() -> None:
     """
 
     global _index_par_forme
+    global _corpus_semantique
 
     _index_par_forme = None
+    _corpus_semantique = None
 
     import services.job_requirements_service as requirements
     import services.matching.normalization as normalization
+    import services.skill_semantic_service as semantique
 
     normalization._canonical_alias_index_cache = None
     requirements._index_extraction_cache = None
+    semantique._index_corpus_par_forme = None
+    semantique._embeddings.clear()
+    semantique._vocabulaires.clear()
 
 
 def _forme_vers_competence() -> dict[str, CatalogSkill]:
@@ -538,11 +569,20 @@ def get_skill_semantic_corpus() -> list[dict]:
 
     Cette structure permettra au moteur sémantique de calculer
     plusieurs similarités et de les fusionner.
+
+    Le résultat est mis en cache : il ne dépend que du référentiel,
+    et le recomposer à chaque appel coûtait plus cher que tout le
+    reste de l'analyse réunie.
     """
+
+    global _corpus_semantique
+
+    if _corpus_semantique is not None:
+        return _corpus_semantique
 
     skills = get_active_skills()
 
-    return [
+    _corpus_semantique = [
         {
             "skill": skill,
             "texts": build_skill_semantic_texts(
@@ -551,3 +591,5 @@ def get_skill_semantic_corpus() -> list[dict]:
         }
         for skill in skills
     ]
+
+    return _corpus_semantique

@@ -484,6 +484,14 @@ def import_esco(
                     canonical_name=nom,
                     category=categorie,
                     subcategory=ligne.get("skillType") or "",
+                    # ESCO sépare le savoir-faire (« skill/competence »)
+                    # du corpus de connaissances (« knowledge »). C'est
+                    # exactement la frontière du déductible : on déduit
+                    # d'un récit qu'un candidat a coordonné un projet,
+                    # jamais qu'il connaît Python.
+                    is_inferable=(
+                        ligne.get("skillType") != "knowledge"
+                    ),
                     description=(ligne.get("description") or "").strip(),
                     aliases=json.dumps(alias, ensure_ascii=False),
                     parent_skill_id=None,

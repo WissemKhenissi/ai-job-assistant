@@ -385,6 +385,7 @@ def promote_to_catalog(
     category: str = "",
     description: str = "",
     aliases: list[str] | tuple[str, ...] | None = None,
+    is_inferable: bool = True,
 ) -> str:
     """
     Crée une compétence du référentiel à partir du terme rencontré.
@@ -393,6 +394,11 @@ def promote_to_catalog(
     retenu et le terme de l'annonce. Chaque alias est confronté au
     référentiel : un mot déjà revendiqué par une autre compétence est
     refusé, car il ne peut appartenir qu'à une seule entrée.
+
+    `is_inferable` dit si le moteur a le droit de déduire cette
+    compétence d'un parcours qui ne la nomme pas. Vrai pour un
+    savoir-faire, faux pour un outil ou un corpus de connaissances :
+    on n'a jamais deviné que quelqu'un connaît Jira.
 
     Retourne l'identifiant de la compétence créée.
     """
@@ -462,6 +468,7 @@ def promote_to_catalog(
                 aliases=json.dumps(alias, ensure_ascii=False),
                 parent_skill_id=None,
                 related_skills=json.dumps([], ensure_ascii=False),
+                is_inferable=is_inferable,
                 is_active=True,
             )
         )

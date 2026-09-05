@@ -107,6 +107,8 @@ def add_catalog_skill(
     skill_id: str | None = None,
     category: str = "Test",
     related_skills: list[str] | None = None,
+    is_inferable: bool = True,
+    is_composite: bool = False,
 ):
     """Insère une compétence dans le référentiel skill_catalog."""
 
@@ -127,6 +129,8 @@ def add_catalog_skill(
             related_skills or [],
             ensure_ascii=False,
         ),
+        is_inferable=is_inferable,
+        is_composite=is_composite,
         is_active=True,
     )
 

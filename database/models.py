@@ -356,6 +356,51 @@ class SkillCatalogDB(Base):
         default=""
     )
 
+    # Cette compétence peut-elle être DÉDUITE d'un parcours, ou
+    # doit-elle être explicitement déclarée ?
+    #
+    # Un savoir-faire se devine d'un récit d'expérience : qui raconte
+    # avoir arbitré des priorités et coordonné des équipes a fait de
+    # la gestion de projet, même sans écrire le mot. Un outil, une
+    # technologie ou un corpus de connaissances, non : personne ne
+    # « déduit » Python, Jira ou le droit du travail — on les a
+    # appris, ou pas.
+    #
+    # Le moteur portait cette distinction dans deux listes écrites à
+    # la main, longues de douze et onze noms, tous issus d'un seul
+    # métier. Elle appartient au référentiel : c'est lui qui décrit
+    # les compétences, et lui seul qui peut suivre quand il en
+    # accueille treize mille.
+    is_inferable: Mapped[bool] = mapped_column(
+        default=True,
+        server_default="1",
+        nullable=False
+    )
+
+    # Cette compétence est-elle un ENSEMBLE, déductible de ses
+    # composantes ?
+    #
+    # « Product Management » en est un : personne ne l'exerce sans
+    # exercer la découverte produit, la priorisation et la livraison.
+    # Constater le faisceau permet de conclure — c'est le seul mode
+    # d'inférence acceptable pour un terme transverse, qui
+    # ressemblerait sinon à tout.
+    #
+    # Distinct de is_inferable, et pas son contraire : Jira est
+    # associé à Agile, au backlog et à la gestion de projet sans être
+    # fait d'eux. Sans cette colonne, constater les trois suffisait à
+    # conclure que le candidat connaît Jira — exactement ce que le
+    # projet interdit.
+    #
+    # Le référentiel ne consigne pas la composition : `related_skills`
+    # dit « associé à », pas « fait de ». Cette colonne dit lesquelles
+    # de ces associations valent composition.
+    is_composite: Mapped[bool] = mapped_column(
+        default=False,
+        server_default="0",
+        nullable=False
+    )
+
     is_active: Mapped[bool] = mapped_column(
         default=True,
         nullable=False

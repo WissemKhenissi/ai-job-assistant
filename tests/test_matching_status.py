@@ -243,10 +243,14 @@ def test_une_competence_technique_non_declaree_est_manquante(
     session = session_factory()
 
     add_candidate(session)
+
+    # C'est le référentiel qui range cette compétence parmi celles
+    # qui ne se déduisent pas — le moteur n'en tient plus la liste.
     add_catalog_skill(
         session,
         canonical_name=technical_skill,
         aliases=[technical_skill],
+        is_inferable=False,
     )
 
     # Un parcours riche, mais qui ne déclare aucune compétence
@@ -263,18 +267,19 @@ def test_une_competence_technique_non_declaree_est_manquante(
 
     session.close()
 
-    # Le moteur sémantique est forcé au maximum : si l'exclusion
-    # fonctionne, elle doit résister à ça.
-    def _always_strong_match(*args, **kwargs):
-        raise AssertionError(
-            "Le moteur sémantique ne doit pas être sollicité "
-            "pour une compétence exclue de l'inférence."
-        )
+    # On enregistre les appels au lieu de lever : l'inférence
+    # sémantique enveloppe l'appel dans un try/except, une exception
+    # y serait avalée et le test passerait pour une mauvaise raison.
+    appels: list[tuple] = []
+
+    def _mouchard(*args, **kwargs):
+        appels.append((args, kwargs))
+        return []
 
     monkeypatch.setattr(
         inference,
         "find_semantic_skill_matches",
-        _always_strong_match,
+        _mouchard,
     )
 
     result = analyze_candidate_against_skills(
@@ -289,27 +294,267 @@ def test_une_competence_technique_non_declaree_est_manquante(
     assert technical_skill in result.missing_skills
     assert technical_skill not in result.inferred_skills
 
+    assert not appels, (
+        "Le moteur sémantique ne doit pas être sollicité pour une "
+        "compétence que le référentiel dit non déductible."
+    )
 
-def test_la_liste_des_exclusions_couvre_les_competences_techniques():
+
+def test_le_referentiel_seul_decide_de_ce_qui_est_deductible(
+    session_factory,
+    monkeypatch,
+):
     """
-    Garde-fou sur le contenu de la liste elle-même : une régression
-    silencieuse consisterait à en retirer une entrée.
+    Le garde-fou tenait dans deux listes écrites à la main. Elles ont
+    été remplacées par une propriété du référentiel : ce test vérifie
+    que c'est bien elle, et rien d'autre, qui ouvre ou ferme la porte.
+
+    Deux compétences identiques en tout point, sauf ce drapeau.
     """
 
-    from services.matching.config import SEMANTIC_INFERENCE_EXCLUDED
+    import services.matching.inference as inference
 
-    attendues = {
-        "python",
-        "sql",
-        "r",
-        "aws",
-        "azure",
-        "google cloud",
-        "machine learning",
-        "data science",
-        "artificial intelligence",
-        "jira",
-        "product management",
-    }
+    from services.matching import analyze_candidate_against_skills
 
-    assert attendues <= SEMANTIC_INFERENCE_EXCLUDED
+    session = session_factory()
+
+    add_candidate(session)
+
+    add_catalog_skill(
+        session,
+        canonical_name="Savoir-faire",
+        aliases=["Savoir-faire"],
+        is_inferable=True,
+    )
+
+    add_catalog_skill(
+        session,
+        canonical_name="Outil maison",
+        aliases=["Outil maison"],
+        is_inferable=False,
+    )
+
+    add_candidate_skill(
+        session,
+        candidate_id=CANDIDATE_ID,
+        name="Product Discovery",
+        description="Un parcours riche, mais qui ne les déclare pas.",
+    )
+
+    session.close()
+
+    interrogees: list[str] = []
+
+    def _mouchard(texte, *args, **kwargs):
+        interrogees.extend(kwargs.get("restrict_to") or ())
+        return []
+
+    monkeypatch.setattr(
+        inference,
+        "find_semantic_skill_matches",
+        _mouchard,
+    )
+
+    analyze_candidate_against_skills(
+        candidate_id=CANDIDATE_ID,
+        required_skills=["Savoir-faire", "Outil maison"],
+    )
+
+    assert "savoir faire" in interrogees
+    assert "outil maison" not in interrogees
+
+
+def test_une_competence_inconnue_du_referentiel_n_est_pas_deduite(
+    session_factory,
+):
+    """
+    Sans entrée pour la décrire, rien ne dit si un terme relève du
+    savoir-faire ou de l'outillage. Le doute se résout du côté
+    prudent : pas d'inférence.
+    """
+
+    from services.matching.inference import _est_deductible
+
+    session = session_factory()
+    add_candidate(session)
+    session.close()
+
+    assert _est_deductible("un terme que personne ne connait") is False
+
+
+# ============================================================
+# INFERENCE COMPOSITE
+# ============================================================
+#
+# Une compétence d'ensemble se déduit de ses composantes. La règle
+# était écrite pour une seule compétence, avec ses neuf composantes
+# en dur ; elle lit maintenant le référentiel.
+
+
+def _profil_avec(session, *competences_prouvees):
+    """Un candidat qui prouve les compétences nommées."""
+
+    add_candidate(session)
+
+    for nom in competences_prouvees:
+
+        add_catalog_skill(
+            session, canonical_name=nom, aliases=[nom]
+        )
+
+        skill = add_candidate_skill(
+            session, candidate_id=CANDIDATE_ID, name=nom
+        )
+
+        add_evidence(
+            session,
+            candidate_id=CANDIDATE_ID,
+            skill_id=skill.id,
+            description=f"Pratique quotidienne de {nom}.",
+            evidence_id=f"evidence-{nom}",
+        )
+
+
+def test_un_ensemble_se_deduit_de_ses_composantes(session_factory):
+    """
+    Le métier n'entre pas dans la règle : ici un ensemble du bâtiment,
+    composé de trois compétences que le candidat prouve.
+    """
+
+    from services.matching import analyze_candidate_against_skills
+
+    session = session_factory()
+
+    _profil_avec(
+        session,
+        "Lecture de plans",
+        "Chiffrage de travaux",
+        "Coordination de chantier",
+    )
+
+    add_catalog_skill(
+        session,
+        canonical_name="Conduite de travaux",
+        aliases=["Conduite de travaux"],
+        related_skills=[
+            "Lecture de plans",
+            "Chiffrage de travaux",
+            "Coordination de chantier",
+        ],
+        is_composite=True,
+    )
+
+    session.close()
+
+    resultat = analyze_candidate_against_skills(
+        candidate_id=CANDIDATE_ID,
+        required_skills=[
+            "Conduite de travaux",
+            "Lecture de plans",
+            "Chiffrage de travaux",
+            "Coordination de chantier",
+        ],
+    )
+
+    conduite = _match_for(resultat, "Conduite de travaux")
+
+    assert conduite.status == "inferred"
+    assert "Lecture de plans" in " ".join(conduite.evidence)
+
+
+def test_un_outil_ne_se_deduit_pas_de_ses_competences_associees(
+    session_factory,
+):
+    """
+    Régression observée en généralisant : « Jira » était déduit parce
+    que le candidat pratiquait Agile, la gestion de backlog et la
+    gestion de projet. Jira est *associé* à ces compétences, il n'en
+    est pas *fait* — et on ne déduit jamais qu'un candidat connaît un
+    outil.
+    """
+
+    from services.matching import analyze_candidate_against_skills
+
+    session = session_factory()
+
+    _profil_avec(
+        session,
+        "Agile / Scrum",
+        "Backlog Management",
+        "Gestion de projet",
+    )
+
+    add_catalog_skill(
+        session,
+        canonical_name="Jira",
+        aliases=["Jira"],
+        related_skills=[
+            "Agile / Scrum",
+            "Backlog Management",
+            "Gestion de projet",
+        ],
+        is_inferable=False,
+        # Des compétences associées, mais aucune composition.
+        is_composite=False,
+    )
+
+    session.close()
+
+    resultat = analyze_candidate_against_skills(
+        candidate_id=CANDIDATE_ID,
+        required_skills=[
+            "Jira",
+            "Agile / Scrum",
+            "Backlog Management",
+            "Gestion de projet",
+        ],
+    )
+
+    assert _match_for(resultat, "Jira").status == "missing"
+
+
+def test_une_composante_manquante_ne_suffit_pas(session_factory):
+    """
+    Deux composantes sur trois ne font pas un ensemble : le seuil
+    protège contre une inférence complaisante.
+    """
+
+    from services.matching import analyze_candidate_against_skills
+
+    session = session_factory()
+
+    _profil_avec(session, "Lecture de plans", "Chiffrage de travaux")
+
+    add_catalog_skill(
+        session,
+        canonical_name="Coordination de chantier",
+        aliases=["Coordination de chantier"],
+    )
+
+    add_catalog_skill(
+        session,
+        canonical_name="Conduite de travaux",
+        aliases=["Conduite de travaux"],
+        related_skills=[
+            "Lecture de plans",
+            "Chiffrage de travaux",
+            "Coordination de chantier",
+        ],
+        is_composite=True,
+    )
+
+    session.close()
+
+    resultat = analyze_candidate_against_skills(
+        candidate_id=CANDIDATE_ID,
+        required_skills=[
+            "Conduite de travaux",
+            "Lecture de plans",
+            "Chiffrage de travaux",
+            "Coordination de chantier",
+        ],
+    )
+
+    assert _match_for(resultat, "Conduite de travaux").status == (
+        "missing"
+    )

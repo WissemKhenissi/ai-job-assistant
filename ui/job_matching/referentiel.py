@@ -284,6 +284,22 @@ def _rendre_un_terme(
                 height=90,
             )
 
+            deductible = st.checkbox(
+                "Cette compétence peut être déduite d'un parcours",
+                value=True,
+                key=(
+                    f"creer_deductible_{identifiant}"
+                    f"_{defauts['version']}"
+                ),
+                help=(
+                    "Un savoir-faire se devine du récit d'une "
+                    "expérience. Un outil, une technologie ou un "
+                    "corpus de connaissances non : décochez pour "
+                    "« Jira », « Python » ou « droit du travail », "
+                    "que le moteur ne devra jamais supposer."
+                ),
+            )
+
             if st.button(
                 "Créer",
                 key=f"creer_{identifiant}",
@@ -301,6 +317,7 @@ def _rendre_un_terme(
                             for ligne in alias_saisis.splitlines()
                             if ligne.strip()
                         ],
+                        is_inferable=deductible,
                     )
                     st.session_state.pop(
                         f"proposition_{identifiant}", None
