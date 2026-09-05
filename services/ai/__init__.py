@@ -16,12 +16,13 @@ Trois usages, trois garde-fous adaptés au risque de chacun :
   télétravail, compétences attendues) et commente en langage naturel
   le résultat déjà calculé par le moteur de matching honnête — l'IA
   ne recalcule jamais le score ni les statuts prouvé/déclaré/déduit.
-- `generate_followup_questions` / `propose_evidence_from_answers`
-  (services.ai.interview) : relance le candidat sur une expérience
-  qu'il vient de raconter, puis propose lignes d'expérience et
-  compétences à partir de ses seules réponses — jamais écrites
-  automatiquement, toujours soumises à validation explicite et
-  éditable par le candidat.
+- `generate_followup_questions` / `generate_skill_questions` /
+  `propose_evidence_from_answers` (services.ai.interview) : relance le
+  candidat sur une expérience qu'il vient de raconter, ou sur une
+  compétence qu'il déclare sans rien pour la documenter, puis propose
+  lignes d'expérience et compétences à partir de ses seules réponses —
+  jamais écrites automatiquement, toujours soumises à validation
+  explicite et éditable par le candidat.
 
 Dans tous les cas, tout repose sur un repli automatique vers le
 contenu déterministe si l'IA n'est pas configurée, échoue, ou que le
@@ -32,7 +33,9 @@ from services.ai.interview import (
     EvidenceProposal,
     InterviewAnswer,
     InterviewQuestion,
+    evidence_is_situated,
     generate_followup_questions,
+    generate_skill_questions,
     propose_evidence_from_answers,
     transcribe_audio,
 )
@@ -59,8 +62,10 @@ __all__ = [
     "ReformulationResult",
     "analyze_job_offer_with_ai",
     "build_ai_letter",
+    "evidence_is_situated",
     "generate_fit_synthesis",
     "generate_followup_questions",
+    "generate_skill_questions",
     "propose_evidence_from_answers",
     "reformulate_cv_summary",
     "reformulate_targeted_cv",

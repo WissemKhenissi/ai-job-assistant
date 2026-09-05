@@ -99,7 +99,7 @@ Le niveau d'exigence n'a pas corrigé ce qui entre dans la liste, il a seulement
 
 - des libellés ESCO en forme de phrase verbale (« utiliser des outils en ligne pour collaborer ») ;
 - des concepts périphériques cités en passant (« logistique », « responsabilité sociale des entreprises ») ;
-- l'**intitulé du poste** lui-même (« Product Owner » compté comme compétence manquante sur une annonce de Product Owner) — le prompt le proscrit désormais, aucun garde-fou déterministe ne le rattrape.
+- ~~l'**intitulé du poste** lui-même~~ **corrigé le 5 septembre 2026** : un terme qui figure dans l'intitulé nettoyé et nulle part dans le corps de l'annonce nomme le poste, pas une compétence. La règle est étroite à dessein — écarter tout ce qui figure dans l'intitulé retirait « E-commerce » d'une annonce de chef de projet e-commerce et « Python » d'une annonce de développeur Python.
 
 `GENERIC_TERMS` (`services/requirement_cleaning.py`) filtre le bruit, mais c'est une liste écrite à la main, non modifiable depuis l'interface : quand elle se trompe, l'utilisateur ne peut rien.
 
@@ -120,7 +120,7 @@ Mots de séniorité, suffixes « k€ / M€ », forme nominale des puces, marqu
 
 - L'annonce parasite « Emplois | Indeed » est toujours en base.
 - Deux expériences sans `business_context` ; mois exacts manquants sur les expériences datées approximativement ; URL LinkedIn absente du profil.
-- 16 compétences au statut `declared` qu'un entretien assisté pourrait convertir en `proven`.
+- ~~16 compétences au statut `declared` qu'un entretien assisté pourrait convertir en `proven`.~~ **L'entretien existe depuis le 5 septembre 2026** : l'onglet Entretien IA propose de documenter une compétence déclarée, avec des questions ciblées sur elle. Restent 9 compétences à documenter, ce qui est maintenant un travail de l'utilisateur, plus un manque de l'outil.
 
 ---
 
@@ -207,6 +207,8 @@ Deux régressions trouvées en mesurant, corrigées avant le commit :
 ### 6.3 Dette assumée, non corrigée
 
 **Deux propriétés du référentiel ne sont pas entièrement modifiables depuis l'interface.** `is_inferable` se règle à la création d'une compétence (case à cocher dans l'onglet Référentiel) ; `is_composite` et les compétences associées, non — les corriger demande une écriture en base. Une entrée mal classée reste donc mal classée.
+
+**Le contrôle « fait situé » ne s'applique qu'à la variante compétence.** Une ligne de preuve qui ne rapporte ni chiffre, ni rythme, ni nom propre est décochée par défaut quand l'entretien documente une compétence déclarée — parce que la valider ferait passer cette compétence de « déclarée » à « prouvée » sur une simple reformulation. Le même mécanisme crée pourtant des preuves dans le parcours par expérience, où le contrôle ne s'applique pas. À étendre ou à justifier.
 
 **Une inférence perdue, et c'est une donnée qui manque, pas une règle.** « Product Delivery » n'est plus déduit sur une annonce, parce que la formulation qui le déclenchait (« piloter les développements par cycles itératifs ») vivait dans le moteur et n'a pas d'équivalent au référentiel. L'y ajouter comme alias la rétablirait — et rendrait aussi l'expression détectable dans les annonces, ce qui n'est pas forcément souhaité. À trancher.
 

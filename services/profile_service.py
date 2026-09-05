@@ -167,6 +167,57 @@ def get_skills(candidate_id):
         db.close()
 
 
+# ============================================================
+# COMPETENCES DECLAREES SANS PREUVE
+# ============================================================
+
+def get_undocumented_skills(candidate_id: str) -> list[dict]:
+    """
+    Les compétences déclarées qu'aucune preuve ne soutient.
+
+    Le moteur les classe « declared » : le candidat les affirme, rien
+    ne les démontre. Elles ne peuvent pas figurer comme compétences
+    explicites sur un CV généré, et elles pèsent moins qu'une
+    compétence prouvée face à une annonce qui les demande.
+
+    Ce n'est pas un défaut du candidat : c'est une documentation
+    manquante. Il a fait ces choses, il ne les a pas racontées.
+
+    Retourne des primitives — jamais l'objet ORM, qui serait détaché
+    de sa session en sortant d'ici.
+    """
+
+    db = SessionLocal()
+
+    try:
+
+        documentees = {
+            identifiant
+            for (identifiant,) in db.query(EvidenceDB.skill_id)
+            .filter(EvidenceDB.candidate_id == candidate_id)
+            .distinct()
+        }
+
+        return [
+            {
+                "id": skill.id,
+                "name": skill.name,
+                "category": skill.category or "",
+                "description": skill.description or "",
+            }
+            for skill in (
+                db.query(SkillDB)
+                .filter(SkillDB.candidate_id == candidate_id)
+                .order_by(SkillDB.name)
+                .all()
+            )
+            if skill.id not in documentees
+        ]
+
+    finally:
+        db.close()
+
+
 def get_evidence(candidate_id):
     db = SessionLocal()
 

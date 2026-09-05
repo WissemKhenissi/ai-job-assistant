@@ -22,6 +22,15 @@ questions une par une décourageait, alors que raconter puis se faire
 relancer correspond à la façon dont on parle réellement de son
 parcours.
 
+Une seconde entrée mène au même parcours : **documenter une
+compétence déclarée**. Une compétence que le candidat affirme sans
+qu'aucune preuve ne la soutienne est classée « declared » par le
+moteur — elle ne peut pas figurer comme compétence explicite sur un
+CV généré, et elle pèse moins face à une annonce qui la demande. Ce
+n'est pas un défaut du candidat : il a fait ces choses, il ne les a
+pas racontées. Les questions portent alors sur une compétence plutôt
+que sur une expérience, et la suite est identique.
+
 Rien n'entre au Master CV sans validation explicite. Chaque
 proposition reste rattachée à l'expérience en cours, ce qui permet
 ensuite de générer un CV ciblé cohérent.
@@ -35,7 +44,9 @@ from services.ai.gemini_client import is_configured as ai_is_configured
 from services.ai.interview import (
     InterviewAnswer,
     InterviewQuestion,
+    evidence_is_situated,
     generate_followup_questions,
+    generate_skill_questions,
     propose_evidence_from_answers,
     transcribe_audio,
 )
@@ -45,7 +56,12 @@ from services.interview_history_service import (
     save_answer,
     save_questions,
 )
-from services.profile_service import add_evidence, add_skill, get_experiences
+from services.profile_service import (
+    add_evidence,
+    add_skill,
+    get_experiences,
+    get_undocumented_skills,
+)
 
 
 _STATE_KEY = "master_cv_interview"
@@ -55,6 +71,10 @@ def _etat_initial() -> dict:
     return {
         "experience_id": None,
         "experience_label": "",
+        # Renseigné dans la variante « documenter une compétence » :
+        # les propositions qui en sortent se rattachent à cette
+        # compétence-là, pas à une compétence devinée par l'IA.
+        "skill_name": "",
         "etape": "recit",
         "narration": "",
         "questions": [],
@@ -389,18 +409,130 @@ def _render_recit(candidate_id: str, etat: dict, experiences) -> None:
 
 
 # ============================================================
+# VARIANTE : DOCUMENTER UNE COMPETENCE DECLAREE
+# ============================================================
+#
+# Une compétence déclarée sans preuve est classée « declared » par le
+# moteur : elle ne peut pas figurer comme compétence explicite sur un
+# CV généré, et elle pèse moins qu'une compétence prouvée face à une
+# annonce qui la demande.
+#
+# Ce n'est pas un défaut du candidat, c'est une documentation
+# manquante — il a fait ces choses, il ne les a pas racontées. Le
+# parcours est donc le même que pour une expérience : questions,
+# réponse libre, propositions à valider. Seule l'entrée change.
+
+
+def _render_choix_competence(candidate_id: str, etat: dict) -> None:
+
+    competences = get_undocumented_skills(candidate_id)
+
+    if not competences:
+
+        st.success(
+            "Toutes vos compétences déclarées sont documentées par "
+            "au moins une preuve."
+        )
+
+        return
+
+    st.caption(
+        f"{len(competences)} compétence(s) que vous déclarez sans "
+        "qu'aucun élément de votre parcours ne les démontre. Le "
+        "moteur les compte comme « déclarées » : elles n'apparaissent "
+        "pas comme compétences explicites sur un CV généré."
+    )
+
+    par_identifiant = {
+        competence["id"]: competence["name"]
+        for competence in competences
+    }
+
+    identifiant = st.selectbox(
+        "Compétence à documenter",
+        options=list(par_identifiant),
+        format_func=lambda cle: par_identifiant[cle],
+        key=f"{_STATE_KEY}_competence_choisie",
+    )
+
+    poste_recherche = st.text_input(
+        "Poste recherché (optionnel)",
+        placeholder="Ex. Product Owner Digital",
+        key=f"{_STATE_KEY}_poste_competence",
+        help=(
+            "Sert à orienter les questions vers ce qui compte pour "
+            "ce type de poste."
+        ),
+    )
+
+    st.divider()
+
+    if st.button(
+        "🤖 Me poser des questions sur cette compétence",
+        type="primary",
+        key=f"{_STATE_KEY}_questions_competence",
+        use_container_width=True,
+    ):
+
+        nom = par_identifiant[identifiant]
+
+        with st.spinner("Préparation des questions (Gemini)..."):
+
+            questions, avertissement = generate_skill_questions(
+                candidate_id=candidate_id,
+                skill_name=nom,
+                target_role=poste_recherche,
+                already_asked=get_asked_questions(candidate_id),
+            )
+
+        if not questions:
+
+            st.warning(
+                avertissement
+                or "Aucune question n'a pu être générée : réessayez."
+            )
+
+            return
+
+        etat["skill_name"] = nom
+        etat["experience_id"] = None
+        etat["experience_label"] = nom
+        etat["questions"] = questions
+        etat["exchange_ids"] = save_questions(
+            candidate_id=candidate_id,
+            questions=questions,
+            target_role=poste_recherche,
+        )
+        etat["warning"] = avertissement
+        etat["etape"] = "relance"
+
+        st.rerun()
+
+
+# ============================================================
 # ETAPE 2 : LES RELANCES
 # ============================================================
 
 def _render_relance(etat: dict) -> None:
 
+    documente_une_competence = bool(etat.get("skill_name"))
+
     if etat["experience_label"]:
-        st.caption(f"Expérience en cours : {etat['experience_label']}")
+
+        st.caption(
+            f"Compétence à documenter : {etat['skill_name']}"
+            if documente_une_competence
+            else f"Expérience en cours : {etat['experience_label']}"
+        )
 
     if etat["warning"]:
         st.caption(etat["warning"])
 
-    st.markdown("**L'IA vous relance sur cette expérience :**")
+    st.markdown(
+        "**L'IA vous interroge sur cette compétence :**"
+        if documente_une_competence
+        else "**L'IA vous relance sur cette expérience :**"
+    )
 
     for question in etat["questions"]:
         st.markdown(f"- {question.question}")
@@ -470,7 +602,7 @@ def _render_relance(etat: dict) -> None:
         etat["etape"] = "propositions"
         st.rerun()
 
-    if st.button("↩️ Recommencer avec une autre expérience"):
+    if st.button("↩️ Recommencer"):
         st.session_state[_STATE_KEY] = _etat_initial()
         st.rerun()
 
@@ -509,9 +641,9 @@ def _render_propositions(candidate_id: str, etat: dict) -> None:
     )
 
     st.caption(
-        "Chaque ligne retenue rejoint votre Master CV comme preuve "
-        "rattachée à cette expérience, ce qui rend sa compétence "
-        "« prouvée »."
+        "Chaque ligne retenue rejoint votre Master CV comme preuve, "
+        "ce qui rend sa compétence « prouvée » — et la rend "
+        "affichable telle quelle sur un CV généré."
     )
 
     retenues = []
@@ -520,11 +652,29 @@ def _render_propositions(candidate_id: str, etat: dict) -> None:
 
         with st.container(border=True):
 
+            # Documenter une compétence déclarée la fait passer de
+            # « déclarée » à « prouvée » : une ligne qui ne fait que
+            # reformuler la déclaration deviendrait sa propre preuve.
+            # Elle est décochée par défaut — jamais refusée, une case
+            # se recoche d'un clic.
+            situee = evidence_is_situated(proposition.text)
+
+            documente_une_competence = bool(etat.get("skill_name"))
+
             garder = st.checkbox(
                 "Ajouter cette ligne",
-                value=True,
+                value=situee or not documente_une_competence,
                 key=f"{_STATE_KEY}_garder_{proposition.id}",
             )
+
+            if documente_une_competence and not situee:
+                st.caption(
+                    "⚠️ Cette ligne ne rapporte aucun fait situé — "
+                    "ni chiffre, ni rythme, ni nom de projet ou "
+                    "d'outil. Telle quelle, elle reformule votre "
+                    "déclaration plutôt que de la démontrer. "
+                    "Complétez-la, ou cochez si elle vous convient."
+                )
 
             texte = st.text_area(
                 "Ligne d'expérience",
@@ -533,9 +683,14 @@ def _render_propositions(candidate_id: str, etat: dict) -> None:
                 height=80,
             )
 
+            # Quand l'entretien porte sur une compétence
+            # déclarée, c'est elle qu'il s'agit de documenter : la
+            # preuve doit s'y rattacher, pas à une compétence voisine
+            # que l'IA aurait nommée autrement — sinon la déclarée
+            # reste sans preuve et une jumelle apparaît à côté.
             competence = st.text_input(
                 "Compétence associée",
-                value=proposition.skill_name,
+                value=etat.get("skill_name") or proposition.skill_name,
                 key=f"{_STATE_KEY}_competence_{proposition.id}",
             )
 
@@ -642,7 +797,6 @@ def render_interview_section(candidate_id: str) -> None:
     st.subheader("🎙️ Entretien IA")
 
     st.caption(
-        "Une expérience à la fois, en commençant par la plus récente. "
         "Vous racontez, l'IA vous relance, puis vous propose des "
         "lignes d'expérience et des compétences à valider. Rien "
         "n'entre dans votre Master CV sans votre accord."
@@ -666,4 +820,26 @@ def render_interview_section(candidate_id: str) -> None:
         _render_relance(etat)
 
     else:
-        _render_recit(candidate_id, etat, get_experiences())
+
+        # Le choix n'est offert qu'au repos : le proposer en cours
+        # d'entretien reviendrait à changer de sujet au milieu d'une
+        # réponse.
+        depart = st.radio(
+            "Par quoi commencer ?",
+            options=("experience", "competence"),
+            format_func=lambda cle: (
+                "Raconter une expérience"
+                if cle == "experience"
+                else "Documenter une compétence déclarée"
+            ),
+            horizontal=True,
+            key=f"{_STATE_KEY}_depart",
+        )
+
+        st.divider()
+
+        if depart == "competence":
+            _render_choix_competence(candidate_id, etat)
+
+        else:
+            _render_recit(candidate_id, etat, get_experiences())

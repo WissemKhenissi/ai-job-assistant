@@ -13,7 +13,12 @@ from datetime import date
 
 import pytest
 
-from conftest import add_candidate
+from conftest import (
+    add_candidate,
+    add_candidate_skill,
+    add_catalog_skill,
+    add_evidence,
+)
 
 
 CANDIDATE_ID = "candidate-test"
@@ -529,3 +534,151 @@ def test_delete_skill_sur_un_identifiant_inconnu_ne_leve_rien(
     session.close()
 
     delete_skill("skill-inexistant")
+
+
+# ============================================================
+# DOCUMENTER UNE COMPETENCE DECLAREE
+# ============================================================
+#
+# Une compétence déclarée sans preuve est classée « declared » : elle
+# ne peut pas figurer comme compétence explicite sur un CV généré, et
+# elle pèse moins face à une annonce qui la demande. Ce n'est pas un
+# défaut du candidat — il a fait ces choses, il ne les a pas
+# racontées.
+
+
+def test_les_competences_sans_preuve_sont_listees(session_factory):
+
+    from services.profile_service import get_undocumented_skills
+
+    session = session_factory()
+
+    add_candidate(session)
+
+    prouvee = add_candidate_skill(
+        session, candidate_id=CANDIDATE_ID, name="Gestion de projet"
+    )
+
+    add_evidence(
+        session,
+        candidate_id=CANDIDATE_ID,
+        skill_id=prouvee.id,
+        description="Refonte du tunnel d'achat.",
+    )
+
+    add_candidate_skill(
+        session,
+        candidate_id=CANDIDATE_ID,
+        name="Veille concurrentielle",
+        skill_id="skill-veille",
+    )
+
+    session.close()
+
+    noms = [
+        competence["name"]
+        for competence in get_undocumented_skills(CANDIDATE_ID)
+    ]
+
+    assert noms == ["Veille concurrentielle"]
+
+
+def test_les_competences_d_un_autre_profil_restent_dehors(
+    session_factory,
+):
+    """
+    Le cloisonnement par candidat vaut ici comme ailleurs : proposer
+    à quelqu'un de documenter la compétence d'un autre profil serait
+    une fuite de données, pas seulement une gêne.
+    """
+
+    from services.profile_service import get_undocumented_skills
+
+    session = session_factory()
+
+    add_candidate(session)
+    add_candidate(session, candidate_id="candidate-autre")
+
+    add_candidate_skill(
+        session, candidate_id=CANDIDATE_ID, name="Veille"
+    )
+    add_candidate_skill(
+        session,
+        candidate_id="candidate-autre",
+        name="Soudure TIG",
+        skill_id="skill-soudure",
+    )
+
+    session.close()
+
+    noms = [
+        competence["name"]
+        for competence in get_undocumented_skills(CANDIDATE_ID)
+    ]
+
+    assert noms == ["Veille"]
+
+
+def test_une_preuve_validee_rend_la_competence_prouvee(
+    session_factory,
+):
+    """
+    Le bout du parcours : la preuve se rattache à la compétence
+    DÉJÀ déclarée, qui passe de « declared » à « proven ». Sans
+    cela, l'entretien créerait une jumelle et laisserait la déclarée
+    orpheline.
+    """
+
+    from services.matching import analyze_candidate_against_skills
+    from services.profile_service import (
+        add_evidence as ajouter_preuve,
+        add_skill,
+        get_undocumented_skills,
+    )
+
+    session = session_factory()
+
+    add_candidate(session)
+    add_catalog_skill(
+        session,
+        canonical_name="Veille concurrentielle",
+        aliases=["Veille concurrentielle"],
+    )
+    add_candidate_skill(
+        session,
+        candidate_id=CANDIDATE_ID,
+        name="Veille concurrentielle",
+    )
+
+    session.close()
+
+    avant = analyze_candidate_against_skills(
+        candidate_id=CANDIDATE_ID,
+        required_skills=["Veille concurrentielle"],
+    )
+
+    assert avant.matches[0].status == "declared"
+
+    # Ce que fait l'interface après validation : add_skill retrouve
+    # la compétence existante plutôt que d'en créer une seconde.
+    skill_id = add_skill(
+        candidate_id=CANDIDATE_ID, name="Veille concurrentielle"
+    )
+
+    ajouter_preuve(
+        candidate_id=CANDIDATE_ID,
+        skill_id=skill_id,
+        description=(
+            "Veille hebdomadaire sur cinq concurrents, restituée en "
+            "comité produit."
+        ),
+        evidence_type="Entretien IA (validé par le candidat)",
+    )
+
+    apres = analyze_candidate_against_skills(
+        candidate_id=CANDIDATE_ID,
+        required_skills=["Veille concurrentielle"],
+    )
+
+    assert apres.matches[0].status == "proven"
+    assert get_undocumented_skills(CANDIDATE_ID) == []

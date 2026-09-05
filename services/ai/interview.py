@@ -457,6 +457,244 @@ def transcribe_audio(audio_bytes: bytes, mime_type: str = "audio/wav") -> tuple[
 
 
 # ============================================================
+# UNE PREUVE EST UN FAIT SITUE
+# ============================================================
+#
+# Mesuré en conditions réelles sur la variante « documenter une
+# compétence déclarée » : à la réponse « oui je fais de la veille,
+# c'est important dans mon métier, je regarde ce que font les autres
+# et je m'informe régulièrement », le modèle a proposé « Réalisation
+# régulière de veille concurrentielle et information sur les
+# pratiques du marché ».
+#
+# Rien n'est inventé — c'est la reformulation fidèle de ce que le
+# candidat a dit. Mais valider cette ligne ferait passer la
+# compétence de « déclarée » à « prouvée » sans qu'aucun fait ne la
+# soutienne : la déclaration reformulée deviendrait sa propre preuve.
+# La consigne du prompt l'interdit ; le modèle l'a ignorée.
+#
+# Ce contrôle ne rejette rien : il décoche par défaut. Il se trompe
+# dans un sens connu — « mise en place d'un tableau de bord partagé
+# avec l'équipe produit » est un fait concret qu'il ne reconnaît pas
+# — et une case se recoche d'un clic. L'erreur va donc vers la
+# prudence, jamais vers la complaisance.
+
+_NOMBRES_ET_RYTHMES = frozenset(
+    {
+        "un", "une", "deux", "trois", "quatre", "cinq", "six", "sept",
+        "huit", "neuf", "dix", "onze", "douze", "treize", "quatorze",
+        "quinze", "seize", "vingt", "trente", "quarante", "cinquante",
+        "soixante", "cent", "cents", "mille", "millier", "milliers",
+        "million", "millions", "demi",
+        "quotidien", "quotidienne", "hebdomadaire", "mensuel",
+        "mensuelle", "trimestriel", "trimestrielle", "annuel",
+        "annuelle", "lundi", "mardi", "mercredi", "jeudi", "vendredi",
+    }
+)
+
+_MOT_DE_TEXTE = re.compile(
+    r"[0-9A-Za-zÀ-ÖØ-öø-ÿ][\w'’-]*", re.UNICODE
+)
+
+# Une majuscule en début de phrase ne signale pas un nom propre.
+_APRES_UNE_FIN_DE_PHRASE = re.compile(r"(?:^|[.!?:;\n]\s*)$")
+
+
+def evidence_is_situated(text: str) -> bool:
+    """
+    Ce texte rapporte-t-il un fait situé, ou reformule-t-il une
+    déclaration ?
+
+    Un fait situé porte une trace : un chiffre, une quantité, un
+    rythme, ou le nom propre d'un projet, d'un outil, d'une
+    entreprise. Une déclaration reformulée n'en porte aucune.
+    """
+
+    if not text or not text.strip():
+        return False
+
+    if re.search(r"\d", text):
+        return True
+
+    for occurrence in _MOT_DE_TEXTE.finditer(text):
+
+        mot = occurrence.group()
+
+        if mot.casefold() in _NOMBRES_ET_RYTHMES:
+            return True
+
+        if not mot[0].isupper():
+            continue
+
+        if _APRES_UNE_FIN_DE_PHRASE.search(text[: occurrence.start()]):
+            continue
+
+        if mot.casefold() in {"je", "j"}:
+            continue
+
+        return True
+
+    return False
+
+
+# ============================================================
+# DOCUMENTER UNE COMPETENCE DECLAREE
+# ============================================================
+
+MIN_SKILL_QUESTIONS = 3
+MAX_SKILL_QUESTIONS = 5
+
+SKILL_RULES = """Un candidat a DÉCLARÉ maîtriser une compétence dans son Master CV, mais rien dans son parcours ne la documente. Le moteur la classe donc « déclarée » et non « prouvée » : elle ne peut pas figurer comme compétence explicite sur un CV généré.
+
+Ta mission : poser entre {min_q} et {max_q} questions courtes qui l'amènent à raconter UNE occasion précise où il a exercé cette compétence. Une preuve, c'est un fait situé — pas une affirmation répétée.
+
+CREUSE EN PRIORITÉ :
+- l'occasion concrète : quel projet, quel poste, quand ;
+- ce qu'il a fait lui-même, pas ce que l'équipe a fait ;
+- comment il s'y est pris — méthode, outil, rituel, format de livrable ;
+- ce que ça a produit, et le chiffre s'il y en a un ;
+- ce qui a été difficile ou arbitré, qui distingue l'expérience réelle du vocabulaire appris.
+
+RÈGLES :
+- Une seule compétence : ne demande rien sur les autres.
+- Des questions concrètes et vérifiables, jamais sur la personnalité ("êtes-vous rigoureux ?" est interdit).
+- Ne suppose PAS qu'il l'a exercée : s'il ne l'a jamais fait, tes questions doivent lui permettre de le dire.
+- N'affirme rien à sa place : tu poses des questions, tu n'y réponds pas.
+- Réponds UNIQUEMENT avec un tableau JSON de chaînes, sans texte autour, sans balisage markdown : ["Question 1", "Question 2"].
+"""
+
+
+def generate_skill_questions(
+    candidate_id: str,
+    skill_name: str,
+    target_role: str = "",
+    already_asked: list[str] | None = None,
+) -> tuple[list[InterviewQuestion], str]:
+    """
+    Questions pour documenter une compétence déclarée sans preuve.
+
+    Les expériences du candidat sont fournies comme contexte, afin
+    que l'IA situe ses questions dans un parcours réel plutôt que de
+    demander « où avez-vous fait cela ? » dans le vide. Elles ne sont
+    jamais une source de réponse : seul ce que le candidat répondra
+    pourra devenir une preuve.
+
+    Ne lève jamais d'exception : retourne une liste vide et un
+    avertissement en cas d'échec.
+    """
+
+    if not skill_name.strip():
+        return [], "Aucune compétence indiquée."
+
+    if not is_configured():
+        return [], (
+            "Clé GEMINI_API_KEY non configurée : entretien IA "
+            "indisponible."
+        )
+
+    db = SessionLocal()
+
+    try:
+        experiences = (
+            db.query(ExperienceDB)
+            .filter(ExperienceDB.candidate_id == candidate_id)
+            .order_by(ExperienceDB.start_date.desc())
+            .all()
+        )
+
+        parcours = [
+            f"- {experience.job_title or 'Poste'} "
+            f"chez {experience.company or 'entreprise non précisée'}"
+            for experience in experiences
+        ]
+
+    finally:
+        db.close()
+
+    prompt = SKILL_RULES.format(
+        min_q=MIN_SKILL_QUESTIONS,
+        max_q=MAX_SKILL_QUESTIONS,
+    )
+
+    prompt += f"\n\nCompétence à documenter : {skill_name.strip()}"
+
+    if parcours:
+        prompt += (
+            "\n\nPostes occupés par le candidat, pour situer tes "
+            "questions — ce ne sont pas des réponses :\n"
+            + "\n".join(parcours)
+        )
+
+    if target_role.strip():
+        prompt += (
+            f"\n\nPoste recherché : {target_role.strip()} — priorise "
+            "ce qui compte pour ce type de poste."
+        )
+
+    if already_asked:
+        prompt += (
+            "\n\nQuestions DÉJÀ posées à ce candidat, à ne pas "
+            "reposer, même reformulées :\n"
+            + "\n".join(f"- {question}" for question in already_asked)
+        )
+
+    try:
+        reponse = generate_multimodal([prompt], temperature=0.4)
+
+    except (GeminiNotConfiguredError, GeminiRequestError) as error:
+        return [], f"Génération des questions impossible ({error})."
+
+    try:
+        donnees = json.loads(_strip_json_fences(reponse))
+
+    except json.JSONDecodeError:
+        return [], "Réponse de l'IA illisible : réessayez."
+
+    if not isinstance(donnees, list):
+        return [], "Format de réponse inattendu : réessayez."
+
+    # Même filtre déterministe que pour les relances d'expérience :
+    # la consigne ne suffit pas, le modèle reformule volontiers une
+    # question déjà posée.
+    deja_vues = {
+        _forme_comparable(question)
+        for question in (already_asked or [])
+    }
+
+    questions: list[InterviewQuestion] = []
+
+    for item in donnees:
+
+        if not isinstance(item, str):
+            continue
+
+        texte = item.strip()
+
+        if not texte:
+            continue
+
+        forme = _forme_comparable(texte)
+
+        if not forme or forme in deja_vues:
+            continue
+
+        deja_vues.add(forme)
+
+        questions.append(
+            InterviewQuestion(
+                question=texte,
+                experience_id=None,
+                experience_label=skill_name.strip(),
+            )
+        )
+
+    if not questions:
+        return [], "Aucune question exploitable n'a été générée."
+
+    return questions[:MAX_SKILL_QUESTIONS], ""
+
+
+# ============================================================
 # PROPOSITION DE PREUVES A PARTIR DES REPONSES
 # ============================================================
 

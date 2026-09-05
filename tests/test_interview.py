@@ -516,3 +516,168 @@ def test_transcription_erreur_api(monkeypatch):
     assert "quota dépassé" in avertissement
 
 
+
+
+# ============================================================
+# QUESTIONS SUR UNE COMPETENCE DECLAREE
+# ============================================================
+#
+# Une compétence déclarée sans preuve reste « declared » : l'entretien
+# doit amener le candidat à raconter UNE occasion précise où il l'a
+# exercée. Une preuve est un fait situé, pas une affirmation répétée.
+
+
+def test_les_questions_portent_sur_la_competence(
+    session_factory, monkeypatch
+):
+    import services.ai.interview as interview
+
+    session = session_factory()
+    add_candidate(session)
+    session.close()
+
+    prompts = []
+
+    def _faux_appel(parts, **kwargs):
+        prompts.append(parts[0])
+        return json.dumps(
+            [
+                "Sur quel projet avez-vous fait cette veille ?",
+                "Comment restituiez-vous vos observations ?",
+            ]
+        )
+
+    monkeypatch.setattr(interview, "is_configured", lambda: True)
+    monkeypatch.setattr(interview, "generate_multimodal", _faux_appel)
+
+    questions, avertissement = interview.generate_skill_questions(
+        candidate_id=CANDIDATE_ID,
+        skill_name="Veille concurrentielle",
+    )
+
+    assert avertissement == ""
+    assert len(questions) == 2
+
+    # La compétence voyage jusqu'aux propositions : c'est elle que la
+    # preuve devra documenter.
+    assert questions[0].experience_label == "Veille concurrentielle"
+    assert questions[0].experience_id is None
+
+    assert "Veille concurrentielle" in prompts[0]
+
+
+def test_une_question_deja_posee_est_ecartee(
+    session_factory, monkeypatch
+):
+    """
+    La consigne ne suffit pas : le modèle reformule volontiers une
+    question déjà posée. Le filtre est déterministe, comme pour les
+    relances d'expérience.
+    """
+
+    import services.ai.interview as interview
+
+    session = session_factory()
+    add_candidate(session)
+    session.close()
+
+    monkeypatch.setattr(interview, "is_configured", lambda: True)
+    monkeypatch.setattr(
+        interview,
+        "generate_multimodal",
+        lambda *a, **k: json.dumps(
+            [
+                "Sur quel projet avez-vous fait cette veille ?",
+                "Quel outil utilisiez-vous ?",
+            ]
+        ),
+    )
+
+    questions, _ = interview.generate_skill_questions(
+        candidate_id=CANDIDATE_ID,
+        skill_name="Veille concurrentielle",
+        already_asked=["sur quel projet avez vous fait cette veille"],
+    )
+
+    assert [q.question for q in questions] == [
+        "Quel outil utilisiez-vous ?"
+    ]
+
+
+def test_sans_cle_configuree_aucune_question(session_factory, monkeypatch):
+    import services.ai.interview as interview
+
+    monkeypatch.setattr(interview, "is_configured", lambda: False)
+
+    questions, avertissement = interview.generate_skill_questions(
+        candidate_id=CANDIDATE_ID, skill_name="Veille concurrentielle"
+    )
+
+    assert questions == []
+    assert "GEMINI_API_KEY" in avertissement
+
+
+def test_sans_competence_aucune_question(session_factory):
+    import services.ai.interview as interview
+
+    questions, avertissement = interview.generate_skill_questions(
+        candidate_id=CANDIDATE_ID, skill_name="   "
+    )
+
+    assert questions == []
+    assert avertissement
+
+
+# ============================================================
+# UNE PREUVE EST UN FAIT SITUE
+# ============================================================
+
+
+def test_une_declaration_reformulee_n_est_pas_un_fait_situe():
+    """
+    Mesuré en conditions réelles : à la réponse « oui je fais de la
+    veille, c'est important dans mon métier », le modèle a proposé
+    « Réalisation régulière de veille concurrentielle ». Rien n'est
+    inventé — mais valider cette ligne ferait de la déclaration sa
+    propre preuve.
+    """
+
+    assert not interview.evidence_is_situated(
+        "Réalisation régulière de veille concurrentielle et "
+        "information sur les pratiques du marché"
+    )
+
+    assert not interview.evidence_is_situated("")
+    assert not interview.evidence_is_situated("   ")
+
+
+def test_un_chiffre_un_rythme_ou_un_nom_propre_situent():
+
+    assert interview.evidence_is_situated(
+        "Pilotage d'un budget de 100 k€"
+    )
+
+    assert interview.evidence_is_situated(
+        "Suivi de cinq plateformes concurrentes"
+    )
+
+    assert interview.evidence_is_situated(
+        "Présentation d'une synthèse mensuelle au comité produit"
+    )
+
+    assert interview.evidence_is_situated(
+        "Animation des cérémonies agiles chez Ticketis"
+    )
+
+
+def test_une_majuscule_de_debut_de_phrase_ne_situe_pas(
+):
+    """
+    Sans cette précaution, la majuscule initiale de n'importe quelle
+    ligne suffirait à la faire passer pour un fait situé, et le
+    contrôle ne servirait à rien.
+    """
+
+    assert not interview.evidence_is_situated(
+        "Veille sur le marché. Analyse des pratiques."
+    )
