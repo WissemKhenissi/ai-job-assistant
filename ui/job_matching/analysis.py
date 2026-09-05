@@ -208,11 +208,6 @@ def render_analysis_tab(candidate_id: str) -> None:
 
         avertissement_ia = ""
 
-        # Ce que l'IA aura compris du statut de chaque exigence.
-        # Le moteur lit l'annonce d'abord et ne s'en sert que là où
-        # sa lecture n'a rien trouvé.
-        niveaux_proposes: dict[str, str] = {}
-
         if ai_is_configured():
 
             analyse_ia = analyze_job_offer_with_ai(
@@ -220,7 +215,6 @@ def render_analysis_tab(candidate_id: str) -> None:
             )
 
             avertissement_ia = analyse_ia.warning
-            niveaux_proposes = dict(analyse_ia.skill_importance)
 
             contract_type = contract_type or analyse_ia.contract_type
             remote_policy = remote_policy or analyse_ia.remote_policy
@@ -287,7 +281,6 @@ def render_analysis_tab(candidate_id: str) -> None:
                 candidate_id=candidate_id,
                 job_offer_id=job_offer_id,
                 required_skills=required_skills,
-                importance_hints=niveaux_proposes,
             )
 
             # --------------------------------------------------

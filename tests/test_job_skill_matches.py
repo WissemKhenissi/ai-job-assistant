@@ -238,32 +238,3 @@ def test_le_niveau_d_exigence_est_historise(session_factory):
     assert par_competence["Jira"].importance == "mention"
 
     session.close()
-
-
-def test_le_niveau_propose_par_l_ia_est_transmis(session_factory):
-    """
-    L'IA lit l'annonce, le moteur enregistre : le chemin complet doit
-    tenir, sinon la proposition se perd entre les deux.
-    """
-
-    from models.skill_match import JobSkillMatchDB
-    from services.matching import analyze_and_save_job_match
-
-    session = session_factory()
-    _prepare(session)
-    session.close()
-
-    analyze_and_save_job_match(
-        candidate_id=CANDIDATE_ID,
-        job_offer_id=JOB_OFFER_ID,
-        required_skills=["Gestion de projet"],
-        importance_hints={"Gestion de projet": "mention"},
-    )
-
-    session = session_factory()
-
-    detail = session.query(JobSkillMatchDB).one()
-
-    assert detail.importance == "mention"
-
-    session.close()

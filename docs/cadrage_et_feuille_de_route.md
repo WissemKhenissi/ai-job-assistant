@@ -155,7 +155,7 @@ Deux points étudiés et documentés, non implémentés :
 | 4 sept. 2026 | Référentiel public plutôt que catalogue écrit à la main : ESCO, CC BY 4.0, attribution affichée dans l'application. |
 | 4 sept. 2026 | Une entrée de référentiel importée en masse ne bénéficie pas de la confiance accordée à une entrée curée : elle passe la même épreuve que l'inconnu. |
 | 5 sept. 2026 | Le niveau d'exigence est lu dans l'annonce ; en cas de doute, le niveau médian. |
-| 5 sept. 2026 | **Le texte de l'annonce prime sur la proposition de l'IA**, qui ne tranche que là où la lecture des marqueurs n'a rien trouvé. Priorité d'abord posée dans l'autre sens, inversée après mesure : sur treize annonces, IA et texte divergeaient sur 29 exigences et l'IA gonflait à chaque fois. Deux captures d'une même offre, identiques à 99,3 %, obtenaient 38,3 et 44,1. |
+| 5 sept. 2026 | **L'IA est écartée du classement du niveau d'exigence**, en deux temps. D'abord elle décidait et le texte comblait ses silences : sur treize annonces, les deux divergeaient sur 29 exigences et l'IA gonflait à chaque fois (14 mentions et 13 souhaits promus en conditions, jamais l'inverse). La priorité inversée n'a pas suffi — 137 exigences sur 202 tombent dans le silence de l'annonce, où l'IA décidait encore : deux captures d'une même offre, aux seules différences de bandeaux de navigation, obtenaient 34,6 et 44,5. Un score reproductible vaut mieux qu'un score plus fin mais instable. |
 | 5 sept. 2026 | La couche de modèles Pydantic parallèle est supprimée plutôt que maintenue : le projet n'a qu'une représentation, les modèles SQLAlchemy. |
 
 ---

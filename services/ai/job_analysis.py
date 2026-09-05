@@ -33,7 +33,6 @@ from database.db import SessionLocal
 from models.matching import JobMatchDB
 from models.skill_match import JobSkillMatchDB
 
-from services.requirement_importance import IMPORTANCES
 from services.text_normalization import (
     minuscules_sans_accents as _normalize_loose,
 )
@@ -52,12 +51,6 @@ MAX_JOB_EXCERPT = 6000
 
 ALLOWED_CONTRACT_TYPES = {"CDI", "CDD", "Freelance", "Stage"}
 ALLOWED_REMOTE_POLICIES = {"Sur site", "Hybride", "Télétravail complet"}
-
-# Niveaux d'exigence acceptés. La liste fait autorité dans
-# services.requirement_importance, où vit aussi le classement
-# déterministe qui prend le relais quand l'IA ne répond pas, ou
-# répond autre chose.
-ALLOWED_IMPORTANCES = IMPORTANCES
 
 
 def _strip_json_fences(text: str) -> str:
@@ -87,17 +80,12 @@ class JobOfferAnalysis:
     remote_details: str = ""
     required_skills: list[str] = field(default_factory=list)
 
-    # Ce que l'annonce demande de chaque compétence extraite :
-    # "essentielle", "souhaitee" ou "mention", indexé par le
-    # libellé tel qu'il figure dans required_skills.
-    #
-    # C'est une proposition, pas une décision. Le moteur lit
-    # d'abord l'annonce ; il ne consulte cette proposition que là où
-    # sa lecture n'a rien trouvé, et seulement si elle est l'une des
-    # trois valeurs connues. Mesuré sur treize annonces réelles :
-    # quand les deux divergent, c'est l'IA qui gonfle, jamais
-    # l'inverse.
-    skill_importance: dict[str, str] = field(default_factory=dict)
+    # Le NIVEAU de chaque exigence — condition, souhait, simple
+    # mention — a été demandé à l'IA pendant une journée, puis
+    # retiré : mesuré sur treize annonces, il gonflait
+    # systématiquement et variait d'un appel à l'autre sur un texte
+    # identique. Il est lu dans l'annonce, par
+    # services.requirement_importance.
 
     warning: str = ""
 
@@ -137,21 +125,10 @@ def analyze_job_offer_with_ai(job_text: str) -> JobOfferAnalysis:
         "elle est explicitement écrite dans le texte (ex. \"2 jours "
         'de télétravail par semaine\"), "" sinon — n\'invente jamais '
         "un nombre de jours qui n'est pas écrit,\n"
-        '  "required_skills": une liste d\'objets, un par '
-        "compétence, outil ou technologie EXPLICITEMENT mentionné "
-        "dans le texte, tel qu'écrit, sans inventer, chacun de la "
-        'forme {"skill": "...", "importance": "..."}\n'
+        '  "required_skills": une liste de compétences, outils ou '
+        "technologies EXPLICITEMENT mentionnés dans le texte, tels "
+        "qu'écrits, sans inventer\n"
         "}\n\n"
-        "Le champ \"importance\" dit ce que l'annonce demande de "
-        "cette compétence, EXACTEMENT l'une de ces trois valeurs :\n"
-        "- \"essentielle\" : l'annonce en fait une condition "
-        "(indispensable, requis, maîtrise exigée, prérequis, "
-        "section « profil recherché »)\n"
-        "- \"souhaitee\" : l'annonce l'apprécierait sans l'exiger "
-        "(« un plus », « idéalement », « apprécié »)\n"
-        "- \"mention\" : l'annonce la cite en exemple ou en décor "
-        "(« environnement : Jira, Miro, GitLab », « notamment », "
-        "« tels que », énumération d'outils possibles)\n\n"
         "RÈGLES ABSOLUES :\n"
         "- N'invente rien : si une information n'est pas "
         "explicitement dans le texte, laisse le champ vide (chaîne "
@@ -161,10 +138,7 @@ def analyze_job_offer_with_ai(job_text: str) -> JobOfferAnalysis:
         "vide — jamais une autre formulation.\n"
         "- N'extrais PAS l'intitulé du poste comme une compétence : "
         "« Product Owner », « Chef de projet » nomment le poste, ils "
-        "ne décrivent pas un savoir-faire attendu en plus.\n"
-        "- Ne classe pas tout en \"essentielle\" : une annonce qui "
-        "énumère huit outils ne fait pas de chacun une condition "
-        "d'entrée.\n\n"
+        "ne décrivent pas un savoir-faire attendu en plus.\n\n"
         f"Texte de l'offre :\n{job_text[:MAX_JOB_EXCERPT]}"
     )
 
@@ -220,22 +194,10 @@ def analyze_job_offer_with_ai(job_text: str) -> JobOfferAnalysis:
     normalized_job_text = _normalize_loose(job_text)
 
     required_skills = []
-    skill_importance: dict[str, str] = {}
 
-    for brut in skills_bruts:
+    for skill in skills_bruts:
 
-        # L'ancien format (une simple liste de chaînes) reste
-        # accepté : une réponse qui l'emploie perd le niveau
-        # d'exigence, pas la compétence — le moteur le reclassera
-        # depuis le texte de l'annonce.
-        if isinstance(brut, str):
-            skill, importance = brut, ""
-
-        elif isinstance(brut, dict):
-            skill = str(brut.get("skill") or "")
-            importance = str(brut.get("importance") or "")
-
-        else:
+        if not isinstance(skill, str):
             continue
 
         skill = skill.strip()
@@ -251,17 +213,11 @@ def analyze_job_offer_with_ai(job_text: str) -> JobOfferAnalysis:
 
         required_skills.append(skill)
 
-        # Même traitement que contract_type : une valeur hors de
-        # l'ensemble connu est écartée plutôt que réinterprétée.
-        if importance in ALLOWED_IMPORTANCES:
-            skill_importance[skill] = importance
-
     return JobOfferAnalysis(
         contract_type=contract_type,
         remote_policy=remote_policy,
         remote_details=remote_details_brut,
         required_skills=required_skills,
-        skill_importance=skill_importance,
     )
 
 

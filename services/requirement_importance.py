@@ -19,23 +19,30 @@ Trois niveaux :
 - ``SOUHAITEE``   — l'annonce l'apprécierait sans l'exiger ;
 - ``MENTION``     — l'annonce la cite, en exemple ou en décor.
 
-Le classement est déterministe et lisible : il repose sur des
+Le classement est entièrement déterministe : il repose sur des
 marqueurs de langage explicites, cherchés dans une fenêtre étroite
-autour de la première occurrence du terme.
+autour de la première occurrence du terme. Le même texte donne
+toujours le même niveau.
 
-L'IA peut proposer un niveau, mais elle ne tranche que là où le texte
-ne tranche pas. Cette priorité a d'abord été posée dans l'autre sens,
-au motif que l'IA lit mieux le découpage en sections d'une annonce.
-La mesure a démenti : sur treize annonces réelles, l'IA et le texte
-divergeaient sur 29 exigences, et **toujours dans le même sens** —
-l'IA promeut en condition d'entrée ce que l'annonce se contente de
-citer (14 fois) ou de souhaiter (13 fois), jamais l'inverse.
+L'IA en a été écartée, en deux temps et sur mesure.
 
-Le cas décisif : deux captures d'une même offre, identiques à 99,3 %,
-notées 38,3 et 44,1. Huit termes y étaient classés « essentielle »
-d'un côté et « mention » de l'autre par l'IA, quand la lecture du
-texte répondait « mention » aux deux. Un score qui varie de six
-points sur le même texte ne sert à rien.
+D'abord elle décidait, et le texte ne comblait que ses silences. Sur
+treize annonces réelles, les deux divergeaient sur 29 exigences,
+**toujours dans le même sens** : l'IA promeut en condition d'entrée
+ce que l'annonce se contente de citer (14 fois) ou de souhaiter
+(13 fois), jamais l'inverse. La priorité a donc été inversée.
+
+Cela n'a pas suffi. Une annonce ne qualifie pas ce qu'elle demande :
+137 exigences sur 202 tombaient dans le silence, et l'IA y décidait
+encore. Deux captures d'une même offre, dont les seules différences
+sont des bandeaux de navigation, obtenaient 34,6 et 44,5 — sur deux
+termes, dont l'un n'apparaît que dans le titre de la page.
+
+Un score qui bouge de dix points sur le même texte n'aide à décider
+de rien. Le classement par l'IA n'a jamais démontré qu'il apportait
+de la justesse — seulement de la sévérité et de la variance. En cas
+de silence, le niveau médian : il n'exagère ni ne minimise l'écart,
+et il ne change pas d'avis.
 
 En cas de doute, ``SOUHAITEE`` : ni écarter une vraie condition, ni
 transformer un décor en exigence.
@@ -58,8 +65,6 @@ from services.text_normalization import (
 ESSENTIELLE = "essentielle"
 SOUHAITEE = "souhaitee"
 MENTION = "mention"
-
-IMPORTANCES = frozenset({ESSENTIELLE, SOUHAITEE, MENTION})
 
 # Ce que l'on retient quand rien dans l'annonce ne tranche.
 IMPORTANCE_PAR_DEFAUT = SOUHAITEE
@@ -421,31 +426,14 @@ def classify_requirement(terme: str, job_text: str) -> str:
 def classify_requirements(
     termes: list[str] | tuple[str, ...],
     job_text: str,
-    hints: dict[str, str] | None = None,
 ) -> dict[str, str]:
     """
     Niveau de chaque exigence, indexé par forme normalisée.
 
-    ``hints`` porte ce que l'IA a proposé en lisant l'annonce. Le
-    texte passe avant : la proposition de l'IA n'est retenue que
-    lorsque la lecture des marqueurs n'a rien trouvé — c'est-à-dire
-    là où le classement déterministe se rabattrait sur le niveau
-    médian faute de raison de trancher.
-
-    Elle doit en outre être l'un des trois niveaux connus, même
-    garde-fou que pour le type de contrat.
-
-    L'IA garde donc un rôle réel — une annonce ne dit pas toujours
-    « indispensable », et sur les treize annonces du corpus les deux
-    tiers des exigences tombent dans ce silence — mais elle ne peut
-    plus contredire ce que l'annonce écrit noir sur blanc.
+    Deux fois le même texte donnent deux fois le même résultat :
+    c'est la propriété qu'on attend d'un score dont on se sert pour
+    comparer des annonces entre elles.
     """
-
-    proposes = {
-        normalise_terme(terme): niveau
-        for terme, niveau in (hints or {}).items()
-        if niveau in IMPORTANCES
-    }
 
     niveaux: dict[str, str] = {}
 
@@ -456,12 +444,8 @@ def classify_requirements(
         if not cle or cle in niveaux:
             continue
 
-        lu = _lire_niveau(terme, job_text)
-
-        # Le silence de l'annonce n'est pas une conclusion, c'est un
-        # aveu d'ignorance : c'est la seule place laissée à l'IA.
         niveaux[cle] = (
-            lu or proposes.get(cle) or IMPORTANCE_PAR_DEFAUT
+            _lire_niveau(terme, job_text) or IMPORTANCE_PAR_DEFAUT
         )
 
     return niveaux

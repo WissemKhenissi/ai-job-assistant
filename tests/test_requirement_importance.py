@@ -224,71 +224,39 @@ def test_chaque_exigence_recoit_son_niveau():
     assert niveaux[normalise_terme("Figma")] == SOUHAITEE
 
 
-def test_l_ia_tranche_la_ou_le_texte_se_tait():
+def test_deux_fois_le_meme_texte_donnent_le_meme_niveau():
     """
-    L'annonce ne dit pas toujours « indispensable ». Là où la lecture
-    des marqueurs n'a rien trouvé, la proposition de l'IA vaut mieux
-    que le niveau médian par défaut.
-    """
+    La propriété qu'on attend d'un score servant à comparer des
+    annonces : la reproductibilité.
 
-    niveaux = classify_requirements(
-        ["Docker"],
-        "Vous interviendrez sur Docker.",
-        hints={"Docker": ESSENTIELLE},
-    )
+    Le niveau a d'abord été demandé à l'IA, le texte ne comblant que
+    ses silences ; puis l'inverse. Ni l'un ni l'autre n'a suffi. Deux
+    captures d'une même offre, dont les seules différences étaient
+    des bandeaux de navigation, obtenaient 34,6 et 44,5 — parce que
+    deux termes tombaient dans le silence de l'annonce, où l'IA
+    décidait encore, et qu'elle n'a pas répondu deux fois pareil.
 
-    assert niveaux[normalise_terme("Docker")] == ESSENTIELLE
-
-
-def test_l_ia_ne_contredit_pas_ce_que_l_annonce_ecrit():
-    """
-    Le cœur de la priorité : quand l'annonce se prononce, elle a
-    raison contre l'IA.
-
-    Cette priorité a d'abord été posée dans l'autre sens. Mesuré sur
-    treize annonces réelles, l'IA et le texte divergeaient sur 29
-    exigences, toujours dans le même sens — l'IA promeut en condition
-    ce que l'annonce se contente de citer. Deux captures d'une même
-    offre, identiques à 99,3 %, obtenaient 38,3 et 44,1.
+    L'IA est écartée du classement. Ce test verrouille la raison.
     """
 
     annonce = (
-        "Environnement technique : Jira, Confluence, Miro, Notion."
+        "Chef de projet\n"
+        "Vous interviendrez sur Docker et Kubernetes.\n"
+        "La maîtrise de la gestion de projet est indispensable."
     )
 
-    niveaux = classify_requirements(
-        ["Jira"],
-        annonce,
-        hints={"Jira": ESSENTIELLE},
+    exigences = ["Docker", "Kubernetes", "Gestion de projet"]
+
+    premier = classify_requirements(exigences, annonce)
+    second = classify_requirements(exigences, annonce)
+
+    assert premier == second
+
+    # Et le silence de l'annonce donne le niveau médian, pas un avis.
+    assert premier[normalise_terme("Docker")] == SOUHAITEE
+    assert (
+        premier[normalise_terme("Gestion de projet")] == ESSENTIELLE
     )
-
-    assert niveaux[normalise_terme("Jira")] == MENTION
-
-
-def test_un_souhait_explicite_resiste_aussi_a_l_ia():
-
-    niveaux = classify_requirements(
-        ["Figma"],
-        "La connaissance de Figma serait un plus.",
-        hints={"Figma": ESSENTIELLE},
-    )
-
-    assert niveaux[normalise_terme("Figma")] == SOUHAITEE
-
-
-def test_une_proposition_hors_des_valeurs_connues_est_ecartee():
-    """
-    Même garde-fou que pour le type de contrat : une valeur inventée
-    par l'IA n'est jamais réinterprétée.
-    """
-
-    niveaux = classify_requirements(
-        ["Docker"],
-        "Vous interviendrez sur Docker.",
-        hints={"Docker": "critique"},
-    )
-
-    assert niveaux[normalise_terme("Docker")] == SOUHAITEE
 
 
 # ============================================================

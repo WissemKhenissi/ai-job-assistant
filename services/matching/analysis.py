@@ -71,17 +71,13 @@ def analyze_candidate_against_skills(
     candidate_id: str,
     required_skills: list[str],
     job_text: str = "",
-    importance_hints: dict[str, str] | None = None,
 ) -> MatchingResult:
     """
     Confronte le profil du candidat aux exigences d'une annonce.
 
-    ``importance_hints`` porte ce que l'IA a compris du statut de
-    chaque exigence en lisant l'annonce (condition, souhait, simple
-    mention). C'est un appoint : le niveau est d'abord lu dans le
-    texte de l'annonce, et la proposition de l'IA ne sert que là où
-    cette lecture n'a rien trouvé. Sans texte d'annonce, toutes les
-    exigences comptent pareil — le comportement d'origine.
+    Le niveau de chaque exigence — condition, souhait, simple
+    mention — est lu dans le texte de l'annonce. Sans texte, toutes
+    les exigences comptent pareil : le comportement d'origine.
     """
 
     if not required_skills:
@@ -486,7 +482,6 @@ def analyze_candidate_against_skills(
     niveaux = classify_requirements(
         [match.skill for match in matches],
         job_text,
-        hints=importance_hints,
     )
 
     for match in matches:
@@ -871,7 +866,6 @@ def analyze_and_save_job_match(
     candidate_id: str,
     job_offer_id: str,
     required_skills: list[str],
-    importance_hints: dict[str, str] | None = None,
 ) -> MatchingResult:
 
     db = SessionLocal()
@@ -909,7 +903,6 @@ def analyze_and_save_job_match(
         candidate_id=candidate_id,
         required_skills=required_skills,
         job_text=job_text,
-        importance_hints=importance_hints,
     )
 
     # ========================================================
