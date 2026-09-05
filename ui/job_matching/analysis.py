@@ -249,7 +249,9 @@ def render_analysis_tab(candidate_id: str) -> None:
         # mots ordinaires.
 
         required_skills, exigences_ecartees = clean_required_skills(
-            required_skills
+            required_skills,
+            job_title=title.strip(),
+            job_description=description.strip(),
         )
 
         if not required_skills:

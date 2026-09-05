@@ -28,7 +28,11 @@ fausserait l'analyse dans l'autre sens.
 
 from __future__ import annotations
 
+import re
+
+from services.job_title import clean_job_title
 from services.skill_catalog_service import find_skill_by_name
+from services.text_normalization import minuscules_sans_accents
 
 # La même forme que celle sous laquelle le niveau d'exigence est
 # indexé (services.requirement_importance). Deux définitions
@@ -167,13 +171,70 @@ def _vient_d_un_import(competence) -> bool:
     return str(getattr(competence, "id", "")).startswith("esco-")
 
 
+def _figure_dans(terme: str, texte: str) -> bool:
+    """Le terme apparaît-il dans ce texte, aux frontières de mot ?"""
+
+    cle = _normalize(terme)
+
+    if not cle or not texte:
+        return False
+
+    motif = re.compile(
+        r"(?<![a-z0-9])"
+        + r"[^a-z0-9]+".join(re.escape(mot) for mot in cle.split(" "))
+        + r"(?![a-z0-9])"
+    )
+
+    return motif.search(minuscules_sans_accents(texte)) is not None
+
+
+def _nomme_le_poste(
+    terme: str,
+    job_title: str,
+    job_description: str,
+) -> bool:
+    """
+    Ce terme désigne-t-il le poste plutôt qu'une compétence ?
+
+    Une annonce de Product Owner comptait « Product Owner » parmi ses
+    exigences, et le candidat qui ne porte pas ce titre dans son
+    Master CV la voyait manquante.
+
+    La règle est étroite à dessein. Écarter tout ce qui figure dans
+    l'intitulé ferait des dégâts : sur le corpus de mesure, cela
+    retirait « E-commerce » d'une annonce intitulée « CHEF DE
+    PROJETS PLATEFORME E-COMMERCE » et « CRM » d'une annonce de chef
+    de projet CRM — deux compétences que le candidat prouve.
+
+    Ce qui distingue le nom du poste d'une compétence citée dans le
+    titre, c'est que le corps de l'annonce reparle de la seconde. Une
+    annonce qui exige vraiment le e-commerce en dit quelque chose ;
+    elle ne redit pas le titre du poste comme une exigence.
+    """
+
+    intitule = clean_job_title(job_title)
+
+    if not intitule:
+        return False
+
+    return _figure_dans(terme, intitule) and not _figure_dans(
+        terme, job_description
+    )
+
+
 def clean_required_skills(
     skills: list[str] | tuple[str, ...],
+    job_title: str = "",
+    job_description: str = "",
 ) -> tuple[list[str], list[str]]:
     """
     Trie les exigences extraites d'une annonce.
 
     Retourne (retenues, écartées).
+
+    ``job_title`` et ``job_description`` servent à reconnaître le nom
+    du poste, qui n'est pas une compétence attendue en plus. Sans
+    eux, le tri fonctionne comme avant.
 
     Les doublons sont supprimés par forme canonique du référentiel :
     « Product backlog » et « Gestion du backlog » désignent la même
@@ -199,7 +260,11 @@ def clean_required_skills(
         if not terme:
             continue
 
-        if not is_plausible_requirement(terme):
+        ecarte = not is_plausible_requirement(terme) or _nomme_le_poste(
+            terme, job_title, job_description
+        )
+
+        if ecarte:
 
             if _normalize(terme) not in {
                 _normalize(item) for item in ecartees

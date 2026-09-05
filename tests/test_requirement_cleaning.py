@@ -170,3 +170,119 @@ def test_un_terme_ecarte_deux_fois_n_est_signale_qu_une_fois(
     _retenues, ecartees = clean_required_skills(["Data", "data"])
 
     assert ecartees == ["Data"]
+
+
+# ============================================================
+# LE NOM DU POSTE N'EST PAS UNE COMPETENCE
+# ============================================================
+#
+# Une annonce de Product Owner comptait « Product Owner » parmi ses
+# exigences, et le candidat qui ne porte pas ce titre dans son Master
+# CV la voyait manquante. Le prompt d'extraction l'interdit désormais
+# à l'IA ; ce garde-fou-ci est déterministe, et tient quel que soit
+# l'humeur du modèle.
+
+
+def test_l_intitule_du_poste_est_ecarte(session_factory):
+
+    session = session_factory()
+    session.close()
+
+    retenues, ecartees = clean_required_skills(
+        ["Product Owner", "Roadmap produit"],
+        job_title="Product Owner Digital",
+        job_description="Vous piloterez la roadmap produit.",
+    )
+
+    assert retenues == ["Roadmap produit"]
+    assert ecartees == ["Product Owner"]
+
+
+def test_une_competence_citee_dans_l_intitule_survit(
+    session_factory,
+):
+    """
+    Le garde-fou est étroit à dessein. Écarter tout ce qui figure
+    dans l'intitulé retirait « E-commerce » d'une annonce intitulée
+    « CHEF DE PROJETS PLATEFORME E-COMMERCE » — une compétence que le
+    candidat prouve.
+
+    Ce qui distingue le nom du poste d'une compétence citée dans le
+    titre, c'est que le corps de l'annonce reparle de la seconde.
+    """
+
+    session = session_factory()
+    session.close()
+
+    retenues, ecartees = clean_required_skills(
+        ["E-commerce"],
+        job_title="CHEF DE PROJETS PLATEFORME E-COMMERCE H/F",
+        job_description=(
+            "Vous pilotez la plateforme e-commerce du groupe."
+        ),
+    )
+
+    assert retenues == ["E-commerce"]
+    assert ecartees == []
+
+
+def test_une_technologie_du_titre_survit(session_factory):
+    """
+    Le cas qui condamnerait une règle plus large : « Développeur
+    Python » nomme le poste par sa technologie, et Python reste une
+    exigence.
+    """
+
+    session = session_factory()
+    session.close()
+
+    retenues, _ = clean_required_skills(
+        ["Python"],
+        job_title="Développeur Python H/F",
+        job_description="Vous développerez en Python.",
+    )
+
+    assert retenues == ["Python"]
+
+
+def test_sans_intitule_le_tri_ne_change_pas(session_factory):
+    """
+    Les appels qui ne fournissent pas l'annonce gardent exactement le
+    comportement d'avant.
+    """
+
+    session = session_factory()
+    session.close()
+
+    retenues, ecartees = clean_required_skills(
+        ["Product Owner", "Roadmap produit"]
+    )
+
+    assert retenues == ["Product Owner", "Roadmap produit"]
+    assert ecartees == []
+
+
+def test_le_bruit_de_page_web_ne_fait_pas_ecarter(session_factory):
+    """
+    Les titres enregistrés depuis un lien portent le nom du site et
+    du recruteur. clean_job_title les coupe avant comparaison, sinon
+    « LinkedIn » ou le nom de l'entreprise écarteraient des exigences
+    au hasard.
+    """
+
+    session = session_factory()
+    session.close()
+
+    retenues, ecartees = clean_required_skills(
+        ["Marketing digital"],
+        job_title=(
+            "Anonyme hiring Chef de Projet Marketing digital in "
+            "Paris | LinkedIn"
+        ),
+        job_description="Une annonce qui n'en reparle pas.",
+    )
+
+    # « Marketing digital » figure dans le titre de page, mais
+    # l'intitulé nettoyé s'arrête avant « in Paris ».
+    assert ecartees == ["Marketing digital"]
+    assert retenues == []
