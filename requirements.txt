@@ -3,9 +3,16 @@ openai
 google-genai
 pandas
 sqlalchemy
+alembic
 python-dotenv
 python-docx
 pypdf
 reportlab
 trafilatura
 pytest
+
+# Recherche sémantique du référentiel (importés en différé par
+# services/skill_semantic_service.py : l'application démarre sans eux,
+# la déduction de compétences est alors désactivée).
+sentence-transformers
+numpy
