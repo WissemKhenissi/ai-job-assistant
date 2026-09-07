@@ -59,7 +59,7 @@ def recalculate_all_job_matches() -> None:
 
             # Le candidat actuellement utilisé
             # dans l'application.
-            candidate_id = "candidate-wissem"
+            candidate_id = "candidate-demo"
 
             try:
                 result = analyze_and_save_job_match(

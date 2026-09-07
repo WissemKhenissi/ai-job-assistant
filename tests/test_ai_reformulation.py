@@ -193,7 +193,7 @@ def test_un_chiffre_deja_present_ne_declenche_pas_le_garde_fou(
 def _cv_de_test() -> TargetedCV:
     return TargetedCV(
         candidate_id="candidate-test",
-        full_name="Wissem Khenissi",
+        full_name="Alex Moreau",
         email="test@example.com",
         phone="",
         location="",

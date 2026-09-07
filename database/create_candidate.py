@@ -19,8 +19,8 @@ def create_candidate():
 
         candidate = CandidateDB(
             id="candidate-001",
-            first_name="Wissem",
-            last_name="Khenissi",
+            first_name="Alex",
+            last_name="Moreau",
             email="",
             phone="",
             location="France",

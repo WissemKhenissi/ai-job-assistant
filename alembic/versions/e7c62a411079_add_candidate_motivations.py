@@ -22,7 +22,7 @@ def upgrade() -> None:
     """Upgrade schema."""
     # Colonne ajoutée à une table déjà peuplée : un server_default est
     # nécessaire pour que SQLite sache quoi mettre dans les lignes
-    # existantes (candidate-wissem). Il est retiré juste après pour
+    # existantes (candidate-demo). Il est retiré juste après pour
     # rester fidèle au modèle Python (default="" côté application).
     op.add_column(
         'candidates',

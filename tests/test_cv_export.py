@@ -36,7 +36,7 @@ def _cv_de_test() -> TargetedCV:
 
     return TargetedCV(
         candidate_id="candidate-test",
-        full_name="Wissem Khenissi",
+        full_name="Alex Moreau",
         email="test@example.com",
         phone="0600000000",
         location="Paris",
@@ -129,7 +129,7 @@ def test_le_docx_est_cree_et_relisible(tmp_path):
 
     texte = _texte_du_docx(destination)
 
-    assert "WISSEM KHENISSI" in texte
+    assert "ALEX MOREAU" in texte
     assert "Chef de projet" in texte
     assert "Conception de produits digitaux." in texte
 
@@ -207,7 +207,7 @@ def test_un_cv_sans_competence_prouvee_s_exporte_quand_meme(
     texte = _texte_du_docx(destination)
 
     assert "COMPÉTENCES CLÉS" not in texte.upper()
-    assert "WISSEM KHENISSI" in texte
+    assert "ALEX MOREAU" in texte
 
 
 # ============================================================
@@ -528,13 +528,13 @@ def test_le_nom_de_fichier_est_lisible_et_sans_accent():
     from services.cv import default_export_path
 
     cv = _cv_de_test()
-    cv.full_name = "Wissem Khenissi"
+    cv.full_name = "Alex Moreau"
     cv.job_offer_title = "Chef de Projet Digital H/F"
 
     chemin = default_export_path(cv, "pdf")
 
     assert chemin.name == (
-        "cv-wissem-khenissi-chef-de-projet-digital-h-f.pdf"
+        "cv-alex-moreau-chef-de-projet-digital-h-f.pdf"
     )
 
 

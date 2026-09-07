@@ -38,7 +38,7 @@ from services.matching.normalization import _canonical_skill_name
 
 DATASET_DIR = Path(__file__).resolve().parent / "dataset"
 
-CANDIDATE_ID = "candidate-wissem"
+CANDIDATE_ID = "candidate-demo"
 
 
 # Du plus faible au plus fort niveau d'affirmation.

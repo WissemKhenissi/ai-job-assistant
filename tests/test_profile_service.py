@@ -57,7 +57,7 @@ def test_update_candidate_refuse_un_champ_inconnu(session_factory):
     session.close()
 
     with pytest.raises(ValueError, match="inconnus"):
-        update_candidate(CANDIDATE_ID, nom_de_famille="Khenissi")
+        update_candidate(CANDIDATE_ID, nom_de_famille="Moreau")
 
 
 def test_update_candidate_sur_un_id_inexistant_echoue(
