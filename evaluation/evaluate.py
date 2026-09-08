@@ -34,11 +34,62 @@ from pathlib import Path
 from services.job_requirements_service import extract_required_skills
 from services.matching import analyze_candidate_against_skills
 from services.matching.normalization import _canonical_skill_name
+from services.requirement_cleaning import clean_required_skills
 
 
 DATASET_DIR = Path(__file__).resolve().parent / "dataset"
 
-CANDIDATE_ID = "candidate-demo"
+
+def resoudre_candidat(demande: str | None) -> str | None:
+    """
+    Le profil sur lequel mesurer, ou None si le choix est ambigu.
+
+    L'identifiant était auparavant codé en dur dans ce module — un
+    reliquat de l'époque où l'application ne connaissait qu'un
+    candidat. Il désignait un profil qui pouvait ne pas exister dans
+    la base de celui qui lance la mesure, et le harnais mesurait
+    alors le vide sans le dire.
+
+    La règle est explicite : un seul profil en base, on le prend ;
+    plusieurs, il faut choisir.
+    """
+
+    from services.profile_service import list_candidates
+
+    profils = list_candidates()
+
+    if not profils:
+        print()
+        print("Aucun profil en base — rien à mesurer.")
+        print("Créez-en un dans l'application, ou voir database/init_db.py.")
+        print()
+        return None
+
+    if demande:
+
+        if any(profil["id"] == demande for profil in profils):
+            return demande
+
+        print()
+        print(f"Profil inconnu : {demande}")
+        print("Profils disponibles :")
+        for profil in profils:
+            print(f"  - {profil['id']} : {profil['full_name']}")
+        print()
+        return None
+
+    if len(profils) == 1:
+        return profils[0]["id"]
+
+    print()
+    print(
+        f"{len(profils)} profils en base : précisez lequel mesurer "
+        "avec --candidat."
+    )
+    for profil in profils:
+        print(f"  - {profil['id']} : {profil['full_name']}")
+    print()
+    return None
 
 
 # Du plus faible au plus fort niveau d'affirmation.
@@ -179,7 +230,10 @@ class CaseResult:
 # EVALUATION D'UN CAS
 # ============================================================
 
-def evaluate_case(case: EvaluationCase) -> CaseResult:
+def evaluate_case(
+    case: EvaluationCase,
+    candidate_id: str,
+) -> CaseResult:
 
     # --------------------------------------------------------
     # COUCHE 1 : EXTRACTION
@@ -189,7 +243,20 @@ def evaluate_case(case: EvaluationCase) -> CaseResult:
     # Management" et "Gestion de projet" désignent la même
     # compétence et ne doivent pas compter comme un écart.
 
-    detectees = extract_required_skills(case.texte)
+    # Le harnais mesurait l'extraction brute, alors que l'application
+    # ne s'en sert jamais telle quelle : elle enchaîne toujours sur
+    # clean_required_skills. La precision affichée était donc celle
+    # d'un enchaînement qui n'existe nulle part — « paris », « ski »
+    # et « communication » comptaient comme des faux positifs que
+    # l'utilisateur n'aurait jamais vus.
+    #
+    # Une mesure doit porter sur le circuit réel, sinon elle mesure
+    # une autre application que la sienne.
+    detectees, _ = clean_required_skills(
+        extract_required_skills(case.texte),
+        job_title=case.titre,
+        job_description=case.texte,
+    )
 
     canon_detectees = {
         _canonical_skill_name(skill): skill
@@ -241,7 +308,7 @@ def evaluate_case(case: EvaluationCase) -> CaseResult:
         return result
 
     matching = analyze_candidate_against_skills(
-        candidate_id=CANDIDATE_ID,
+        candidate_id=candidate_id,
         required_skills=skills_a_analyser,
         job_text=case.texte,
     )
@@ -455,6 +522,15 @@ def main() -> int:
     )
 
     parser.add_argument(
+        "--candidat",
+        metavar="ID",
+        help=(
+            "identifiant du profil à mesurer ; facultatif si la base "
+            "n'en contient qu'un"
+        ),
+    )
+
+    parser.add_argument(
         "--detail",
         action="store_true",
         help="affiche le détail annonce par annonce",
@@ -516,7 +592,14 @@ def main() -> int:
             print()
             return 1
 
-    results = [evaluate_case(case) for case in cases]
+    candidate_id = resoudre_candidat(args.candidat)
+
+    if candidate_id is None:
+        return 1
+
+    results = [
+        evaluate_case(case, candidate_id) for case in cases
+    ]
 
     print_report(results, detail=args.detail)
 
