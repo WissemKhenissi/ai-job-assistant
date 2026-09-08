@@ -144,9 +144,9 @@ cadrage. *Une dette écrite est une décision ; une dette tue est un piège.*
 | LLM | Gemini (`google-genai`) |
 | Recherche sémantique | `sentence-transformers`, modèle `paraphrase-multilingual-MiniLM-L12-v2` |
 | Documents | `reportlab` (PDF), `python-docx` (DOCX), `pypdf`, `trafilatura` |
-| Tests | pytest — **571 tests** |
+| Tests | pytest — **578 tests** |
 
-74 modules applicatifs, 42 fichiers de test.
+72 modules applicatifs, 43 fichiers de test.
 
 ---
 

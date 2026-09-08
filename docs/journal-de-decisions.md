@@ -1,7 +1,7 @@
 # Journal de décisions — AI Job Assistant
 
 **Wissem Khenissi** — cadrage en août 2026, construction du 2 au 5 septembre 2026.
-73 commits, 571 tests automatisés, une base de 13 476 compétences.
+79 commits, 578 tests automatisés, une base de 13 476 compétences.
 
 ---
 
@@ -409,8 +409,8 @@ section 6. **Une dette écrite est une décision ; une dette tue est un piège.*
 
 | | |
 |---|---|
-| Commits | 73 (1 le 3 août, 72 du 2 au 5 septembre) |
-| Tests automatisés | 571, verts |
+| Commits | 79 (1 le 3 août, 72 du 2 au 5 septembre, 6 de mise en portfolio) |
+| Tests automatisés | 578, verts |
 | Référentiel de compétences | 13 476 entrées (ESCO v1.2.1, CC BY 4.0) |
 | Corpus d'annonces réelles | 13 |
 | Coût mesuré d'une candidature complète | 10 appels LLM, ~19 700 tokens en entrée |

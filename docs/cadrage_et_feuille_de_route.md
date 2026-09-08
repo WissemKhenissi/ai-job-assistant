@@ -51,7 +51,7 @@ Déclinaisons opérationnelles :
 
 **La V1 est close.** Les cinq phases prévues sont livrées, plus quatre briques qui appartenaient au backlog V2.
 
-Ordres de grandeur : 78 modules applicatifs, 540 tests, 42 fichiers de test, un référentiel de 13 476 compétences, 13 annonces analysées, 7 candidatures suivies.
+Ordres de grandeur : 72 modules applicatifs, 578 tests, 43 fichiers de test, un référentiel de 13 476 compétences, 13 annonces analysées, 7 candidatures suivies.
 
 ### Phases V1
 
