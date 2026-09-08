@@ -30,6 +30,13 @@ Cette distinction est la décision fondatrice du projet
 des compétences que rien ne démontre — ce qui est précisément ce que le candidat paierait
 en entretien.
 
+![Analyse d'une annonce : score, répartition des statuts, conditions non couvertes et détail
+du matching](docs/captures/analyse-annonce.png)
+
+L'écran d'analyse ne donne pas qu'un score. Il isole **les conditions posées par l'annonce et
+non couvertes** — le seul résultat sur lequel un candidat peut agir — et justifie chaque
+statut, ligne par ligne.
+
 ---
 
 ## Comment la contrainte est tenue
@@ -73,6 +80,17 @@ sont donc **déterministes** et vérifiables ligne à ligne :
   analysées : l'IA propose une entrée, l'utilisateur valide, et chaque décision de tri est
   réversible.
 - **Suivi de candidatures** et mémoire de marché.
+
+### Aperçu
+
+![Onglet Compétences : les compétences du Master CV en pastilles](docs/captures/master-cv-competences.png)
+
+![Onglet Expériences du Master CV](docs/captures/master-cv-experiences.png)
+
+![Entretien IA : raconter une expérience ou documenter une compétence déclarée](docs/captures/entretien-ia.png)
+
+> Ces captures utilisent un **profil de démonstration entièrement fictif** (Alex Moreau),
+> construit pour que l'analyse produise les quatre statuts sur un même écran.
 
 ---
 
