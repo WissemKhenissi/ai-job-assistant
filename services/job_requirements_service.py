@@ -283,6 +283,135 @@ _SEPARATEUR_DUR = re.compile(
 )
 
 
+# ============================================================
+# SECTIONS QUI N'ENONCENT AUCUNE EXIGENCE
+# ============================================================
+
+# Une annonce ne demande rien dans ses paragraphes d'avantages, de
+# rémunération ou de déroulé d'entretien. Le moteur les lisait pourtant
+# comme le reste. Mesuré sur le jeu d'évaluation : « ski » venait d'un
+# week-end au ski, « évènements sportifs » et « Formation des équipes »
+# du paragraphe sur la vie d'entreprise, « éthique » d'un soft skill.
+#
+# Ces sections sont masquées avant la détection — remplacées par des
+# espaces plutôt que retirées, pour que les positions restent celles du
+# texte d'origine. Elles portent l'ordre d'apparition, dont dépendent la
+# pondération par rang et la lecture du niveau d'exigence.
+#
+# Le masquage est local à la détection : extract_required_years et la
+# lecture du type de contrat continuent de voir l'annonce entière,
+# puisque c'est justement dans ces sections qu'ils trouvent leur
+# réponse.
+
+_TITRES_HORS_EXIGENCE = (
+    "avantages",
+    "notre petit +",
+    "ce que nous offrons",
+    "ce que nous proposons",
+    "ce que nous t offrons",
+    "pourquoi nous rejoindre",
+    "pourquoi choisir",
+    "pourquoi venir",
+    "process de recrutement",
+    "processus de recrutement",
+    "deroulement du recrutement",
+    "etapes du recrutement",
+    "notre process",
+    "informations supplementaires",
+    "infos pratiques",
+    "conditions du poste",
+    "remuneration",
+)
+
+# Un intitulé qui rouvre les exigences referme la section masquée. Sans
+# lui, une annonce plaçant ses avantages au milieu perdrait tout ce qui
+# suit. Ce sont les titres qui, dans le corpus, introduisent réellement
+# des exigences.
+_TITRES_EXIGENCE = (
+    "votre profil",
+    "ton profil",
+    "profil recherche",
+    "profil souhaite",
+    "profil du candidat",
+    "qualifications",
+    "hard skills",
+    "soft skills",
+    "competences",
+    "vos missions",
+    "tes missions",
+    "vous maitrisez",
+    "tu maitrises",
+    "description du poste",
+    "ce que vous apportez",
+    "ce que tu apportes",
+)
+
+# Au-delà, la ligne est une phrase, pas un intitulé de section.
+_MOTS_MAX_TITRE_SECTION = 8
+
+_PUCES_SECTION = "-*>+"
+
+
+def _est_un_intitule(ligne: str) -> bool:
+    """
+    Une ligne courte et sans puce se lit comme un titre de section.
+
+    C'est la forme de la ligne qui la désigne, pas une liste de titres
+    connus — même critère que pour la lecture du niveau d'exigence.
+    """
+
+    nue = ligne.strip()
+
+    if not nue:
+        return False
+
+    if nue[:1] in _PUCES_SECTION or not nue[:1].isalnum():
+        return False
+
+    return len(nue.split()) <= _MOTS_MAX_TITRE_SECTION
+
+
+def _correspond(ligne: str, titres: tuple[str, ...]) -> bool:
+
+    forme = _normalize(ligne)
+
+    return any(titre in forme for titre in titres)
+
+
+def masquer_sections_hors_exigence(job_description: str) -> str:
+    """
+    Remplace par des espaces les sections qui n'énoncent pas
+    d'exigence, en conservant la longueur du texte.
+
+    Une section masquée court jusqu'au prochain intitulé qui rouvre les
+    exigences, ou jusqu'à la fin — les avantages terminent presque
+    toujours une annonce.
+
+    Un intitulé inconnu ne masque rien : l'erreur va vers la lecture
+    complète, jamais vers la coupe à l'aveugle.
+    """
+
+    if not job_description:
+        return job_description
+
+    masquees = []
+    dans_section = False
+
+    for ligne in job_description.split("\n"):
+
+        if _est_un_intitule(ligne):
+
+            if _correspond(ligne, _TITRES_HORS_EXIGENCE):
+                dans_section = True
+
+            elif dans_section and _correspond(ligne, _TITRES_EXIGENCE):
+                dans_section = False
+
+        masquees.append(" " * len(ligne) if dans_section else ligne)
+
+    return "\n".join(masquees)
+
+
 def _segments(job_description: str) -> list[tuple[str, int]]:
     """
     Les fragments d'annonce à l'intérieur desquels un groupe de mots
@@ -320,6 +449,10 @@ def _detecter(job_description: str) -> list[tuple]:
 
     if not _normalize(job_description):
         return []
+
+    # Les avantages, la rémunération et le déroulé d'entretien ne
+    # demandent rien : ils sont masqués avant toute détection.
+    job_description = masquer_sections_hors_exigence(job_description)
 
     mots: list[str] = []
     positions: list[int] = []
