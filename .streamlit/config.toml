@@ -1,0 +1,13 @@
+# Configuration Streamlit du projet.
+
+[server]
+
+# 10 Mo, au lieu des 200 Mo par défaut de Streamlit.
+#
+# Les deux téléversements de l'application attendent un CV (.pdf,
+# .docx) ou des captures d'écran : dix mégaoctets couvrent largement
+# ces usages. La valeur par défaut n'apportait rien et s'affichait
+# telle quelle sous le bouton — « 200MB per file » — ce qui annonçait
+# à l'utilisateur une tolérance que le produit n'a aucune raison
+# d'offrir.
+maxUploadSize = 10

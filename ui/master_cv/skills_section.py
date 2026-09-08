@@ -7,7 +7,8 @@ rendait la page illisible.
 
 Cliquer une pastille ouvre son panneau d'édition (renommer /
 supprimer). Deux popovers permettent d'en ajouter : à la main ou
-depuis le référentiel, et à partir des compétences qu'un poste visé
+depuis le référentiel — par recherche, le référentiel comptant plus
+de 13 000 entrées — et à partir des compétences qu'un poste visé
 attend habituellement.
 
 Point d'honnêteté : une compétence ajoutée ici est **déclarée**, pas
@@ -30,7 +31,7 @@ from services.profile_service import (
     get_skills,
     update_skill,
 )
-from services.skill_catalog_service import get_active_skills
+from services.skill_catalog_service import search_active_skills
 
 
 _STATE_SUGGESTIONS = "master_cv_suggestions_competences"
@@ -70,21 +71,47 @@ def _render_ajout(candidate_id: str, noms_existants: set[str]) -> None:
 
         st.caption("Ou depuis le référentiel :")
 
-        disponibles = [
-            skill.canonical_name
-            for skill in get_active_skills()
-            if skill.canonical_name.casefold() not in noms_existants
-        ]
+        # Cherché, pas déversé. Les 13 476 entrées du référentiel
+        # étaient auparavant passées en options de ce multiselect :
+        # un popover Streamlit rend son contenu qu'il soit ouvert ou
+        # non, si bien que le catalogue entier partait au navigateur
+        # à chaque affichage de l'onglet. Écrit quand le référentiel
+        # comptait 46 entrées, ce code n'a pas survécu à l'import
+        # ESCO — et le défaut est invisible côté serveur, qui répond
+        # en 0,25 s.
+        recherche = st.text_input(
+            "Chercher dans le référentiel",
+            key="master_cv_recherche_referentiel",
+            placeholder="Ex. agile, budget, SQL…",
+        )
 
-        if not disponibles:
+        resultats, total = search_active_skills(
+            recherche,
+            exclure=tuple(noms_existants),
+        )
+
+        if not recherche.strip():
             st.caption(
-                "Toutes les compétences du référentiel sont déjà là."
+                "Tapez quelques lettres pour chercher — le nom et les "
+                "synonymes sont parcourus."
             )
             return
 
+        if not resultats:
+            st.caption(
+                f"Aucune compétence ne correspond à « {recherche} »."
+            )
+            return
+
+        if total > len(resultats):
+            st.caption(
+                f"{total} correspondances — les {len(resultats)} "
+                "premières sont proposées, précisez votre recherche."
+            )
+
         choisies = st.multiselect(
             "Compétences du référentiel",
-            options=disponibles,
+            options=[skill.canonical_name for skill in resultats],
             key="master_cv_competences_referentiel",
             label_visibility="collapsed",
         )

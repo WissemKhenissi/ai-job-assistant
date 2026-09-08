@@ -221,6 +221,59 @@ def get_active_skills() -> list[CatalogSkill]:
 
 
 # ============================================================
+# RECHERCHE PLEIN TEXTE
+# ============================================================
+
+# Combien de résultats sont proposés à l'utilisateur. Le référentiel
+# compte plus de 13 000 entrées depuis l'import ESCO : les proposer
+# toutes n'aide personne à choisir, et les envoyer toutes au navigateur
+# rendait l'onglet Compétences inutilisable.
+MAX_RESULTATS_RECHERCHE = 30
+
+
+def search_active_skills(
+    terme: str,
+    limite: int = MAX_RESULTATS_RECHERCHE,
+    exclure: tuple[str, ...] | list[str] = (),
+) -> tuple[list[CatalogSkill], int]:
+    """
+    Compétences du référentiel dont le nom ou un alias contient `terme`.
+
+    Cherche aussi dans les alias : le nom canonique est « Agile /
+    Scrum », et quelqu'un qui tape « kanban » doit la trouver.
+
+    Retourne les `limite` premiers résultats **et** le nombre total de
+    correspondances, pour que l'appelant puisse dire à l'utilisateur
+    que sa recherche est trop large plutôt que de tronquer en silence.
+
+    Un terme vide ne retourne rien : c'est une recherche, pas un
+    déversement du catalogue.
+    """
+
+    forme = normalize_skill_text(terme)
+
+    if not forme:
+        return [], 0
+
+    deja_la = {
+        normalize_skill_text(nom)
+        for nom in exclure
+    }
+
+    trouvees = [
+        skill
+        for skill in get_active_skills()
+        if normalize_skill_text(skill.canonical_name) not in deja_la
+        and any(
+            forme in normalize_skill_text(cible)
+            for cible in (skill.canonical_name,) + tuple(skill.aliases)
+        )
+    ]
+
+    return trouvees[:limite], len(trouvees)
+
+
+# ============================================================
 # RECHERCHE PAR NOM / ALIAS
 # ============================================================
 
