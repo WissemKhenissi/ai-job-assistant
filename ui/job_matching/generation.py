@@ -256,8 +256,6 @@ def render_generation_tab(
     modifiable entre l'analyse et les documents produits.
     """
 
-    st.subheader("CV ciblé et lettre de motivation")
-
     # --------------------------------------------------------
     # SEUIL DES COMPETENCES AFFICHEES
     # --------------------------------------------------------

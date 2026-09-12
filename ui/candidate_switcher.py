@@ -102,12 +102,41 @@ def _rendre_suppression(candidate_id: str, libelle: str) -> None:
             st.rerun()
 
 
-def render_candidate_switcher() -> str | None:
+def profil_courant() -> str | None:
     """
-    Affiche le sélecteur et retourne l'identifiant du profil courant.
+    L'identifiant du profil courant, sans rien afficher.
 
     Retourne None si la base ne contient aucun profil : l'appelant
     doit alors proposer d'en créer un plutôt que de planter.
+
+    Séparé du rendu parce que l'ordre compte. La navigation se
+    construit à partir du profil, et Streamlit écrit dans la barre
+    latérale dans l'ordre des appels : sans cette séparation, le
+    sélecteur s'afficherait au-dessus du menu qu'il sert à alimenter.
+    """
+
+    profils = list_candidates()
+
+    if not profils:
+        return None
+
+    identifiants = [profil["id"] for profil in profils]
+
+    courant = st.session_state.get(CLE)
+
+    if courant not in identifiants:
+        courant = identifiants[0]
+        st.session_state[CLE] = courant
+
+    return courant
+
+
+def render_candidate_switcher() -> None:
+    """
+    Affiche le sélecteur de profil dans la barre latérale.
+
+    N'a pas de valeur de retour : l'identifiant se demande à
+    profil_courant(), avant la construction de la navigation.
     """
 
     profils = list_candidates()
@@ -117,7 +146,7 @@ def render_candidate_switcher() -> str | None:
         st.sidebar.info("Aucun profil.")
         _rendre_creation()
 
-        return None
+        return
 
     identifiants = [profil["id"] for profil in profils]
 
@@ -125,11 +154,7 @@ def render_candidate_switcher() -> str | None:
         profil["id"]: profil["full_name"] for profil in profils
     }
 
-    courant = st.session_state.get(CLE)
-
-    if courant not in identifiants:
-        courant = identifiants[0]
-        st.session_state[CLE] = courant
+    courant = profil_courant()
 
     if len(profils) > 1:
 
@@ -151,5 +176,3 @@ def render_candidate_switcher() -> str | None:
 
     _rendre_creation()
     _rendre_suppression(courant, libelles[courant])
-
-    return courant

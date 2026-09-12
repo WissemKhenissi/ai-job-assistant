@@ -813,8 +813,6 @@ def _render_propositions(candidate_id: str, etat: dict) -> None:
 
 def render_interview_section(candidate_id: str) -> None:
 
-    st.subheader("🎙️ Entretien IA")
-
     st.caption(
         "Vous racontez, l'IA vous relance, puis vous propose des "
         "lignes d'expérience et des compétences à valider. Rien "

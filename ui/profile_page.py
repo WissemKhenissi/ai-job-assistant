@@ -30,8 +30,6 @@ def render_profile_page(
     experiences=None,
 ) -> None:
 
-    st.subheader("Profil")
-
     # --------------------------------------------------------
     # RÉSUMÉ CHIFFRÉ
     # --------------------------------------------------------

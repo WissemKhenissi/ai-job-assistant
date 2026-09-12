@@ -15,8 +15,6 @@ from utils.profile_editor import edit_experience
 
 def render_experiences_section(experiences) -> None:
 
-    st.subheader("Expériences professionnelles")
-
     for experience in experiences:
 
         with st.container(border=True):

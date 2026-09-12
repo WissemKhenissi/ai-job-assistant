@@ -1,3 +1,13 @@
+"""
+Point d'entrée de l'application.
+
+Ne contient que ce qui vaut pour toutes les pages : le profil courant,
+la barre latérale, et le lancement de la page choisie. Les pages
+elles-mêmes sont décrites dans ui/navigation.py.
+"""
+
+from pathlib import Path
+
 import streamlit as st
 
 from services.profile_service import (
@@ -5,56 +15,41 @@ from services.profile_service import (
     get_experiences,
 )
 
-from ui.candidate_switcher import render_candidate_switcher
-from ui.job_matching import render_job_matching_page
-from ui.master_cv import render_master_cv_page
+from ui.candidate_switcher import (
+    profil_courant,
+    render_candidate_switcher,
+)
+from ui.navigation import construire_navigation
 
 
 st.set_page_config(
     page_title="AI Job Assistant",
     page_icon="🤖",
-    layout="wide"
+    layout="wide",
 )
 
-
-# ============================================================
-# HEADER
-# ============================================================
-
-st.title("🤖 AI Job Assistant")
-
-st.write(
-    "Ton assistant intelligent pour construire, adapter "
-    "et suivre tes candidatures."
-)
+# Le nom du produit vit ici, dans l'emplacement que Streamlit réserve
+# au-dessus du menu. Il était auparavant réaffiché en tête de chaque
+# page, avec son sous-titre : deux cents pixels de hauteur utile
+# consommés à chaque écran pour rappeler où l'on est déjà.
+st.logo(str(Path(__file__).parent / "assets" / "logo.svg"), size="large")
 
 
 # ============================================================
-# SIDEBAR
+# PROFIL COURANT
 # ============================================================
+#
+# Résolu avant toute chose : la navigation se construit à partir de
+# lui, et chaque page le reçoit explicitement. Aucune ne devine « le
+# premier candidat de la base ».
 
-st.sidebar.title("Navigation")
-
-page = st.sidebar.radio(
-    "Aller vers",
-    [
-        "Mon Master CV",
-        "Mes candidatures",
-    ]
-)
-
-st.sidebar.divider()
-
-# Le profil courant est choisi ici et passé explicitement aux pages :
-# aucune ne doit deviner « le premier candidat de la base ».
-candidate_id = render_candidate_switcher()
-
-
-# ============================================================
-# DONNÉES
-# ============================================================
+candidate_id = profil_courant()
 
 if candidate_id is None:
+
+    st.title("🤖 AI Job Assistant")
+
+    render_candidate_switcher()
 
     st.info(
         "Aucun profil n'existe encore. Créez-en un depuis le menu "
@@ -69,17 +64,22 @@ experiences = get_experiences(candidate_id)
 
 
 # ============================================================
-# PAGE : MON MASTER CV
+# BARRE LATERALE
+# ============================================================
+#
+# Streamlit place toujours le menu en haut de la barre latérale, quel
+# que soit l'ordre des appels. Ce qui suit s'affiche donc en dessous :
+# ici le sélecteur de profil.
+
+page = construire_navigation(candidate, experiences)
+
+st.sidebar.divider()
+
+render_candidate_switcher()
+
+
+# ============================================================
+# PAGE COURANTE
 # ============================================================
 
-if page == "Mon Master CV":
-
-    render_master_cv_page(candidate, experiences)
-
-
-# ============================================================
-# PAGE : MES CANDIDATURES
-# ============================================================
-
-elif page == "Mes candidatures":
-    render_job_matching_page(candidate.id)
+page.run()

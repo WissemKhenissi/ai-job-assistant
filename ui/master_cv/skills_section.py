@@ -252,8 +252,6 @@ def _render_edition(candidate_id: str, skill) -> None:
 
 def render_skills_section(candidate_id: str) -> None:
 
-    st.subheader("Compétences")
-
     skills = get_skills(candidate_id)
 
     noms_existants = {skill.name.casefold() for skill in skills}
