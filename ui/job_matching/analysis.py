@@ -42,6 +42,8 @@ from services.job_requirements_service import (
     extract_required_years,
 )
 from services.matching.normalization import _canonical_skill_name
+from services.skill_candidate_service import ecarter_terme
+from services.skill_catalog_service import find_skill_by_name
 from services.profile_service import get_experiences
 
 
@@ -68,6 +70,70 @@ _LONGUEUR_MAX_TITRE = 120
 
 # De part et d'autre de l'exigence reconnue, dans l'extrait d'annonce.
 _MARGE_EXTRAIT = 180
+
+
+def _vient_d_un_import(terme: str) -> bool:
+    """
+    Cette exigence vient-elle de la taxonomie importée ?
+
+    La distinction compte : mesuré sur treize annonces, les 136
+    exigences issues du référentiel curé sont propres, tandis que la
+    quarantaine venue d'ESCO contient à peu près autant de bruit que
+    de vraies exigences — « écosystèmes », « moulins », « philosophie »
+    y sont des concepts, et deviennent des exigences dès qu'une
+    annonce prononce le mot.
+
+    Aucune règle automatique n'a su séparer ce bruit de « Confluence »,
+    « WordPress » ou « RGPD », qui viennent du même endroit et sont
+    légitimes. On montre donc l'origine, et on laisse trancher.
+    """
+
+    entree = find_skill_by_name(terme)
+
+    return entree is not None and str(entree.id).startswith("esco-")
+
+
+def _refuser_exigence(
+    candidate_id: str,
+    stored_result: dict,
+    terme: str,
+) -> None:
+    """
+    Retire une exigence du décompte, et retient la décision.
+
+    Le matching est recalculé sur-le-champ, sans repasser par l'IA :
+    les exigences sont déjà connues, seule la liste change. Le score
+    se met donc à jour sans coût ni attente.
+    """
+
+    ecarter_terme(terme)
+
+    restantes = [
+        exigence
+        for exigence in stored_result["required_skills"]
+        if exigence != terme
+    ]
+
+    if not restantes:
+        st.warning(
+            "C'était la dernière exigence : l'analyse n'aurait plus "
+            "rien à comparer."
+        )
+        return
+
+    stored_result["required_skills"] = restantes
+
+    stored_result["requirements_dropped"] = list(
+        stored_result.get("requirements_dropped") or []
+    ) + [terme]
+
+    stored_result["result"] = analyze_and_save_job_match(
+        candidate_id=candidate_id,
+        job_offer_id=stored_result["job_offer_id"],
+        required_skills=restantes,
+    )
+
+    st.session_state["job_matching_result"] = stored_result
 
 
 def _rendre_suivi(candidate_id: str, stored_result: dict) -> None:
@@ -791,6 +857,20 @@ def render_analysis_tab(candidate_id: str) -> None:
                 )
             }
 
+            importees = [
+                item
+                for item in result.matches
+                if _vient_d_un_import(item.skill)
+            ]
+
+            if importees:
+                st.caption(
+                    "%d exigence(s) sur %d viennent de la taxonomie "
+                    "importée, où un mot courant peut être un concept. "
+                    "Chacune peut être retirée du décompte."
+                    % (len(importees), len(result.matches))
+                )
+
             filtre = st.segmented_control(
                 "Filtrer le détail",
                 options=[
@@ -843,6 +923,37 @@ def render_analysis_tab(candidate_id: str) -> None:
                             "Éléments du Master CV : "
                             + " · ".join(item.evidence)
                         )
+
+                    importee = _vient_d_un_import(item.skill)
+
+                    col_origine, col_refus = st.columns([3, 1])
+
+                    with col_origine:
+
+                        col_origine.caption(
+                            "🌐 Taxonomie importée"
+                            if importee
+                            else "✔️ Référentiel maison"
+                        )
+
+                    with col_refus:
+
+                        if st.button(
+                            "Ne plus compter",
+                            key=f"refus_{item.skill}",
+                            use_container_width=True,
+                            help=(
+                                "L'annonce prononce ce mot sans en "
+                                "faire une exigence. La compétence "
+                                "reste au référentiel ; elle cesse "
+                                "seulement d'être comptée, ici et "
+                                "dans les analyses suivantes."
+                            ),
+                        ):
+                            _refuser_exigence(
+                                candidate_id, stored_result, item.skill
+                            )
+                            st.rerun()
 
                     reconnaissance = reconnaissances.get(
                         _canonical_skill_name(item.skill)

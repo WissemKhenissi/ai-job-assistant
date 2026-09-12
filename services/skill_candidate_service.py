@@ -42,6 +42,76 @@ IGNORE = "ignore"        # jugé sans valeur par l'utilisateur
 MAX_EXEMPLES = 10
 
 
+def ecarter_terme(terme: str) -> str:
+    """
+    Écarte un terme du décompte, qu'il soit reconnu ou non.
+
+    record_unknown_terms ne retient que les termes qu'aucune
+    compétence ne reconnaît : c'est sa raison d'être, repérer les
+    trous du référentiel. Mais l'erreur inverse existe aussi — une
+    taxonomie importée en masse connaît « écosystèmes », « moulins »
+    et « philosophie », qui deviennent alors des exigences que
+    l'annonce ne pose pas.
+
+    Cette fonction ouvre la même décision à ces termes-là. Elle ne
+    supprime rien du référentiel : la compétence reste disponible pour
+    le Master CV et le matching. Elle dit seulement qu'une annonce qui
+    prononce ce mot n'en fait pas une exigence.
+
+    Réversible par undo_decision, comme toute décision de tri.
+
+    Retourne le libellé enregistré.
+    """
+
+    nom = (terme or "").strip()
+
+    cle = normalize_skill_text(nom)
+
+    if not cle:
+        return ""
+
+    db = SessionLocal()
+
+    try:
+
+        ligne = (
+            db.query(SkillCandidateDB)
+            .filter(SkillCandidateDB.canonical_key == cle)
+            .one_or_none()
+        )
+
+        if ligne is None:
+
+            ligne = SkillCandidateDB(
+                id=f"skill-candidate-{uuid4()}",
+                term=nom,
+                canonical_key=cle,
+                occurrences=1,
+                was_counted=True,
+                status=IGNORE,
+                job_offer_ids=json.dumps([], ensure_ascii=False),
+            )
+
+            db.add(ligne)
+
+        else:
+            ligne.status = IGNORE
+
+        db.commit()
+
+        return ligne.term
+
+    except Exception:
+
+        db.rollback()
+
+        raise
+
+    finally:
+
+        db.close()
+
+
 def termes_ignores() -> set[str]:
     """
     Les formes canoniques des termes que l'utilisateur a écartés.
