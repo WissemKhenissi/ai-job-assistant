@@ -315,6 +315,8 @@ SKILLS = [
             "Scrum",
             "Agile Scrum",
             "Méthodologie Agile",
+            "Méthode Agile",
+            "Méthodes agiles",
             "Agile methodology",
             "Sprints",
             "Sprint",

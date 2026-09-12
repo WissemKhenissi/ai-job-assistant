@@ -27,11 +27,11 @@ from services.experience_duration import (
     format_experience_years,
     total_experience_years,
 )
-from services.requirement_cleaning import clean_required_skills
-from services.skill_candidate_service import record_unknown_terms
-from services.text_normalization import (
-    minuscules_sans_accents as _normalize_loose,
+from services.requirement_cleaning import (
+    clean_required_skills,
+    merge_ai_requirements,
 )
+from services.skill_candidate_service import record_unknown_terms
 from services.job_requirements_service import (
     extract_required_skills,
     extract_required_skills_detailed,
@@ -275,9 +275,9 @@ def render_analysis_tab(candidate_id: str) -> None:
         # ne comble que les champs laissés vides. Les compétences
         # détectées par le catalogue restent la base ; l'IA ne fait
         # qu'y ajouter celles qu'elle a repérées en plus. La
-        # déduplication ici est insensible à la casse/aux accents —
-        # simple affichage — le moteur de matching applique sa propre
-        # normalisation, plus poussée, au moment du calcul du score.
+        # fusion passe par le référentiel : une proposition qu'il
+        # reconnaît est ramenée à son nom canonique, et n'est ajoutée
+        # que si ce nom manque encore.
 
         avertissement_ia = ""
 
@@ -293,19 +293,10 @@ def render_analysis_tab(candidate_id: str) -> None:
             remote_policy = remote_policy or analyse_ia.remote_policy
             remote_details = analyse_ia.remote_details
 
-            deja_presentes = {
-                _normalize_loose(skill) for skill in required_skills
-            }
-
-            for skill in analyse_ia.required_skills:
-
-                cle = _normalize_loose(skill)
-
-                if cle in deja_presentes:
-                    continue
-
-                deja_presentes.add(cle)
-                required_skills.append(skill)
+            required_skills = merge_ai_requirements(
+                required_skills,
+                analyse_ia.required_skills,
+            )
 
         else:
 

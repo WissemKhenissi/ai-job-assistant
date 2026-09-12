@@ -159,6 +159,60 @@ def is_plausible_requirement(skill: str) -> bool:
     return normalise not in GENERIC_TERMS
 
 
+def merge_ai_requirements(
+    du_catalogue: list[str],
+    proposees_par_ia: list[str] | tuple[str, ...],
+) -> list[str]:
+    """
+    Ajoute aux exigences du catalogue celles que l'IA a repérées en
+    plus, sans compter deux fois la même.
+
+    La comparaison portait sur la forme des chaînes : « Agile /
+    Scrum », détecté par le catalogue, et « méthode Agile », proposé
+    par l'IA, ne se ressemblent pas. L'annonce écrivait une seule
+    phrase — « la maîtrise de la méthode Agile est indispensable » —
+    et en sortaient deux exigences qui se contredisaient : l'une
+    prouvée, l'autre manquante et posée comme condition d'entrée.
+
+    C'est le référentiel qui tranche désormais. Une proposition qu'il
+    reconnaît est ramenée à son nom canonique, puis écartée si ce nom
+    est déjà là.
+
+    Une proposition qu'il ne reconnaît pas est conservée telle quelle.
+    C'est peut-être une exigence réelle que le référentiel ignore
+    encore — « Marketplace B2B » en est une, relevée sur le corpus —
+    et l'écarter masquerait l'exigence en même temps que le trou.
+    """
+
+    exigences = list(du_catalogue)
+
+    def forme_retenue(terme: str) -> str:
+        connue = find_skill_by_name(terme)
+        return connue.canonical_name if connue is not None else terme
+
+    deja_la = {
+        _normalize(forme_retenue(terme)) for terme in exigences
+    }
+
+    for brut in proposees_par_ia:
+
+        terme = (brut or "").strip()
+
+        if not terme:
+            continue
+
+        nom = forme_retenue(terme)
+        cle = _normalize(nom)
+
+        if not cle or cle in deja_la:
+            continue
+
+        deja_la.add(cle)
+        exigences.append(nom)
+
+    return exigences
+
+
 def _vient_d_un_import(competence) -> bool:
     """
     Cette entrée du référentiel a-t-elle été importée en masse ?
