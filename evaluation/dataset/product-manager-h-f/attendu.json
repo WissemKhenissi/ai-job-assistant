@@ -1,7 +1,7 @@
 {
   "titre": "Product Manager H/F",
   "revise_par_humain": false,
-  "commentaire": "COUCHE 1 ANNOTÉE À LA LECTURE DE L'ANNONCE, pas par le moteur. L'annonce est structurée par ses propres intertitres — Product Strategy, Product Discovery, Product Delivery — ce qui rend la vérité terrain peu discutable. Ajouts au pré-remplissage : « Data / KPI » (« à l'aide de KPIs et de métriques », « tu places la data au cœur de ta prise de décision »), « User Research » (« conduire des recherches utilisateur : études qualitatives et quantitatives »), et « gérer les relations avec des parties prenantes » (« coordination des équipes de développement, de design, de marketing, de vente et de support »). « Experimentation » est gardé ici, contrairement à l'autre annonce : celle-ci le demande vraiment (« tu planifies et exécutes des tests de validation : prototypes, tests utilisateurs, A/B tests »). Laissés de côté faute d'entrée exploitable au référentiel : l'étude de marché et le leadership, qu'ESCO ne propose qu'en variantes trop spécifiques (« mener une étude de marché dans le secteur de la chaussure »). Les rattacher serait faux. COUCHE 2 (statuts) NON ANNOTÉE : elle demande de savoir ce que le candidat a réellement fait et peut démontrer. À compléter par lui, puis passer revise_par_humain à true.",
+  "commentaire": "COUCHE 1 ANNOTÉE À LA LECTURE DE L'ANNONCE, pas par le moteur. L'annonce est structurée par ses propres intertitres — Product Strategy, Product Discovery, Product Delivery — ce qui rend la vérité terrain peu discutable. Ajouts au pré-remplissage : « Data / KPI » (« à l'aide de KPIs et de métriques », « tu places la data au cœur de ta prise de décision »), « User Research » (« conduire des recherches utilisateur : études qualitatives et quantitatives »), et « gérer les relations avec des parties prenantes » (« coordination des équipes de développement, de design, de marketing, de vente et de support »). « Experimentation » est gardé ici, contrairement à l'autre annonce : celle-ci le demande vraiment (« tu planifies et exécutes des tests de validation : prototypes, tests utilisateurs, A/B tests »). Laissés de côté faute d'entrée exploitable au référentiel : l'étude de marché et le leadership, qu'ESCO ne propose qu'en variantes trop spécifiques (« mener une étude de marché dans le secteur de la chaussure »). Les rattacher serait faux. COUCHE 2 (statuts) NON ANNOTÉE : elle demande de savoir ce que le candidat a réellement fait et peut démontrer. À compléter par lui, puis passer revise_par_humain à true. CORRECTION (audit des alias) : « Coordination transverse » avait été oubliée à l'annotation, alors que l'annonce lui consacre un intertitre entier — « Coordination des équipes : Tu travailles en étroite collaboration avec les équipes de développement, de design, de marketing, de vente et de support ». Le moteur la détectait ; c'est la vérité terrain qui avait tort.",
   "competences_attendues": [
     "Product Management",
     "Product Strategy",
@@ -13,7 +13,8 @@
     "Agile / Scrum",
     "Data / KPI",
     "User Research",
-    "gérer les relations avec des parties prenantes"
+    "gérer les relations avec des parties prenantes",
+    "Coordination transverse"
   ],
   "statuts_attendus": {}
 }

@@ -1,7 +1,7 @@
 {
   "titre": "Chef de Projet Marketing Media H/F",
   "revise_par_humain": false,
-  "commentaire": "COUCHE 1 ANNOTÉE À LA LECTURE DE L'ANNONCE, pas par le moteur : ces compétences ne sont donc plus sa propre sortie. COUCHE 2 (statuts) NON ANNOTÉE — elle demande de savoir ce que le candidat a réellement fait et peut démontrer. À compléter par lui, puis passer revise_par_humain à true. « Social listening » est rattaché à E-réputation : suivre ce qui se dit d'une marque en ligne est la même activité. Laissés de côté faute d'entrée exploitable : le marketing d'influence, auquel l'annonce consacre pourtant une section, et le leadership. La cosmétique et le circuit pharmacie/parapharmacie sont des secteurs, pas des compétences.",
+  "commentaire": "COUCHE 1 ANNOTÉE À LA LECTURE DE L'ANNONCE, pas par le moteur : ces compétences ne sont donc plus sa propre sortie. COUCHE 2 (statuts) NON ANNOTÉE — elle demande de savoir ce que le candidat a réellement fait et peut démontrer. À compléter par lui, puis passer revise_par_humain à true. « Social listening » est rattaché à E-réputation : suivre ce qui se dit d'une marque en ligne est la même activité. Laissés de côté faute d'entrée exploitable : le marketing d'influence, auquel l'annonce consacre pourtant une section, et le leadership. La cosmétique et le circuit pharmacie/parapharmacie sont des secteurs, pas des compétences. CORRECTION (audit des alias) : « Formation des équipes » est retirée. Elle reposait sur « savez transmettre pour faire grandir les équipes », une phrase de la section « Compétences Comportementales », voisine du « leadership naturel » que j'avais moi-même écarté ailleurs. L'entrée du référentiel désigne la transmission d'une méthode ou d'un outil, pas un trait de caractère.",
   "competences_attendues": [
     "Marketing digital",
     "Gestion de campagnes",
@@ -11,8 +11,7 @@
     "Analyse de marché",
     "E-réputation",
     "Coordination transverse",
-    "Pack Office",
-    "Formation des équipes"
+    "Pack Office"
   ],
   "statuts_attendus": {}
 }

@@ -32,6 +32,11 @@ SKILLS = [
             "Product Manager",
             "Gestion de produit",
             "Management produit",
+            # Rapatriés du tri : n'existaient qu'en base.
+            "Discovery et Delivery",
+            "Product Owner",
+            "Product management (Discovery et Delivery)",
+            "gestion de produits digitaux",
         ],
         "parent": None,
         "related_skills": [
@@ -232,6 +237,8 @@ SKILLS = [
             "Priorisation des fonctionnalités",
             "Priorisation du backlog",
             "Backlog prioritization",
+            # Rapatriés du tri : n'existaient qu'en base.
+            "frameworks de priorisation",
         ],
         "parent": "catalog-product-delivery",
         "related_skills": [
@@ -291,6 +298,10 @@ SKILLS = [
             "Pilotage de projet",
             "Conduite de projet",
             "Project Delivery",
+            # Rapatriés du tri : n'existaient qu'en base.
+            "gestion de projets",
+            "gestion de projets digitaux",
+            "pilotage de projets digitaux",
         ],
         "parent": None,
         "related_skills": [
@@ -410,6 +421,8 @@ SKILLS = [
             "Data Analytics",
             "Analyse de performance",
             "Performance Analysis",
+            # Rapatriés du tri : n'existaient qu'en base.
+            "Compétences analytiques",
         ],
         "parent": None,
         "related_skills": [
@@ -437,6 +450,8 @@ SKILLS = [
             "Data Driven",
             "Data Driven Decision Making",
             "Data Marketing",
+            # Rapatriés du tri : n'existaient qu'en base.
+            "KPIs",
         ],
         "parent": "catalog-data-analysis",
         "related_skills": [
@@ -488,6 +503,11 @@ SKILLS = [
             "Apprentissage automatique",
             "Machine Learning Engineering",
             "ML",
+            # Rapatriés du tri : n'existaient qu'en base.
+            (
+                "développement de produits utilisant des "
+                "techniques de machine learning et de data science"
+            ),
         ],
         "parent": None,
         "related_skills": [
@@ -516,6 +536,9 @@ SKILLS = [
             "AI",
             "IA",
             "Intelligence Artificielle",
+            # Rapatriés du tri : n'existaient qu'en base.
+            "outils d'IA",
+            "principes et technologies de l'IA",
         ],
         "parent": None,
         "related_skills": [
@@ -841,6 +864,8 @@ SKILLS = [
             "Commerce électronique",
             "Commerce electronique",
             "Digital Commerce",
+            # Rapatriés du tri : n'existaient qu'en base.
+            "B2C et e-commerce",
         ],
         "parent": None,
         "related_skills": [
@@ -1148,6 +1173,13 @@ SKILLS = [
             "Coordination des équipes",
             "Coordination des équipes techniques",
             "Coordination Marketing et Commercial",
+            # Les annonces disent rarement « coordination
+            # transverse » : elles écrivent « en collaboration avec
+            # les équipes », ou titrent une section « MANAGEMENT
+            # TRANSVERSE ». Ces deux tournures couvraient à elles
+            # seules quatre des oublis mesurés.
+            "Collaboration avec les équipes",
+            "Management transverse",
         ],
         "parent": None,
         "related_skills": [
@@ -1247,9 +1279,18 @@ SKILLS = [
         "aliases": [
             "Formation des équipes",
             "Formation commerciale",
-            "Formation interne",
             "Accompagnement des équipes",
+            # La forme verbale est celle des annonces :
+            # « Accompagner les équipes internes à l'usage des
+            # nouvelles fonctionnalités ».
+            "Accompagner les équipes",
             "Training",
+            # « Formation interne » est retiré : dans une annonce
+            # française, il nomme presque toujours la formation que
+            # l'entreprise DONNE au candidat (« après une formation
+            # interne à notre méthodologie »), pas une compétence
+            # qu'elle lui demande. Il ne produisait qu'un faux
+            # positif sur le corpus.
         ],
         "parent": None,
         "related_skills": [
