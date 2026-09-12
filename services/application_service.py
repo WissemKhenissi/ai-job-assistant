@@ -84,6 +84,7 @@ def record_application(
     cv_pdf_path: Path | str | None = None,
     letter_docx_path: Path | str | None = None,
     letter_pdf_path: Path | str | None = None,
+    statut_initial: str = "generee",
 ) -> str:
     """
     Crée ou met à jour la trace d'une candidature.
@@ -91,6 +92,17 @@ def record_application(
     Idempotent : régénérer les documents d'une offre met à jour la
     candidature existante au lieu d'en créer une seconde. Le statut
     de suivi déjà saisi par l'utilisateur n'est jamais écrasé.
+
+    `statut_initial` ne vaut qu'à la création. Il existe parce que le
+    suivi ne commençait qu'après la génération des documents : une
+    annonce repérée, ou une candidature envoyée à la main, ne pouvait
+    pas être suivie. « reperee » ouvre le cycle plus tôt.
+
+    Une exception à la règle du statut préservé : produire des
+    documents pour une annonce simplement repérée la fait passer à
+    « generee ». Laisser « Repérée » sur une candidature dont le CV
+    est prêt serait faux, et c'est le seul cas où le système en sait
+    plus que ce que l'utilisateur a saisi.
 
     Retourne l'identifiant de la candidature.
     """
@@ -114,13 +126,15 @@ def record_application(
                 id=f"application-{uuid4()}",
                 candidate_id=candidate_id,
                 job_offer_id=job_offer_id,
-                status="generee",
+                status=statut_initial,
             )
 
             db.add(application)
 
         # Seuls les chemins fournis sont mis à jour : régénérer un
         # seul document ne doit pas effacer la trace de l'autre.
+        documents_produits = False
+
         for champ, valeur in (
             ("cv_docx_path", cv_docx_path),
             ("cv_pdf_path", cv_pdf_path),
@@ -130,6 +144,13 @@ def record_application(
 
             if valeur is not None:
                 setattr(application, champ, _chemin_relatif(valeur))
+                documents_produits = True
+
+        # La seule promotion automatique, et elle ne remonte jamais
+        # au-delà : une candidature déjà envoyée ou en entretien
+        # garde son statut si on régénère ses documents.
+        if documents_produits and application.status == "reperee":
+            application.status = "generee"
 
         db.commit()
 
@@ -144,6 +165,25 @@ def record_application(
     finally:
 
         db.close()
+
+
+def get_application(
+    candidate_id: str,
+    job_offer_id: str,
+) -> ApplicationSummary | None:
+    """
+    La candidature d'un candidat pour une offre, si elle existe.
+
+    Permet à l'écran d'analyse de savoir si l'annonce est déjà suivie
+    plutôt que de proposer de la suivre une seconde fois.
+    """
+
+    for candidature in list_applications(candidate_id):
+
+        if candidature.job_offer_id == job_offer_id:
+            return candidature
+
+    return None
 
 
 def list_applications(

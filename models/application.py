@@ -18,6 +18,7 @@ from database.models import Base
 # aucune boîte mail, ce qui nécessiterait un connecteur externe
 # explicitement hors périmètre.
 APPLICATION_STATUSES = (
+    "reperee",
     "generee",
     "envoyee",
     "relancee",
@@ -28,6 +29,7 @@ APPLICATION_STATUSES = (
 )
 
 APPLICATION_STATUS_LABELS = {
+    "reperee": "Repérée",
     "generee": "Documents générés",
     "envoyee": "Candidature envoyée",
     "relancee": "Relancée",
@@ -36,6 +38,22 @@ APPLICATION_STATUS_LABELS = {
     "acceptee": "Acceptée",
     "sans_reponse": "Sans réponse",
 }
+
+
+# L'avancement d'une candidature, en colonnes.
+#
+# Un statut décrit un fait ; une colonne décrit où en est la
+# candidature. Les trois issues — acceptée, refus, sans réponse —
+# partagent la dernière : ce qui compte alors est que le dossier est
+# clos, pas la façon dont il l'est. Les garder séparées aurait fait
+# trois colonnes presque toujours vides.
+APPLICATION_COLUMNS = (
+    ("Repérées", ("reperee",)),
+    ("Documents prêts", ("generee",)),
+    ("Postulées", ("envoyee", "relancee")),
+    ("Entretien", ("entretien",)),
+    ("Issue", ("acceptee", "refus", "sans_reponse")),
+)
 
 
 class ApplicationDB(Base):

@@ -20,6 +20,10 @@ from services.ai.job_analysis import (
     analyze_job_offer_with_ai,
     generate_fit_synthesis,
 )
+from services.application_service import (
+    get_application,
+    record_application,
+)
 from services.job_offer_fetcher import fetch_job_offer_from_url
 from services.job_service import save_job_offer
 from services.matching import analyze_and_save_job_match
@@ -64,6 +68,42 @@ _LONGUEUR_MAX_TITRE = 120
 
 # De part et d'autre de l'exigence reconnue, dans l'extrait d'annonce.
 _MARGE_EXTRAIT = 180
+
+
+def _rendre_suivi(candidate_id: str, stored_result: dict) -> None:
+    """
+    Suivre une annonce sans avoir encore généré ses documents.
+
+    Le suivi ne commençait qu'en aval de la génération : on ne pouvait
+    garder trace ni d'une annonce repérée, ni d'une candidature
+    envoyée à la main. C'est pourtant là que commence une recherche
+    d'emploi, et l'écran de suivi s'ouvrait donc presque toujours
+    vide.
+    """
+
+    candidature = get_application(
+        candidate_id, stored_result["job_offer_id"]
+    )
+
+    if candidature is not None:
+        st.caption(f"📌 Suivie — {candidature.status_label}")
+        return
+
+    if st.button(
+        "📌 Suivre cette annonce",
+        help=(
+            "Garde la trace de cette offre dans « Suivi », sans "
+            "attendre d'avoir généré un CV."
+        ),
+    ):
+
+        record_application(
+            candidate_id=candidate_id,
+            job_offer_id=stored_result["job_offer_id"],
+            statut_initial="reperee",
+        )
+
+        st.rerun()
 
 
 def _titre_devine(description: str) -> str:
@@ -587,6 +627,8 @@ def render_analysis_tab(candidate_id: str) -> None:
 
         if categorisation:
             st.caption(f"📋 {categorisation}")
+
+        _rendre_suivi(candidate_id, stored_result)
 
         # ====================================================
         # ANCIENNETE DEMANDEE vs ANCIENNETE REELLE
