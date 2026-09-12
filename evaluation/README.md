@@ -15,6 +15,26 @@ Avec le détail annonce par annonce :
 .venv/Scripts/python.exe -m evaluation.evaluate --detail
 ```
 
+## Deux refus, avant de mesurer quoi que ce soit
+
+Le harnais s'arrête plutôt que de produire un chiffre trompeur.
+
+**Les cas non relus sont exclus.** Une annotation pré-remplie par le
+moteur reviendrait à le comparer à lui-même : le score serait de
+100 % et ne mesurerait rien. `--inclure-non-revises` passe outre.
+
+**Une base qui ne correspond plus au dépôt arrête tout.** Le
+référentiel pilote entièrement l'extraction, et l'écran Référentiel
+écrit directement en base : un alias ajouté là et jamais remonté dans
+`database/seed_skill_catalog.py` donne un moteur que personne d'autre
+ne peut reconstituer — et que le prochain passage du seed effacera.
+
+C'est arrivé. Quatorze alias issus du tri des termes n'existaient
+qu'en base ; la mesure publiée portait sur un moteur plus riche que
+celui du dépôt, et un seed a fait tomber le recall de 83,0 % à
+75,5 % d'un coup. `--ignorer-la-derive` passe outre, en sachant que
+les chiffres ne vaudront que pour cette machine.
+
 ## Ce qui est mesuré
 
 Deux couches, évaluées séparément parce qu'elles échouent différemment.

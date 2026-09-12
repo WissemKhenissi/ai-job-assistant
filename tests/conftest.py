@@ -29,6 +29,7 @@ SERVICE_MODULES = (
     "services.ai.job_analysis",
     "services.ai.letter_authoring",
     "services.application_service",
+    "services.catalog_drift",
     "services.catalog_hygiene",
     "services.interview_history_service",
     "services.cv.selection",

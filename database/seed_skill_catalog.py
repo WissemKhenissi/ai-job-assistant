@@ -1752,6 +1752,42 @@ SKILLS = [
 # SEED
 # ============================================================
 
+def champs_ecrases_par_le_seed(skill_data: dict) -> dict:
+    """
+    Les colonnes que le seed IMPOSE à une entrée déjà en base.
+
+    Le seed remplace ces colonnes, il ne les fusionne pas. Un alias
+    ajouté depuis l'écran Référentiel et jamais remonté dans SKILLS
+    disparaît donc au premier passage du seed — c'est ainsi que
+    quatorze alias issus du tri des termes ont été perdus, et que la
+    mesure publiée n'était plus reproductible depuis le dépôt.
+
+    Cette liste est partagée avec services/catalog_drift.py, qui
+    prévient avant que ça arrive. La garder à un seul endroit est la
+    condition pour que le garde-fou surveille bien ce que le seed
+    écrase, et pas une liste voisine tombée en désuétude.
+    """
+
+    return {
+        "canonical_name": skill_data["canonical_name"],
+        "category": skill_data.get("category", ""),
+        "subcategory": skill_data.get("subcategory", ""),
+        "description": skill_data.get("description", ""),
+        "aliases": json.dumps(
+            skill_data.get("aliases", []),
+            ensure_ascii=False,
+        ),
+        "related_skills": json.dumps(
+            skill_data.get("related_skills", []),
+            ensure_ascii=False,
+        ),
+        "is_inferable": skill_data.get("is_inferable", True),
+        "is_composite": skill_data.get("is_composite", False),
+        "is_active": True,
+        "parent_skill_id": skill_data.get("parent"),
+    }
+
+
 def seed_skill_catalog() -> None:
 
     db = SessionLocal()
@@ -1876,70 +1912,18 @@ def seed_skill_catalog() -> None:
 
                 changed = False
 
-                fields = {
-                    "canonical_name": canonical_name,
-                    "category": skill_data.get(
-                        "category",
-                        "",
-                    ),
-                    "subcategory": skill_data.get(
-                        "subcategory",
-                        "",
-                    ),
-                    "description": skill_data.get(
-                        "description",
-                        "",
-                    ),
-                    "aliases": aliases_json,
-                    "related_skills": related_skills_json,
-                    "is_inferable": skill_data.get(
-                        "is_inferable",
-                        True,
-                    ),
-                    "is_composite": skill_data.get(
-                        "is_composite",
-                        False,
-                    ),
-                    "is_active": True,
-                }
+                for champ, valeur in champs_ecrases_par_le_seed(
+                    skill_data
+                ).items():
 
-                for field, value in fields.items():
+                    # Une base antérieure à la colonne : on ne la
+                    # crée pas ici, la migration s'en charge.
+                    if not hasattr(existing, champ):
+                        continue
 
-                    if getattr(
-                        existing,
-                        field,
-                        None,
-                    ) != value:
+                    if getattr(existing, champ) != valeur:
 
-                        setattr(
-                            existing,
-                            field,
-                            value,
-                        )
-
-                        changed = True
-
-                # ---------------------------------------------
-                # Parent
-                # ---------------------------------------------
-
-                if hasattr(
-                    existing,
-                    "parent_skill_id",
-                ):
-
-                    parent_id = skill_data.get(
-                        "parent"
-                    )
-
-                    if (
-                        existing.parent_skill_id
-                        != parent_id
-                    ):
-
-                        existing.parent_skill_id = (
-                            parent_id
-                        )
+                        setattr(existing, champ, valeur)
 
                         changed = True
 

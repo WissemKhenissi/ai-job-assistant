@@ -37,6 +37,10 @@ from services.skill_candidate_service import (
     promote_to_catalog,
     undo_decision,
 )
+from services.catalog_drift import (
+    divergences_avec_le_seed,
+    extrait_de_seed,
+)
 from services.catalog_hygiene import (
     detections_douteuses,
     remove_alias,
@@ -460,6 +464,129 @@ def _rendre_attribution() -> None:
 
 
 # ============================================================
+# CE QUI N'EXISTE QU'EN BASE
+# ============================================================
+
+
+def _rendre_la_derive() -> None:
+    """
+    Avertit que les décisions prises ici ne sont pas dans le dépôt.
+
+    Cet écran écrit dans data/job_assistant.db. Le référentiel est
+    par ailleurs décrit dans database/seed_skill_catalog.py, et le
+    seed REMPLACE ce qu'il gère au lieu de le compléter : tout ce qui
+    n'a pas été remonté dans le fichier disparaît à son prochain
+    passage, sans message d'erreur, sans trace.
+
+    Quatorze alias issus du tri des termes ont été perdus ainsi. La
+    mesure d'évaluation publiée portait alors sur un moteur que le
+    dépôt ne décrivait pas.
+
+    L'avertissement ne s'affiche que s'il y a quelque chose à perdre.
+    Une bannière permanente finirait par ne plus être lue.
+    """
+
+    try:
+        derive = divergences_avec_le_seed()
+
+    except Exception as erreur:
+        st.caption(f"Comparaison au dépôt indisponible ({erreur}).")
+        return
+
+    if not derive:
+        return
+
+    morceaux = []
+
+    if derive.modifiees:
+
+        # Compter les entrées et non les seuls alias : désactiver
+        # une compétence depuis cet écran ne survit pas davantage,
+        # et ne se voyait pas dans le résumé.
+        resume = f"{len(derive.modifiees)} entrée(s) modifiée(s)"
+
+        if derive.alias_en_peril:
+            resume += (
+                f", dont {derive.alias_en_peril} alias "
+                "en péril"
+            )
+
+        morceaux.append(resume)
+
+    if derive.hors_depot:
+        morceaux.append(
+            f"{len(derive.hors_depot)} compétence(s) créée(s) ici"
+        )
+
+    if derive.absentes_de_la_base:
+        morceaux.append(
+            f"{len(derive.absentes_de_la_base)} entrée(s) du dépôt "
+            "manquante(s) en base"
+        )
+
+    st.warning(
+        "**Ces décisions n'existent que sur cette machine** — "
+        + ", ".join(morceaux)
+        + ". Le référentiel est aussi décrit dans "
+        "`database/seed_skill_catalog.py`, et le seed remplace ce "
+        "qu'il gère : sans report dans ce fichier, tout cela "
+        "disparaît à son prochain passage. L'évaluation, elle, "
+        "refuse de mesurer tant que les deux divergent."
+    )
+
+    with st.expander("Ce qui diverge, et le texte à reporter"):
+
+        for entree in derive.modifiees:
+
+            st.markdown(f"**{entree.canonical_name}**")
+
+            if entree.alias_perdus:
+                st.caption(
+                    "En base seulement, perdus au prochain seed : "
+                    + ", ".join(entree.alias_perdus)
+                )
+
+            if entree.alias_a_recuperer:
+                st.caption(
+                    "Au dépôt seulement, la base ne les a pas "
+                    "encore : "
+                    + ", ".join(entree.alias_a_recuperer)
+                )
+
+            if entree.autres_champs:
+                st.caption(
+                    "Autres champs divergents : "
+                    + ", ".join(entree.autres_champs)
+                )
+
+        for entree in derive.hors_depot:
+
+            st.markdown(f"**{entree.canonical_name}**")
+            st.caption("Créée depuis cet écran, absente du dépôt.")
+
+        for nom in derive.absentes_de_la_base:
+
+            st.markdown(f"**{nom}**")
+            st.caption(
+                "Décrite dans le dépôt, absente de cette base : "
+                "rejouez le seed."
+            )
+
+        texte = extrait_de_seed(derive)
+
+        if texte:
+
+            st.caption(
+                "À porter dans `database/seed_skill_catalog.py`. "
+                "Le report est manuel : écrire dans le dépôt depuis "
+                "l'application reviendrait à modifier son propre "
+                "code sans relecture."
+            )
+
+            st.code(texte, language="python")
+
+
+# ============================================================
 # RECONNAISSANCES DOUTEUSES
 # ============================================================
 #
@@ -578,6 +705,8 @@ def render_referentiel_tab() -> None:
     )
 
     _rendre_attribution()
+
+    _rendre_la_derive()
 
     message = st.session_state.pop("referentiel_message", "")
 

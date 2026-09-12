@@ -163,3 +163,98 @@ def test_le_dataset_livre_n_est_pas_marque_comme_relu():
                 f"{case.slug} est marqué relu alors que son "
                 "annotation vient encore du moteur"
             )
+
+
+# ============================================================
+# LE REFERENTIEL MESURE EST-IL CELUI DU DEPOT ?
+# ============================================================
+#
+# Le référentiel pilote entièrement l'extraction. Mesuré sur une base
+# qui ne correspond plus à database/seed_skill_catalog.py, le harnais
+# décrit un moteur que personne ne peut reconstituer depuis le dépôt
+# — et qu'un simple passage du seed fera changer sans prévenir.
+#
+# C'est arrivé : quatorze alias ajoutés depuis l'écran Référentiel
+# n'y avaient jamais été remontés.
+
+
+def _deriver(monkeypatch, derive) -> None:
+    """Fait répondre ce que le test veut à la détection de dérive."""
+
+    import evaluation.evaluate as module
+
+    monkeypatch.setattr(
+        module,
+        "divergences_avec_le_seed",
+        lambda: derive,
+    )
+
+
+def test_une_base_conforme_au_depot_laisse_mesurer(monkeypatch):
+
+    from services.catalog_drift import Derive
+
+    _deriver(monkeypatch, Derive())
+
+    from evaluation.evaluate import refuser_si_la_base_derive
+
+    assert refuser_si_la_base_derive(ignorer=False) is False
+
+
+def test_une_base_qui_derive_arrete_la_mesure(monkeypatch, capsys):
+
+    from services.catalog_drift import Derive, EntreeModifiee
+
+    _deriver(
+        monkeypatch,
+        Derive(
+            modifiees=[
+                EntreeModifiee(
+                    skill_id="catalog-project-management",
+                    canonical_name="Gestion de projet",
+                    alias_perdus=["gestion de projets"],
+                )
+            ]
+        ),
+    )
+
+    from evaluation.evaluate import refuser_si_la_base_derive
+
+    assert refuser_si_la_base_derive(ignorer=False) is True
+
+    sortie = capsys.readouterr().out
+
+    assert "gestion de projets" in sortie
+    assert "--ignorer-la-derive" in sortie
+
+
+def test_on_peut_passer_outre_mais_en_le_demandant(
+    monkeypatch, capsys
+):
+    """
+    L'échappatoire existe, comme pour --inclure-non-revises.
+
+    Elle ne rend pas l'alerte muette pour autant : les chiffres qui
+    suivent ne valent que pour cette machine, et il faut que ce soit
+    écrit à côté d'eux.
+    """
+
+    from services.catalog_drift import Derive, EntreeHorsDepot
+
+    _deriver(
+        monkeypatch,
+        Derive(
+            hors_depot=[
+                EntreeHorsDepot(
+                    skill_id="catalog-1f2e3d4c",
+                    canonical_name="Marketplace B2B",
+                )
+            ]
+        ),
+    )
+
+    from evaluation.evaluate import refuser_si_la_base_derive
+
+    assert refuser_si_la_base_derive(ignorer=True) is False
+
+    assert "Marketplace B2B" in capsys.readouterr().out

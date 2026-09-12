@@ -28,6 +28,11 @@ SURÉVALUATION : le moteur affirme une compétence mieux établie
 qu'elle ne l'est. C'est elle qui produirait un CV malhonnête. Elle est
 donc comptée et affichée à part, jamais noyée dans un taux global.
 
+Le référentiel en base doit par ailleurs correspondre à celui du
+dépôt : c'est lui qui pilote l'extraction, et une mesure prise sur un
+catalogue que personne d'autre ne peut reconstituer ne prouve rien.
+Le harnais refuse de mesurer tant qu'ils divergent.
+
 Usage :
 
     .venv/Scripts/python.exe -m evaluation.evaluate
@@ -42,6 +47,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from services.catalog_drift import divergences_avec_le_seed
 from services.job_requirements_service import extract_required_skills
 from services.matching import analyze_candidate_against_skills
 from services.matching.normalization import _canonical_skill_name
@@ -630,6 +636,113 @@ def print_report(
 
 
 # ============================================================
+# LE REFERENTIEL MESURE EST-IL CELUI DU DEPOT ?
+# ============================================================
+
+def refuser_si_la_base_derive(ignorer: bool) -> bool:
+    """
+    Vrai s'il faut renoncer à mesurer.
+
+    Le référentiel pilote entièrement l'extraction. S'il ne
+    correspond plus à database/seed_skill_catalog.py, les chiffres
+    obtenus décrivent un moteur qui n'existe que sur cette machine :
+    personne ne peut les retrouver depuis le dépôt, et une prochaine
+    exécution du seed les changera sans prévenir.
+
+    C'est arrivé. Quatorze alias ajoutés depuis l'écran Référentiel
+    n'avaient jamais été remontés dans le fichier ; la mesure publiée
+    portait sur un moteur plus riche que celui du dépôt, et un seed
+    l'a fait tomber de 83,0 % à 75,5 % de recall d'un coup.
+
+    Même esprit que --inclure-non-revises : on peut passer outre,
+    mais il faut le demander, et savoir ce qu'on mesure alors.
+    """
+
+    derive = divergences_avec_le_seed()
+
+    if not derive:
+        return False
+
+    print()
+    print(
+        "LE RÉFÉRENTIEL EN BASE NE CORRESPOND PAS AU DÉPÔT."
+    )
+    print()
+
+    if derive.modifiees:
+
+        print(
+            f"{len(derive.modifiees)} entrée(s) modifiée(s) — un "
+            f"seed détruirait {derive.alias_en_peril} alias :"
+        )
+
+        for entree in derive.modifiees:
+
+            print(f"  - {entree.canonical_name}")
+
+            if entree.alias_perdus:
+                print(
+                    "      en base seulement : "
+                    + ", ".join(entree.alias_perdus)
+                )
+
+            if entree.alias_a_recuperer:
+                print(
+                    "      au dépôt seulement : "
+                    + ", ".join(entree.alias_a_recuperer)
+                )
+
+            if entree.autres_champs:
+                print(
+                    "      champs divergents : "
+                    + ", ".join(entree.autres_champs)
+                )
+
+    if derive.hors_depot:
+
+        print()
+        print(
+            f"{len(derive.hors_depot)} compétence(s) créée(s) "
+            "depuis l'écran et absente(s) du dépôt :"
+        )
+
+        for entree in derive.hors_depot:
+            print(f"  - {entree.canonical_name}")
+
+    if derive.absentes_de_la_base:
+
+        print()
+        print(
+            f"{len(derive.absentes_de_la_base)} entrée(s) du dépôt "
+            "manquante(s) en base — la base est en retard d'un "
+            "seed :"
+        )
+
+        for nom in derive.absentes_de_la_base:
+            print(f"  - {nom}")
+
+    print()
+    print(
+        "Une mesure prise sur cette base ne serait reproductible "
+        "par personne d'autre."
+    )
+    print()
+    print("Deux sorties :")
+    print(
+        "  - remonter ces décisions dans "
+        "database/seed_skill_catalog.py (l'écran Référentiel "
+        "affiche le texte à coller), puis rejouer le seed ;"
+    )
+    print(
+        "  - ou relancer avec --ignorer-la-derive, en sachant que "
+        "les chiffres ne vaudront que pour cette machine."
+    )
+    print()
+
+    return not ignorer
+
+
+# ============================================================
 # POINT D'ENTREE
 # ============================================================
 
@@ -655,6 +768,16 @@ def main() -> int:
         "--detail",
         action="store_true",
         help="affiche le détail annonce par annonce",
+    )
+
+    parser.add_argument(
+        "--ignorer-la-derive",
+        action="store_true",
+        help=(
+            "mesure même si le référentiel en base ne correspond "
+            "plus au dépôt — les chiffres ne valent alors que pour "
+            "cette machine"
+        ),
     )
 
     parser.add_argument(
@@ -712,6 +835,9 @@ def main() -> int:
             print("Aucun cas relu : rien à mesurer pour l'instant.")
             print()
             return 1
+
+    if refuser_si_la_base_derive(args.ignorer_la_derive):
+        return 1
 
     candidate_id = resoudre_candidat(args.candidat)
 
