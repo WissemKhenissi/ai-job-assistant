@@ -34,9 +34,97 @@ from services.text_normalization import (
 )
 from services.job_requirements_service import (
     extract_required_skills,
+    extract_required_skills_detailed,
     extract_required_years,
 )
+from services.matching.normalization import _canonical_skill_name
 from services.profile_service import get_experiences
+
+
+_CONTRATS = ("", "CDI", "CDD", "Freelance", "Stage")
+
+_TELETRAVAIL = ("", "Sur site", "Hybride", "Télétravail complet")
+
+# Message à afficher après enregistrement de la fiche, une fois la
+# page relancée pour que l'intitulé corrigé s'affiche en tête.
+_CLE_MESSAGE_FICHE = "job_offer_fiche_message"
+
+
+def _index_connu(valeurs: tuple[str, ...], valeur: str) -> int:
+    """
+    La position d'une valeur dans un menu, ou zéro si l'IA en a
+    rapporté une que le menu ne propose pas.
+    """
+
+    return valeurs.index(valeur) if valeur in valeurs else 0
+
+
+# Un intitulé plus long qu'une ligne de titre n'en est pas un.
+_LONGUEUR_MAX_TITRE = 120
+
+# De part et d'autre de l'exigence reconnue, dans l'extrait d'annonce.
+_MARGE_EXTRAIT = 180
+
+
+def _titre_devine(description: str) -> str:
+    """
+    La première ligne non vide d'une annonce en est le titre.
+
+    Règle déterministe, donc explicable et reproductible — et
+    corrigible d'un clic une fois l'analyse faite. Elle remplace un
+    champ obligatoire qui demandait à l'utilisateur de recopier la
+    première ligne de ce qu'il venait de coller.
+    """
+
+    for ligne in description.split("\n"):
+
+        nue = ligne.strip()
+
+        if nue:
+            return nue[:_LONGUEUR_MAX_TITRE]
+
+    return ""
+
+
+def _extrait_annonce(texte: str, position: int, alias: str) -> str:
+    """
+    Le passage de l'annonce où l'exigence a été reconnue, l'alias en
+    gras.
+
+    Montrer le passage plutôt que d'affirmer l'exigence : une
+    reconnaissance qu'on peut retrouver dans le texte est vérifiable,
+    et donc contestable. C'est tout l'intérêt.
+    """
+
+    fin_alias = position + len(alias)
+
+    reconnu = texte[position:fin_alias]
+
+    debut = max(0, position - _MARGE_EXTRAIT)
+    fin = min(len(texte), fin_alias + _MARGE_EXTRAIT)
+
+    def plat(fragment: str) -> str:
+        return " ".join(fragment.split())
+
+    # La position vient du moteur ; si elle ne retombe pas sur l'alias,
+    # on montre le passage sans le mettre en gras plutôt que de
+    # souligner le mauvais mot.
+    if reconnu.casefold() != alias.casefold():
+        return (
+            ("… " if debut > 0 else "")
+            + plat(texte[debut:fin])
+            + (" …" if fin < len(texte) else "")
+        )
+
+    return (
+        ("… " if debut > 0 else "")
+        + plat(texte[debut:position])
+        + " **"
+        + plat(reconnu)
+        + "** "
+        + plat(texte[fin_alias:fin])
+        + (" …" if fin < len(texte) else "")
+    )
 
 
 # Clés session_state utilisées pour préremplir le formulaire après une
@@ -57,8 +145,9 @@ def _new_draft() -> None:
 def render_analysis_tab(candidate_id: str) -> None:
 
     st.write(
-        "Collez une annonce, indiquez les compétences attendues, "
-        "puis obtenez un score de matching explicable."
+        "Collez une annonce. L'intitulé, le contrat et le télétravail "
+        "se lisent dans le texte — vous les corrigerez ensuite si "
+        "besoin."
     )
 
     # ========================================================
@@ -128,43 +217,12 @@ def render_analysis_tab(candidate_id: str) -> None:
 
     with st.form("job_matching_form"):
 
-        title = st.text_input(
-            "Intitulé du poste *",
-            value=st.session_state.get(_PREFILL_TITLE_KEY, ""),
-            placeholder="Product Owner E-commerce",
-        )
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-
-            company = st.text_input(
-                "Entreprise",
-                placeholder="Nom de l'entreprise",
-            )
-
-            location = st.text_input(
-                "Localisation",
-                placeholder="Paris / Hybride",
-            )
-
-        with col2:
-
-            contract_type = st.selectbox(
-                "Type de contrat",
-                ["", "CDI", "CDD", "Freelance", "Stage"],
-            )
-
-            remote_policy = st.selectbox(
-                "Télétravail",
-                ["", "Sur site", "Hybride", "Télétravail complet"],
-            )
-
         description = st.text_area(
-            "Texte de l'annonce *",
+            "Texte de l'annonce",
             value=st.session_state.get(_PREFILL_TEXT_KEY, ""),
-            height=220,
+            height=300,
             placeholder="Collez ici l'annonce complète.",
+            label_visibility="collapsed",
         )
 
         submitted = st.form_submit_button(
@@ -173,18 +231,33 @@ def render_analysis_tab(candidate_id: str) -> None:
             use_container_width=True,
         )
 
+    # Six champs se dressaient ici entre l'utilisateur et son
+    # résultat : intitulé, entreprise, localisation, contrat,
+    # télétravail. Quatre d'entre eux se lisent dans le texte qu'on
+    # vient de coller — le contrat et le télétravail par l'IA, qui les
+    # rapportait déjà, l'intitulé par sa première ligne. Les demander
+    # d'avance revenait à faire saisir à l'utilisateur ce que la
+    # machine sait, avant de lui montrer quoi que ce soit.
+    title = (
+        st.session_state.get(_PREFILL_TITLE_KEY, "").strip()
+        or _titre_devine(description)
+    )
+
+    company = ""
+    location = ""
+    contract_type = ""
+    remote_policy = ""
+
     # ========================================================
     # ANALYSE
     # ========================================================
 
     if submitted:
 
-        if not title.strip():
-            st.error("L'intitulé du poste est obligatoire.")
-            return
-
         if not description.strip():
-            st.error("Le texte de l'annonce est obligatoire.")
+            st.error(
+                "Collez le texte de l'annonce pour lancer l'analyse."
+            )
             return
 
         required_skills = extract_required_skills(description)
@@ -315,6 +388,12 @@ def render_analysis_tab(candidate_id: str) -> None:
             st.session_state["job_matching_result"] = {
                 "job_offer_id": job_offer_id,
                 "title": title.strip(),
+                # Conservé pour pouvoir montrer, exigence par
+                # exigence, le passage de l'annonce où elle a été
+                # reconnue.
+                "description": description.strip(),
+                "company": company.strip(),
+                "location": location.strip(),
                 "extraction_source": (
                     "catalogue + IA (Gemini)"
                     if ai_is_configured()
@@ -390,6 +469,116 @@ def render_analysis_tab(candidate_id: str) -> None:
         st.subheader(
             stored_result["title"]
         )
+
+        # ====================================================
+        # CORRIGER LA FICHE
+        # ====================================================
+        #
+        # Ce que la machine a lu est proposé, jamais imposé :
+        # l'intitulé vient de la première ligne de l'annonce, le
+        # contrat et le télétravail de l'IA. Trois lectures qui
+        # peuvent se tromper, et qui se corrigent ici — après le
+        # résultat, plutôt que d'être saisies avant lui.
+
+        with st.expander("✏️ Corriger la fiche de l'annonce"):
+
+            message = st.session_state.pop(_CLE_MESSAGE_FICHE, None)
+
+            if message:
+                st.success(message)
+
+            with st.form("job_offer_fiche"):
+
+                titre_corrige = st.text_input(
+                    "Intitulé du poste",
+                    value=stored_result["title"],
+                )
+
+                col_gauche, col_droite = st.columns(2)
+
+                with col_gauche:
+
+                    entreprise = st.text_input(
+                        "Entreprise",
+                        value=stored_result.get("company", ""),
+                        placeholder="Nom de l'entreprise",
+                    )
+
+                    localisation = st.text_input(
+                        "Localisation",
+                        value=stored_result.get("location", ""),
+                        placeholder="Paris / Hybride",
+                    )
+
+                with col_droite:
+
+                    contrat = st.selectbox(
+                        "Type de contrat",
+                        _CONTRATS,
+                        index=_index_connu(
+                            _CONTRATS,
+                            stored_result.get("contract_type", ""),
+                        ),
+                    )
+
+                    teletravail = st.selectbox(
+                        "Télétravail",
+                        _TELETRAVAIL,
+                        index=_index_connu(
+                            _TELETRAVAIL,
+                            stored_result.get("remote_policy", ""),
+                        ),
+                    )
+
+                enregistrer = st.form_submit_button(
+                    "Enregistrer",
+                    use_container_width=True,
+                )
+
+            if enregistrer:
+
+                titre_change = (
+                    titre_corrige.strip() != stored_result["title"]
+                )
+
+                save_job_offer(
+                    job_offer_id=stored_result["job_offer_id"],
+                    title=titre_corrige.strip(),
+                    description=stored_result.get("description", ""),
+                    company=entreprise.strip(),
+                    location=localisation.strip(),
+                    contract_type=contrat,
+                    remote_policy=teletravail,
+                    remote_details=stored_result.get(
+                        "remote_details", ""
+                    ),
+                    required_years=stored_result.get("required_years"),
+                    source="manual",
+                    status="selected",
+                )
+
+                stored_result["title"] = titre_corrige.strip()
+                stored_result["company"] = entreprise.strip()
+                stored_result["location"] = localisation.strip()
+                stored_result["contract_type"] = contrat
+                stored_result["remote_policy"] = teletravail
+
+                st.session_state["job_matching_result"] = stored_result
+
+                # L'intitulé n'est pas qu'une étiquette : il sert à
+                # écarter les mots qui ne figurent que dans le titre
+                # du poste. Le corriger peut donc changer le résultat,
+                # et le dire vaut mieux que de laisser croire à un
+                # score à jour.
+                st.session_state[_CLE_MESSAGE_FICHE] = (
+                    "Fiche enregistrée. L'intitulé participe à "
+                    "l'analyse — relancez-la pour que le score en "
+                    "tienne compte."
+                    if titre_change
+                    else "Fiche enregistrée."
+                )
+
+                st.rerun()
 
         # ====================================================
         # CATEGORISATION DE L'OFFRE
@@ -539,50 +728,118 @@ def render_analysis_tab(candidate_id: str) -> None:
             "mention": "• Citée",
         }
 
-        details = []
-
-        for item in result.matches:
-
-            details.append(
-                {
-                    "Compétence": item.skill,
-                    "Statut": status_labels.get(
-                        item.status,
-                        item.status,
-                    ),
-                    "Attendue par l'annonce": (
-                        importance_labels.get(
-                            item.importance,
-                            item.importance,
-                        )
-                    ),
-                    "Score": f"{item.score * 100:.0f} %",
-                    "Justification": item.explanation,
-                    "Éléments du Master CV": (
-                        "\n".join(item.evidence)
-                        if item.evidence
-                        else "—"
-                    ),
-                }
-            )
-
         st.subheader(
             "Détail du matching"
         )
 
-        if details:
-
-            st.dataframe(
-                details,
-                hide_index=True,
-                use_container_width=True,
-            )
-
-        else:
+        if not result.matches:
 
             st.info(
                 "Aucun détail de matching disponible."
             )
+
+        else:
+
+            # Le détail tenait dans un tableau, et la justification y
+            # était coupée au bord de sa colonne — celle qui porte
+            # justement l'honnêteté du moteur : pourquoi cette
+            # compétence a ce statut. Elle est désormais lue en
+            # entier.
+            #
+            # Et chaque exigence peut être retrouvée dans l'annonce.
+            # Le moteur sait où il l'a reconnue : le montrer rend sa
+            # lecture contestable, ce qu'un score seul n'est pas.
+
+            reconnaissances = {
+                _canonical_skill_name(detail["canonical_name"]): detail
+                for detail in extract_required_skills_detailed(
+                    stored_result.get("description", "")
+                )
+            }
+
+            filtre = st.segmented_control(
+                "Filtrer le détail",
+                options=[
+                    "Tout",
+                    "Conditions",
+                    "Écarts",
+                ],
+                default="Tout",
+                label_visibility="collapsed",
+            )
+
+            for item in result.matches:
+
+                if (
+                    filtre == "Conditions"
+                    and item.importance != "essentielle"
+                ):
+                    continue
+
+                if filtre == "Écarts" and item.status not in (
+                    "missing",
+                    "inferred",
+                ):
+                    continue
+
+                with st.container(border=True):
+
+                    col_nom, col_statut, col_niveau, col_score = (
+                        st.columns([4, 2, 2, 1])
+                    )
+
+                    col_nom.markdown(f"**{item.skill}**")
+
+                    col_statut.write(
+                        status_labels.get(item.status, item.status)
+                    )
+
+                    col_niveau.write(
+                        importance_labels.get(
+                            item.importance, item.importance
+                        )
+                    )
+
+                    col_score.write(f"{item.score * 100:.0f} %")
+
+                    st.caption(item.explanation)
+
+                    if item.evidence:
+                        st.caption(
+                            "Éléments du Master CV : "
+                            + " · ".join(item.evidence)
+                        )
+
+                    reconnaissance = reconnaissances.get(
+                        _canonical_skill_name(item.skill)
+                    )
+
+                    if reconnaissance:
+
+                        with st.expander(
+                            "Où est-ce écrit dans l'annonce ?"
+                        ):
+
+                            st.markdown(
+                                _extrait_annonce(
+                                    stored_result.get(
+                                        "description", ""
+                                    ),
+                                    reconnaissance["position"],
+                                    reconnaissance["matched_alias"],
+                                )
+                            )
+
+                            if (
+                                reconnaissance["matched_alias"].casefold()
+                                != item.skill.casefold()
+                            ):
+                                st.caption(
+                                    "Reconnue derrière « "
+                                    + reconnaissance["matched_alias"]
+                                    + " », synonyme enregistré au "
+                                    "référentiel."
+                                )
 
         # ====================================================
         # POINTS FORTS
