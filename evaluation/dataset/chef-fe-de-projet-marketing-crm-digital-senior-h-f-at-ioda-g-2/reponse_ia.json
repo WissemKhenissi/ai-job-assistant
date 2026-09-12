@@ -1,0 +1,27 @@
+{
+  "enregistre_le": "2026-09-12",
+  "modele": "gemini-flash-lite-latest",
+  "contract_type": "CDI",
+  "remote_policy": "",
+  "remote_details": "",
+  "required_skills": [
+    "CRM",
+    "PRM",
+    "Data",
+    "IA",
+    "e-commerce",
+    "acquisition",
+    "fidélisation",
+    "social media",
+    "influence",
+    "web-to-store",
+    "mobile",
+    "e-réputation",
+    "CDP",
+    "CMS",
+    "marketing automation",
+    "Agile",
+    "Scrum",
+    "Cycle en V"
+  ]
+}

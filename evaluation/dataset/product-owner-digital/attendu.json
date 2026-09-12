@@ -1,0 +1,14 @@
+{
+  "titre": "Product Owner Digital",
+  "revise_par_humain": false,
+  "commentaire": "COUCHE 1 ANNOTÉE À LA LECTURE DE L'ANNONCE, pas par le moteur : ces compétences ne sont donc plus sa propre sortie. COUCHE 2 (statuts) NON ANNOTÉE — elle demande de savoir ce que le candidat a réellement fait et peut démontrer. À compléter par lui, puis passer revise_par_humain à true. E-commerce est retenu ici, contrairement à l'annonce freelance : l'annonce en fait une condition d'ancienneté (« au moins 5 ans d'expérience en e-commerce »), pas un décor.",
+  "competences_attendues": [
+    "E-commerce",
+    "Roadmap produit",
+    "Agile / Scrum",
+    "Product Discovery",
+    "Gestion de projet",
+    "Coordination transverse"
+  ],
+  "statuts_attendus": {}
+}

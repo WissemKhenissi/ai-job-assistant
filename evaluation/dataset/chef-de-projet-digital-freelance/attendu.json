@@ -1,0 +1,11 @@
+{
+  "titre": "Chef de Projet Digital Freelance",
+  "revise_par_humain": false,
+  "commentaire": "COUCHE 1 ANNOTÉE À LA LECTURE DE L'ANNONCE, pas par le moteur : ces compétences ne sont donc plus sa propre sortie. COUCHE 2 (statuts) NON ANNOTÉE — elle demande de savoir ce que le candidat a réellement fait et peut démontrer. À compléter par lui, puis passer revise_par_humain à true. L'annonce nomme ses attentes en une phrase : « Compétences attendues : gestion de projet, Agile/Scrum, coordination des équipes techniques ». La refonte e-commerce est le contexte du projet, pas une compétence demandée — elle n'est pas retenue.",
+  "competences_attendues": [
+    "Gestion de projet",
+    "Agile / Scrum",
+    "Coordination transverse"
+  ],
+  "statuts_attendus": {}
+}

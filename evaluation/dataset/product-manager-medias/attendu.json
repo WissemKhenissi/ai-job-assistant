@@ -1,0 +1,32 @@
+{
+  "titre": "Product Manager Médias",
+  "revise_par_humain": false,
+  "commentaire": "COUCHE 1 ANNOTÉE À LA LECTURE DE L'ANNONCE, pas par le moteur : ces compétences ne sont donc plus sa propre sortie. COUCHE 2 (statuts) NON ANNOTÉE — elle demande de savoir ce que le candidat a réellement fait et peut démontrer. À compléter par lui, puis passer revise_par_humain à true. Les dix outils de l'énumération « Jira, Confluence, Trello, Miro, GitLab, BaseCamp, Planner, TFS, Clarity, MS Project » sont tous retenus : l'annonce les nomme. C'est le niveau d'exigence, pas l'extraction, qui doit ensuite distinguer une condition d'un exemple. Laissés de côté : « secteur des médias » (un secteur), « web, dekstop, mobile » (des supports), « anglais » (une langue), et la veille produit — faire de la veille sur l'UX n'est pas maîtriser l'UX, mais l'UX et le design thinking sont par ailleurs nommés comme sujets attendus.",
+  "competences_attendues": [
+    "Product Management",
+    "Product Strategy",
+    "Roadmap produit",
+    "Backlog Management",
+    "User Stories",
+    "Priorisation",
+    "Data / KPI",
+    "Agile / Scrum",
+    "Coordination transverse",
+    "Stakeholder Management",
+    "Formation des équipes",
+    "Jira",
+    "Confluence",
+    "Trello",
+    "Miro",
+    "GitLab",
+    "BaseCamp",
+    "Planner",
+    "TFS",
+    "Clarity",
+    "MS Project",
+    "UX",
+    "design thinking",
+    "Lean management"
+  ],
+  "statuts_attendus": {}
+}

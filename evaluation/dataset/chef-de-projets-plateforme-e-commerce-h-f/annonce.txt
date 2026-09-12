@@ -1,0 +1,91 @@
+CHEF DE PROJETS PLATEFORME E-COMMERCE H/F
+À propos de l’offre d’emploi
+L’univers de la farine et de la boulangerie vous passionne ?
+
+Vous êtes engagé(e) pour une alimentation durable et responsable ?
+
+Votre place est peut-être parmi nous !
+
+Grands Moulins de Paris, c’est plus de 100 ans de savoir-faire pour sélectionner les meilleurs blés français et produire des farines et mélanges meuniers de qualité. Une expertise qui permet de faire rayonner le savoir-faire boulanger à la française dans plus de 65 pays dans le monde. Grands Moulins de Paris c’est aussi des marques fortes comme Francine, qui accompagne petits et grands en cuisine depuis plus de 50 ans, et Campaillette avec son réseau d’artisans boulangers adhérents. Enfin, c’est la fierté d’appartenir aux 10 000 agriculteurs-coopérateurs, propriétaires du Groupe coopératif VIVESCIA, qui cultivent avec soin le grain.
+
+Chez nous, seule la gourmandise est de mise. Alors que vous soyez plutôt pain au chocolat ou chocolatine, nous vous attendons au sein de notre grande famille, composée de femmes et d’hommes tous pétris d’audace.
+
+Poste:
+
+Embarquez avec nous dans l'aventure Grands Moulins de Paris au poste de :
+
+Chef(fe) de projet plateforme e-commerce H/F
+
+CDI
+
+Début : Octobre 2026
+
+Poste basé à Ivry sur Seine (94)
+
+Rattaché(e) au Responsable E-Business vous participerez au pilotage de la maintenance et des différentes évolutions de la plateforme e-commerce en collaboration avec les équipes interne (IT & Digital) et externe intervenant sur la plateforme.
+
+Nous vous donnons du grain à moudre
+
+Co-construction de la vision produit et pilotage de la roadmap
+
+ Co-Construire et porter la vision produit de grandsmoulinsdeparis.com en cohérence avec la stratégie business et les problématiques à résoudre (Utilisateurs, marchands, revenus, conformité, technique).
+ Construire, maintenir et partager la roadmap produit (court / moyen terme).
+ Prioriser les évolutions en fonction des objectifs Business, des capacités, et des contraintes techniques.
+ Arbitrer les demandes ad hoc vs la roadmap stratégique.
+ Garantir la tenue des délais, du périmètre et de la qualité fonctionnelle.
+
+Recueil des besoins et cadrage fonctionnel
+
+ Recueillir et formaliser les besoins utilisateurs & métiers (utilisateurs finaux/ marchands/ équipes internes / ... )
+ Traduire ces besoins en pitchs, parcours & spécifications fonctionnelles claires.
+ Diriger & réaliser le cadrage des fonctionnalités sur tout le périmétre du site
+
+Collaboration avec les équipes techniques et prestataires
+
+ Piloter les prestataires techniques (résolution de bugs, vérification du staffing réalisé des prestataires, contribution au suivi des budgets, choix et mise en place de la méthodologie projet, respect des engagements, contribution aux recrutements/renouvellements)
+ Collaborer avec tous les partenaires techniques (internes comme externes) & les parties prenantes métiers
+ Participer à la création et à la réalisation des rituels de gestion de produit nécessaires au bon déroulement.
+ Valider les développements (recette fonctionnelle, tests utilisateurs).
+ Accompagner les équipes internes à l’usage des nouvelles fonctionnalités.
+ Être garant de la bonne appropriation produit par les utilisateurs internes et externes.
+
+Suivi de la performance produit et amélioration continue
+
+ Définir et suivre les KPIs produit.
+ Analyser les comportements utilisateurs et identifier les points de friction.
+ Proposer et piloter des optimisations continues (UX, parcours, règles métier).
+ Capitaliser sur les retours terrain (support, force de vente, marchands).
+
+Profil:
+
+Vous apportez de l’eau à notre moulin
+
+Formation Bac +5 (Digital ou gestion de projet) ou expérience équivalente (+ 5 années d'expérience en PO/Chef de projet)
+
+Capacité à définir et porter une vision produit claire, orientée valeur business et usage.
+
+Sens aigu de la priorisation (impact / effort / valeur).
+
+Capacité à arbitrer et à dire non de façon argumentée.
+
+Maitrise des méthodes courantes de gestion de produit (Agile, Kanban,..)
+
+Maitrise des outils produits (Jira, Confluence, Figma,…)
+
+Capacité à travailler en collaboration avec différents départements et prestataires internes comme externes.
+
+Capacité à dialoguer efficacement avec des équipes techniques sans être développeur.
+
+Bonne compréhension des modèles Marketplace B2B et E-commerce
+
+Sens aigu de la satisfaction client et de l’amélioration continue.
+
+Rigueur et organisation
+
+Anglais professionnel
+
+Autres informations:
+
+Nous cultivons la bienveillance
+
+Chez Grands Moulins de Paris, nous avons à cœur le bien-être de nos collaborateurs. C’est pourquoi nous avons signé un accord-cadre sur la Qualité de Vie au Travail s’articulant autour de la qualité des rapports sociaux au sein de l’entreprise, l’égalité entre les femmes et les hommes, l’équilibre entre la vie professionnelle et personnelle, le télétravail et la sensibilisation autour du handicap. À ce titre, nous précisons que ce poste est ouvert aux personnes en situation de handicap.

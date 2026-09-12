@@ -1,0 +1,13 @@
+{
+  "enregistre_le": "2026-09-12",
+  "modele": "gemini-flash-lite-latest",
+  "contract_type": "Freelance",
+  "remote_policy": "Hybride",
+  "remote_details": "3 jours de télétravail obligatoires par semaine",
+  "required_skills": [
+    "gestion de projet",
+    "Agile",
+    "Scrum",
+    "coordination des équipes techniques"
+  ]
+}
