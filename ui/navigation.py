@@ -11,9 +11,13 @@ c'est le même geste.
 
 Les pages sont désormais à plat, groupées par intention :
 
+    (sans titre) où en est la recherche, et ce qui attend une action
     Mon profil   ce qu'on construit une fois, et qu'on enrichit
     Candidater   ce qu'on refait à chaque annonce, dans cet ordre
     Outils       ce qu'on entretient de temps en temps
+
+L'accueil est seul et sans intitulé de groupe : il n'est pas une
+catégorie de travail, c'est le point d'où l'on part.
 
 Chaque page reçoit son candidat explicitement, par functools.partial.
 Aucune ne le devine : c'est la règle posée avec le cloisonnement des
@@ -27,6 +31,7 @@ from functools import partial
 import streamlit as st
 
 from services.profile_service import get_skills
+from ui.dashboard import render_dashboard
 from ui.job_matching.analysis import render_analysis_tab
 from ui.job_matching.generation import render_generation_tab
 from ui.job_matching.market_memory import render_market_memory_tab
@@ -37,6 +42,39 @@ from ui.master_cv.import_section import render_import_section
 from ui.master_cv.interview_section import render_interview_section
 from ui.master_cv.skills_section import render_skills_section
 from ui.profile_page import render_profile_page
+
+
+# Les pages construites, retrouvables par leur adresse.
+#
+# st.page_link exige l'objet Page lui-même, pas son chemin : sans ce
+# registre, une page ne pourrait renvoyer vers une autre qu'au prix
+# d'un lien HTML, qui recharge l'application et perd l'analyse en
+# cours.
+_pages: dict = {}
+
+
+def lien_vers(
+    url_path: str,
+    label: str,
+    icon: str | None = None,
+) -> None:
+    """Un lien interne, sans rechargement."""
+
+    page = _pages.get(url_path)
+
+    if page is None:
+        return
+
+    st.page_link(page, label=label, icon=icon)
+
+
+# ============================================================
+# ACCUEIL
+# ============================================================
+
+def _page_accueil(candidate, experiences) -> None:
+
+    render_dashboard(candidate, experiences)
 
 
 # ============================================================
@@ -151,13 +189,21 @@ def construire_navigation(candidate, experiences):
     """
 
     pages = {
+        "": [
+            st.Page(
+                partial(_page_accueil, candidate, experiences),
+                title="Où j'en suis",
+                icon="🏠",
+                url_path="accueil",
+                default=True,
+            ),
+        ],
         "Mon profil": [
             st.Page(
                 partial(_page_profil, candidate, experiences),
                 title="Profil",
                 icon="👤",
                 url_path="profil",
-                default=True,
             ),
             st.Page(
                 partial(_page_experiences, experiences),
@@ -213,6 +259,12 @@ def construire_navigation(candidate, experiences):
             ),
         ],
     }
+
+    _pages.clear()
+
+    for groupe in pages.values():
+        for page in groupe:
+            _pages[page.url_path] = page
 
     return st.navigation(pages)
 

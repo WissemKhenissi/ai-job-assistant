@@ -49,7 +49,10 @@ APPLICATION_STATUS_LABELS = {
 # trois colonnes presque toujours vides.
 APPLICATION_COLUMNS = (
     ("Repérées", ("reperee",)),
-    ("Documents prêts", ("generee",)),
+    # « Préparées » plutôt que « Documents prêts » : un seul mot, au
+    # même temps que ses voisines, et qui ne se fait pas tronquer dans
+    # une colonne étroite.
+    ("Préparées", ("generee",)),
     ("Postulées", ("envoyee", "relancee")),
     ("Entretien", ("entretien",)),
     ("Issue", ("acceptee", "refus", "sans_reponse")),
