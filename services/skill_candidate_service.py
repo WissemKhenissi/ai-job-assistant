@@ -42,6 +42,44 @@ IGNORE = "ignore"        # jugé sans valeur par l'utilisateur
 MAX_EXEMPLES = 10
 
 
+def termes_ignores() -> set[str]:
+    """
+    Les formes canoniques des termes que l'utilisateur a écartés.
+
+    Écarter un terme rangeait la file de tri sans rien changer au
+    calcul : le terme continuait de compter comme exigence manquante,
+    annonce après annonce. La décision était recueillie, enregistrée,
+    puis ignorée là où elle comptait — « Anglais professionnel »,
+    écarté comme langue, pesait encore sur chaque score.
+
+    Les formes retournées sont celles de canonical_key, construites
+    par normalize_skill_text : l'appelant doit comparer avec la même
+    normalisation, sans quoi la décision de l'utilisateur retomberait
+    à côté.
+
+    Pas de cache. La fonction est appelée une fois par analyse, et une
+    décision de tri doit prendre effet à l'analyse suivante — un cache
+    oublié la rendrait sans effet jusqu'au redémarrage, exactement le
+    piège que invalidate_caches existe pour éviter ailleurs.
+    """
+
+    db = SessionLocal()
+
+    try:
+
+        return {
+            ligne.canonical_key
+            for ligne in db.query(SkillCandidateDB)
+            .filter(SkillCandidateDB.status == IGNORE)
+            .all()
+            if ligne.canonical_key
+        }
+
+    finally:
+
+        db.close()
+
+
 def _invalider_cache_alias() -> None:
     """
     L'index « alias -> nom canonique » est construit une fois par

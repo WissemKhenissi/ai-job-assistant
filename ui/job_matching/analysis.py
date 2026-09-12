@@ -491,8 +491,9 @@ def render_analysis_tab(candidate_id: str) -> None:
 
         if ecartees:
             st.caption(
-                "Écartés du décompte (mots de l'annonce, pas des "
-                f"compétences) : {', '.join(ecartees)}"
+                "Écartés du décompte — mots de l'annonce, nom du "
+                "poste, ou termes que vous avez vous-même écartés "
+                f"depuis le Référentiel : {', '.join(ecartees)}"
             )
 
         st.divider()

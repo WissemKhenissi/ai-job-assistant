@@ -31,7 +31,10 @@ from __future__ import annotations
 import re
 
 from services.job_title import clean_job_title
-from services.skill_catalog_service import find_skill_by_name
+from services.skill_catalog_service import (
+    find_skill_by_name,
+    normalize_skill_text,
+)
 from services.text_normalization import minuscules_sans_accents
 
 # La même forme que celle sous laquelle le niveau d'exigence est
@@ -300,7 +303,26 @@ def clean_required_skills(
     Les écartées sont retournées plutôt que jetées : l'utilisateur
     doit pouvoir voir ce que le système a refusé de compter, et le
     rattraper à la main si le tri s'est trompé.
+
+    Un terme que l'utilisateur a lui-même écarté depuis l'écran
+    Référentiel est écarté ici aussi. Ce n'était pas le cas : sa
+    décision rangeait la file de tri sans rien changer au calcul, et
+    le terme continuait de peser comme exigence manquante, annonce
+    après annonce. Un jugement qu'on recueille et qu'on n'applique pas
+    vaut moins que pas de jugement du tout — l'utilisateur croit avoir
+    corrigé quelque chose.
+
+    C'est la seule règle de ce module qui ne soit pas déterminée par
+    le texte : elle l'est par une décision explicite, prise une fois,
+    et consultable.
     """
+
+    # Import tardif : skill_candidate_service lit le référentiel, que
+    # ce module lit aussi. L'appeler en tête nouerait les deux au
+    # chargement sans nécessité.
+    from services.skill_candidate_service import termes_ignores
+
+    ecartes_par_l_utilisateur = termes_ignores()
 
     retenues: list[str] = []
     ecartees: list[str] = []
@@ -314,8 +336,12 @@ def clean_required_skills(
         if not terme:
             continue
 
-        ecarte = not is_plausible_requirement(terme) or _nomme_le_poste(
-            terme, job_title, job_description
+        ecarte = (
+            not is_plausible_requirement(terme)
+            or _nomme_le_poste(terme, job_title, job_description)
+            # normalize_skill_text, et pas _normalize : c'est la forme
+            # sous laquelle la décision a été enregistrée.
+            or normalize_skill_text(terme) in ecartes_par_l_utilisateur
         )
 
         if ecarte:
