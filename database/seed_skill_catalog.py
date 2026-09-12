@@ -40,6 +40,8 @@ SKILLS = [
             "Product Delivery",
             "Roadmap produit",
         ],
+        "is_inferable": False,
+        "is_composite": True,
     },
 
     {
@@ -467,6 +469,7 @@ SKILLS = [
             "Python",
             "SQL",
         ],
+        "is_inferable": False,
     },
 
     {
@@ -493,6 +496,7 @@ SKILLS = [
             "Python",
             "Data Analysis",
         ],
+        "is_inferable": False,
     },
 
     {
@@ -520,6 +524,7 @@ SKILLS = [
             "Product Management",
             "Data Analysis",
         ],
+        "is_inferable": False,
     },
 
     {
@@ -545,6 +550,7 @@ SKILLS = [
             "Python",
             "Business Intelligence",
         ],
+        "is_inferable": False,
     },
 
     # ========================================================
@@ -575,6 +581,7 @@ SKILLS = [
             "Data Analysis",
             "Automatisation",
         ],
+        "is_inferable": False,
     },
 
     {
@@ -598,6 +605,7 @@ SKILLS = [
             "Python",
             "Microsoft Excel",
         ],
+        "is_inferable": False,
     },
 
     {
@@ -622,6 +630,7 @@ SKILLS = [
             "Data Analysis",
             "Machine Learning",
         ],
+        "is_inferable": False,
     },
 
     {
@@ -645,6 +654,7 @@ SKILLS = [
             "Google Cloud",
             "Cloud Computing",
         ],
+        "is_inferable": False,
     },
 
     {
@@ -667,6 +677,7 @@ SKILLS = [
             "Google Cloud",
             "Cloud Computing",
         ],
+        "is_inferable": False,
     },
 
     {
@@ -691,6 +702,7 @@ SKILLS = [
             "Cloud Computing",
             "Machine Learning",
         ],
+        "is_inferable": False,
     },
 
     # ========================================================
@@ -717,6 +729,7 @@ SKILLS = [
             "Backlog Management",
             "Gestion de projet",
         ],
+        "is_inferable": False,
     },
 
     {
@@ -746,6 +759,7 @@ SKILLS = [
             "Data / KPI",
             "Automatisation",
         ],
+        "is_inferable": False,
     },
 
     # ========================================================
@@ -1194,6 +1208,7 @@ SKILLS = [
             "Gestion de campagnes",
             "Data / KPI",
         ],
+        "is_inferable": False,
     },
 
     {
@@ -1241,6 +1256,454 @@ SKILLS = [
             "Coordination transverse",
             "Business Development",
         ],
+    },
+
+    # ======================================================
+    # AJOUTÉES PAR LE TRI DES TERMES RENCONTRÉS
+    # ======================================================
+    #
+    # Nées de l'usage : des annonces réelles les nommaient,
+    # le référentiel ne les connaissait pas. Versées ici pour
+    # qu'une installation neuve en dispose — sans quoi le
+    # travail de tri ne survivrait pas à une reconstruction
+    # de la base.
+
+    # ======================================================
+    # BUSINESS
+    # ======================================================
+
+    {
+        "id": "catalog-e-reputation",
+        "canonical_name": "E-réputation",
+        "category": "Business",
+        "subcategory": "",
+        "description": (
+            "Suivi et pilotage de l'image d'une marque ou d'une "
+            "personne en ligne."
+        ),
+        "aliases": [
+            "E-réputation",
+            "réputation en ligne",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": False,
+    },
+
+    {
+        "id": "catalog-emailing",
+        "canonical_name": "Emailing",
+        "category": "Business",
+        "subcategory": "",
+        "description": (
+            "Conception et envoi de campagnes par courriel, de la "
+            "liste au suivi de performance."
+        ),
+        "aliases": [
+            "Emailing",
+            "campagnes emailing",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": False,
+    },
+
+    {
+        "id": "catalog-experience-client-omnicanale",
+        "canonical_name": "Expérience client omnicanale",
+        "category": "Business",
+        "subcategory": "",
+        "description": (
+            "Cohérence de l'expérience vécue par un client d'un "
+            "canal à l'autre, du site au point de vente."
+        ),
+        "aliases": [
+            "Expérience client omnicanale",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": False,
+    },
+
+    {
+        "id": "catalog-marketing-automation",
+        "canonical_name": "Marketing automation",
+        "category": "Business",
+        "subcategory": "",
+        "description": (
+            "Automatisation de scénarios relationnels déclenchés "
+            "par le comportement d'un contact."
+        ),
+        "aliases": [
+            "Marketing automation",
+            "solutions marketing automation",
+            "automation marketing",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": False,
+    },
+
+    {
+        "id": "catalog-marketing-digital",
+        "canonical_name": "Marketing digital",
+        "category": "Business",
+        "subcategory": "",
+        "description": (
+            "Conception et pilotage d'actions marketing sur les "
+            "canaux en ligne."
+        ),
+        "aliases": [
+            "Marketing digital",
+            "stratégie marketing digital",
+            "acquisition digitale",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": True,
+    },
+
+    {
+        "id": "catalog-marketplace-b2b",
+        "canonical_name": "Marketplace B2B",
+        "category": "Business",
+        "subcategory": "",
+        "description": (
+            "Place de marché entre professionnels : catalogue, "
+            "vendeurs tiers, règles de commission."
+        ),
+        "aliases": [
+            "Marketplace B2B",
+            "marketplace",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": False,
+    },
+
+    {
+        "id": "catalog-parcours-client",
+        "canonical_name": "Parcours client",
+        "category": "Business",
+        "subcategory": "",
+        "description": (
+            "Description et amélioration des étapes par "
+            "lesquelles passe un client, d'un canal à l'autre."
+        ),
+        "aliases": [
+            "Parcours client",
+            "parcours clients",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": True,
+    },
+
+    {
+        "id": "catalog-sea",
+        "canonical_name": "SEA",
+        "category": "Business",
+        "subcategory": "",
+        "description": (
+            "Publicité sur les moteurs de recherche, achat de "
+            "mots-clés."
+        ),
+        "aliases": [
+            "SEA",
+            "Search Engine Advertising",
+            "référencement payant",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": False,
+    },
+
+    {
+        "id": "catalog-social-media",
+        "canonical_name": "Social media",
+        "category": "Business",
+        "subcategory": "",
+        "description": (
+            "Animation et pilotage de la présence d'une marque "
+            "sur les réseaux sociaux."
+        ),
+        "aliases": [
+            "Social media",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": False,
+    },
+
+    {
+        "id": "catalog-web-to-store",
+        "canonical_name": "Web-to-store",
+        "category": "Business",
+        "subcategory": "",
+        "description": (
+            "Dispositifs en ligne conçus pour amener le client en "
+            "point de vente physique."
+        ),
+        "aliases": [
+            "Web-to-store",
+            "drive-to-store",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": False,
+    },
+
+    # ======================================================
+    # PROJECT MANAGEMENT
+    # ======================================================
+
+    {
+        "id": "catalog-cycle-en-v",
+        "canonical_name": "Cycle en V",
+        "category": "Project Management",
+        "subcategory": "",
+        "description": (
+            "Conduite de projet séquentielle, où chaque phase de "
+            "conception répond à une phase de validation. "
+            "S'oppose aux approches itératives."
+        ),
+        "aliases": [
+            "Cycle en V",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": False,
+    },
+
+    {
+        "id": "catalog-lean-management",
+        "canonical_name": "Lean management",
+        "category": "Project Management",
+        "subcategory": "",
+        "description": (
+            "Recherche continue de la valeur pour le client par "
+            "la réduction des gaspillages."
+        ),
+        "aliases": [
+            "Lean management",
+            "lean",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": False,
+    },
+
+    # ======================================================
+    # TOOLS
+    # ======================================================
+
+    {
+        "id": "catalog-basecamp",
+        "canonical_name": "BaseCamp",
+        "category": "Tools",
+        "subcategory": "",
+        "description": (
+            "Outil de gestion de projet et de communication "
+            "d'équipe."
+        ),
+        "aliases": [
+            "BaseCamp",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": False,
+    },
+
+    {
+        "id": "catalog-cdp",
+        "canonical_name": "CDP",
+        "category": "Tools",
+        "subcategory": "",
+        "description": (
+            "Plateforme de données clients (Customer Data "
+            "Platform), qui unifie les données d'un client à "
+            "travers ses points de contact."
+        ),
+        "aliases": [
+            "CDP",
+            "Customer Data Platform",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": False,
+    },
+
+    {
+        "id": "catalog-clarity",
+        "canonical_name": "Clarity",
+        "category": "Tools",
+        "subcategory": "",
+        "description": (
+            "Outil de gestion de portefeuille de projets."
+        ),
+        "aliases": [
+            "Clarity",
+            "Clarity PPM",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": False,
+    },
+
+    {
+        "id": "catalog-gitlab",
+        "canonical_name": "GitLab",
+        "category": "Tools",
+        "subcategory": "",
+        "description": (
+            "Plateforme de gestion de code source, d'intégration "
+            "et de déploiement continus."
+        ),
+        "aliases": [
+            "GitLab",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": False,
+    },
+
+    {
+        "id": "catalog-ms-project",
+        "canonical_name": "MS Project",
+        "category": "Tools",
+        "subcategory": "",
+        "description": (
+            "Logiciel de planification de projet de Microsoft."
+        ),
+        "aliases": [
+            "MS Project",
+            "Microsoft Project",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": False,
+    },
+
+    {
+        "id": "catalog-meta-ads",
+        "canonical_name": "Meta Ads",
+        "category": "Tools",
+        "subcategory": "",
+        "description": (
+            "Régie publicitaire de Meta, pour Facebook et "
+            "Instagram."
+        ),
+        "aliases": [
+            "Meta Ads",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": False,
+    },
+
+    {
+        "id": "catalog-microsoft-planner",
+        "canonical_name": "Microsoft Planner",
+        "category": "Tools",
+        "subcategory": "",
+        "description": (
+            "Outil de suivi de tâches en équipe de Microsoft."
+        ),
+        "aliases": [
+            "Microsoft Planner",
+            "Planner",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": False,
+    },
+
+    {
+        "id": "catalog-miro",
+        "canonical_name": "Miro",
+        "category": "Tools",
+        "subcategory": "",
+        "description": (
+            "Tableau blanc collaboratif en ligne, utilisé pour "
+            "les ateliers et la cartographie de parcours."
+        ),
+        "aliases": [
+            "Miro",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": False,
+    },
+
+    {
+        "id": "catalog-pack-adobe",
+        "canonical_name": "Pack Adobe",
+        "category": "Tools",
+        "subcategory": "",
+        "description": (
+            "Suite créative d'Adobe : image, mise en page, vidéo."
+        ),
+        "aliases": [
+            "Pack Adobe",
+            "Suite Adobe",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": False,
+    },
+
+    {
+        "id": "catalog-pack-office",
+        "canonical_name": "Pack Office",
+        "category": "Tools",
+        "subcategory": "",
+        "description": (
+            "Suite bureautique de Microsoft : traitement de "
+            "texte, tableur, présentation."
+        ),
+        "aliases": [
+            "Pack Office",
+            "Microsoft Office",
+            "Suite Office",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": False,
+    },
+
+    {
+        "id": "catalog-salesforce-marketing-cloud",
+        "canonical_name": "Salesforce Marketing Cloud",
+        "category": "Tools",
+        "subcategory": "",
+        "description": (
+            "Plateforme d'automatisation marketing de Salesforce."
+        ),
+        "aliases": [
+            "Salesforce Marketing Cloud",
+            "Marketing Cloud",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": False,
+    },
+
+    {
+        "id": "catalog-tfs",
+        "canonical_name": "TFS",
+        "category": "Tools",
+        "subcategory": "",
+        "description": (
+            "Team Foundation Server, plateforme Microsoft de "
+            "gestion de code et de suivi de travaux."
+        ),
+        "aliases": [
+            "TFS",
+            "Team Foundation Server",
+        ],
+        "parent": None,
+        "related_skills": [],
+        "is_inferable": False,
     },
 ]
 
@@ -1388,6 +1851,14 @@ def seed_skill_catalog() -> None:
                     ),
                     "aliases": aliases_json,
                     "related_skills": related_skills_json,
+                    "is_inferable": skill_data.get(
+                        "is_inferable",
+                        True,
+                    ),
+                    "is_composite": skill_data.get(
+                        "is_composite",
+                        False,
+                    ),
                     "is_active": True,
                 }
 
@@ -1463,6 +1934,23 @@ def seed_skill_catalog() -> None:
                     aliases=aliases_json,
 
                     related_skills=related_skills_json,
+
+                    # Le drapeau qui décide si une compétence peut
+                    # être DÉDUITE d'un parcours qui ne la nomme pas.
+                    # Absent du seed jusqu'ici : une installation
+                    # neuve rendait Python, Jira et AWS devinables
+                    # d'un récit. C'est ce même réglage qui, mal posé
+                    # sur « Cycle en V », créditait un profil agile de
+                    # la méthode inverse.
+                    is_inferable=skill_data.get(
+                        "is_inferable",
+                        True,
+                    ),
+
+                    is_composite=skill_data.get(
+                        "is_composite",
+                        False,
+                    ),
 
                     is_active=True,
                 )
