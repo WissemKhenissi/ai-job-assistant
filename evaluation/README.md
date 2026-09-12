@@ -22,6 +22,22 @@ Deux couches, évaluées séparément parce qu'elles échouent différemment.
 **1. Extraction** — à partir du texte de l'annonce, quelles compétences le
 moteur considère-t-il comme demandées ?
 
+Mesurée deux fois : par le seul catalogue, puis avec l'extraction par
+l'IA que l'application intercale. L'écart entre les deux colonnes est
+la seule réponse honnête à « l'IA apporte-t-elle quelque chose ? ».
+
+La réponse de l'IA n'est pas redemandée à chaque mesure — elle varie
+d'un appel à l'autre, et une mesure qui bouge toute seule ne mesure
+rien. Elle est figée une fois, datée, versionnée à côté de l'annonce :
+
+```bash
+.venv/Scripts/python.exe -m evaluation.enregistrer_reponses_ia
+```
+
+Réenregistrer après une mise à jour du modèle est une décision à
+prendre, pas un automatisme : sans quoi la référence suivrait
+silencieusement ce qu'elle est censée juger.
+
 - *precision* : parmi les compétences détectées, combien sont réellement
   demandées ? Une precision basse = le moteur voit des exigences qui
   n'existent pas.

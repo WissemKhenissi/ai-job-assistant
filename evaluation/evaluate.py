@@ -8,6 +8,17 @@ différemment :
    le moteur considère-t-il comme demandées ? On mesure precision,
    recall et faux positifs face aux compétences réellement attendues.
 
+   Deux fois : sans l'IA, puis avec. L'application intercale une
+   extraction par l'IA entre le catalogue et le nettoyage ; ne
+   mesurer que la moitié déterministe laissait l'autre sans aucun
+   garde-fou — c'est ainsi que le doublon « méthode Agile » est passé
+   au travers, et que sa correction n'a bougé aucun chiffre.
+
+   La réponse de l'IA est rejouée depuis reponse_ia.json, figée par
+   evaluation/enregistrer_reponses_ia.py. La redemander à chaque
+   mesure rendrait celle-ci variable, et une mesure qui bouge toute
+   seule ne mesure rien.
+
 2. STATUTS — pour chaque compétence demandée, le moteur répond
    proven / declared / inferred / missing. On compare au statut
    attendu.
@@ -34,7 +45,10 @@ from pathlib import Path
 from services.job_requirements_service import extract_required_skills
 from services.matching import analyze_candidate_against_skills
 from services.matching.normalization import _canonical_skill_name
-from services.requirement_cleaning import clean_required_skills
+from services.requirement_cleaning import (
+    clean_required_skills,
+    merge_ai_requirements,
+)
 
 
 DATASET_DIR = Path(__file__).resolve().parent / "dataset"
@@ -117,6 +131,27 @@ class EvaluationCase:
     revise_par_humain: bool
     commentaire: str = ""
 
+    # Ce que l'IA avait répondu le jour de l'enregistrement, ou None
+    # si aucune réponse n'a été figée pour ce cas.
+    reponse_ia: dict | None = None
+
+
+def _lire_reponse_ia(case_dir: Path) -> dict | None:
+    """
+    La réponse de l'IA figée pour ce cas, si elle existe.
+
+    Son absence n'est pas une erreur : la mesure sans IA reste
+    valable, et le rapport dit alors sur combien de cas la couche IA
+    a pu être évaluée.
+    """
+
+    chemin = case_dir / "reponse_ia.json"
+
+    if not chemin.exists():
+        return None
+
+    return json.loads(chemin.read_text(encoding="utf-8"))
+
 
 def load_cases() -> list[EvaluationCase]:
     """Charge tous les cas du dataset."""
@@ -163,6 +198,7 @@ def load_cases() -> list[EvaluationCase]:
                     False,
                 ),
                 commentaire=attendu.get("commentaire", ""),
+                reponse_ia=_lire_reponse_ia(case_dir),
             )
         )
 
@@ -221,7 +257,14 @@ class StatusError:
 @dataclass
 class CaseResult:
     case: EvaluationCase
+
+    # Le circuit complet de l'application : catalogue, IA, nettoyage.
     extraction: ExtractionResult
+
+    # Le même, sans l'étape IA. L'écart entre les deux est la seule
+    # réponse honnête à « l'IA apporte-t-elle quelque chose ? ».
+    extraction_sans_ia: ExtractionResult
+
     statuts_corrects: int = 0
     erreurs_statut: list[StatusError] = field(default_factory=list)
 
@@ -252,41 +295,63 @@ def evaluate_case(
     #
     # Une mesure doit porter sur le circuit réel, sinon elle mesure
     # une autre application que la sienne.
-    detectees, _ = clean_required_skills(
-        extract_required_skills(case.texte),
+
+    du_catalogue = extract_required_skills(case.texte)
+
+    detectees_sans_ia, _ = clean_required_skills(
+        list(du_catalogue),
         job_title=case.titre,
         job_description=case.texte,
     )
 
-    canon_detectees = {
-        _canonical_skill_name(skill): skill
-        for skill in detectees
-    }
+    if case.reponse_ia is not None:
+
+        avec_ia = merge_ai_requirements(
+            list(du_catalogue),
+            case.reponse_ia.get("required_skills", []),
+        )
+
+    else:
+        avec_ia = list(du_catalogue)
+
+    detectees, _ = clean_required_skills(
+        avec_ia,
+        job_title=case.titre,
+        job_description=case.texte,
+    )
 
     canon_attendues = {
         _canonical_skill_name(skill): skill
         for skill in case.competences_attendues
     }
 
-    extraction = ExtractionResult(
-        trouvees_et_attendues=sorted(
-            canon_attendues[canon]
-            for canon in canon_detectees.keys()
-            & canon_attendues.keys()
-        ),
-        faux_positifs=sorted(
-            canon_detectees[canon]
-            for canon in canon_detectees.keys()
-            - canon_attendues.keys()
-        ),
-        oubliees=sorted(
-            canon_attendues[canon]
-            for canon in canon_attendues.keys()
-            - canon_detectees.keys()
-        ),
-    )
+    def confronter(sorties) -> ExtractionResult:
+        """Ce qu'un circuit a trouvé, face à ce qui est attendu."""
 
-    result = CaseResult(case=case, extraction=extraction)
+        canon = {
+            _canonical_skill_name(skill): skill for skill in sorties
+        }
+
+        return ExtractionResult(
+            trouvees_et_attendues=sorted(
+                canon_attendues[cle]
+                for cle in canon.keys() & canon_attendues.keys()
+            ),
+            faux_positifs=sorted(
+                canon[cle]
+                for cle in canon.keys() - canon_attendues.keys()
+            ),
+            oubliees=sorted(
+                canon_attendues[cle]
+                for cle in canon_attendues.keys() - canon.keys()
+            ),
+        )
+
+    result = CaseResult(
+        case=case,
+        extraction=confronter(detectees),
+        extraction_sans_ia=confronter(detectees_sans_ia),
+    )
 
     # --------------------------------------------------------
     # COUCHE 2 : STATUTS
@@ -429,31 +494,87 @@ def print_report(
     # AGREGATION
     # --------------------------------------------------------
 
-    tp = sum(
-        len(r.extraction.trouvees_et_attendues) for r in results
-    )
-    fp = sum(len(r.extraction.faux_positifs) for r in results)
-    fn = sum(len(r.extraction.oubliees) for r in results)
+    def agreger(extractions) -> tuple:
 
-    precision = tp / (tp + fp) if (tp + fp) else None
-    recall = tp / (tp + fn) if (tp + fn) else None
+        tp = sum(len(e.trouvees_et_attendues) for e in extractions)
+        fp = sum(len(e.faux_positifs) for e in extractions)
+        fn = sum(len(e.oubliees) for e in extractions)
 
-    f1 = (
-        2 * precision * recall / (precision + recall)
-        if precision and recall
-        else None
-    )
+        precision = tp / (tp + fp) if (tp + fp) else None
+        recall = tp / (tp + fn) if (tp + fn) else None
+
+        f1 = (
+            2 * precision * recall / (precision + recall)
+            if precision and recall
+            else None
+        )
+
+        return tp, fp, fn, precision, recall, f1
+
+    complet = agreger([r.extraction for r in results])
+    sans_ia = agreger([r.extraction_sans_ia for r in results])
+
+    avec_reponse = [
+        r for r in results if r.case.reponse_ia is not None
+    ]
 
     print()
     print(f"Cas évalués : {len(results)}")
     print()
     print("EXTRACTION DES COMPÉTENCES DEMANDÉES")
-    print(f"  compétences correctement détectées : {tp}")
-    print(f"  faux positifs (détectées à tort)   : {fp}")
-    print(f"  oubliées (attendues, non trouvées) : {fn}")
-    print(f"  precision : {_pourcent(precision)}")
-    print(f"  recall    : {_pourcent(recall)}")
-    print(f"  F1        : {_pourcent(f1)}")
+    print(
+        "  %-14s %-12s %-12s %s"
+        % ("", "catalogue", "+ IA", "apport de l'IA")
+    )
+
+    for libelle, i in (
+        ("détectées", 0),
+        ("faux positifs", 1),
+        ("oubliées", 2),
+    ):
+        print(
+            "  %-14s %-12d %-12d %+d"
+            % (libelle, sans_ia[i], complet[i], complet[i] - sans_ia[i])
+        )
+
+    for libelle, i in (
+        ("precision", 3),
+        ("recall", 4),
+        ("F1", 5),
+    ):
+        ecart = (
+            "%+.1f pts" % ((complet[i] - sans_ia[i]) * 100)
+            if complet[i] is not None and sans_ia[i] is not None
+            else "—"
+        )
+        print(
+            "  %-14s %-12s %-12s %s"
+            % (
+                libelle,
+                _pourcent(sans_ia[i]),
+                _pourcent(complet[i]),
+                ecart,
+            )
+        )
+
+    print()
+
+    if not avec_reponse:
+        print(
+            "  Aucune réponse d'IA figée : les deux colonnes sont "
+            "identiques. Voir enregistrer_reponses_ia.py."
+        )
+    else:
+        print(
+            "  Réponse de l'IA rejouée sur %d cas sur %d, figée le %s."
+            % (
+                len(avec_reponse),
+                len(results),
+                avec_reponse[0].case.reponse_ia.get(
+                    "enregistre_le", "?"
+                ),
+            )
+        )
 
     # --------------------------------------------------------
     # STATUTS
